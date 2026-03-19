@@ -1,6 +1,0 @@
-fastapi
-uvicorn
-redis
-openai
-faker
-python-dotenv
