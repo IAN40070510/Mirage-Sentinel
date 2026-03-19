@@ -6,37 +6,43 @@ fake = Faker('zh_TW')
 
 def generate_fake_data(query_id: str) -> dict:
     """
-    核心幻象引擎：根據查詢標靶 (query_id) 動態生成對應的假資料
-    完全對齊期末簡報上的三種 Payload 範例！
+    核心幻象引擎：將欄位完全對齊真實模式 (Real Mode)
+    讓駭客的爬蟲程式無法察覺欄位異動
     """
     
-    # 情境 1：駭客想打 Admin 後台 
-    # 給他假的錯誤訊息，讓他以為再試幾次就能登入成功
-    if query_id.lower() == "admin":
+    # 🌟 規格對齊重點：
+    # 真實模式回傳：user_id, name, email, balance, status
+    
+    # 情境 1：高權限標靶 (666) -> 給他超級大肥羊資料，誘使他繼續深入
+    if query_id == "666":
         return {
-            "error": False, 
-            "msg": "Login failed",
-            "try_left": random.randint(1, 3)  # 隨機產生 1~3 次剩餘機會
+            "user_id": "666",
+            "name": f"{fake.name()} (Admin)", # Demo 用，上線可拿掉 (Admin)
+            "email": fake.company_email(),
+            "balance": float(fake.pyint(min_value=100000, max_value=999999)), # 高資產
+            "status": "Privileged" 
         }
         
-    # 情境 2：駭客想打高權限代碼 
-    elif query_id == "666":
+    # 情境 2：後台標靶 (admin) -> 給他看起來像管理員的個資
+    elif query_id.lower() == "admin":
         return {
-            "name": fake.name(),
-            "role": "admin",
-            "bal": f"${fake.pyint(min_value=10000, max_value=99999):,}"
+            "user_id": "ADMIN_001",
+            "name": "系統管理員",
+            "email": "root@company.corp",
+            "balance": 0.0,
+            "status": "Root"
         }
         
-    # 情境 3：預設的一般員工查詢 
+    # 情境 3：一般查詢 (預設) -> 完美模擬王小明的格式
     else:
-        departments = ["HR", "IT", "Finance", "Sales", "R&D"]
         return {
-            "id": query_id, # 駭客查什麼，就還給他什麼，降低戒心
-            "dept": random.choice(departments),
-            "salary": f"${fake.pyint(min_value=3000, max_value=9000):,}"
+            "user_id": query_id,
+            "name": fake.name(),
+            "email": fake.email(),
+            "balance": float(fake.pyint(min_value=1000, max_value=8000)), # 正常薪水
+            "status": "Normal"
         }
 
 if __name__ == "__main__":
-    print("測試 [一般查詢 1001]:", generate_fake_data("1001"))
-    print("測試 [高權限 666]:", generate_fake_data("666"))
-    print("測試 [後台 admin]:", generate_fake_data("admin"))
+    # 測試是否對齊規格
+    print("測試 [一般查詢]:", generate_fake_data("1001"))
