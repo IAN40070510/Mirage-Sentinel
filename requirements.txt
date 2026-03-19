@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+redis
+openai
+faker
+pyahocorasick
+rbloom
+python-dotenv

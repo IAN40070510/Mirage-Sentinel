@@ -1,0 +1,24 @@
+services:
+  # 1. 哨兵閘道 (FastAPI)
+  - type: web
+    name: mirage-sentinel
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: sentinel-cache
+          property: connectionString
+
+  # 2. 狀態記憶庫 (Redis) - 移動到 services 區塊內
+  - type: redis
+    name: sentinel-cache
+    plan: free
+    region: singapore
+    ipAllowList: [] # 允許所有內部連線
