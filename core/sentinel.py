@@ -18,7 +18,7 @@ class HoneypotDetector:
         self.configs = {
             "lfi": {"path": "LFI-Jhaddix.txt", "weight": 0.70},
             "paths": {"path": "common.txt", "weight": 0.10},
-            "sqli": {"path": "Generic-SQLi.txt", "weight": 0.85}
+            "sqli": {"path": "login_bypass.txt", "weight": 0.85}
         }
         self._initialize_engine()
 
