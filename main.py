@@ -1,34 +1,36 @@
 from fastapi import FastAPI, Request
 import uvicorn
+import time
+import json
+from datetime import datetime
 from contextlib import asynccontextmanager
 
 # 匯入核心偵測與幻象引擎
 from core.sentinel import analyze_intent
 from core.mirage import generate_fake_data
 
-# 匯入拆分後的雙核心資料庫：一個對內記憶，一個對外日誌
-from core.deception_db import setup_deception_db, get_memory, save_deception_state
+# 匯入雙核心資料庫
+from core.deception_db import setup_deception_db, get_memory, update_deception_state as save_deception_state
 from core.traffic_db import setup_traffic_db, log_attack_event
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """伺服器啟動時，同步初始化雙軌資料庫"""
-    setup_deception_db()  # 檔案 A: mirage_memory.db
-    setup_traffic_db()    # 檔案 B: traffic_logs.db
-    print("[SYSTEM] 雙核心資料庫已完成物理隔離部署：")
-    print("         - Deception Memory (後端一致性維護)")
-    print("         - Traffic Logs (前端戰情數據源)")
+    """伺服器啟動時，初始化雙軌資料庫"""
+    setup_deception_db()
+    setup_traffic_db()
+    print("[SYSTEM] Mirage-Sentinel 雙核心資料庫啟動成功，物理隔離已就緒。")
     yield
 
-# 初始化 FastAPI 伺服器
-app = FastAPI(title="Mirage-Sentinel API Gateway", version="1.1-Hybrid", lifespan=lifespan)
+app = FastAPI(title="Mirage-Sentinel API Gateway", version="1.2-FullForensics", lifespan=lifespan)
 
 @app.get("/api/v1/user/{user_id}")
-async def get_user_data(user_id: str, request: Request, payload: str = ""):
-    
-    # 1. 抓取攻擊者基礎情報 (Who & How)
+async def get_user_data(user_id: str, request: Request):
+    # --- T1: 記錄請求進入時間 (精確到毫秒) ---
+    start_perf = time.perf_counter()
+    request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+
+    # 1. 抓取基礎情報
     client_ip = request.client.host
-    # 修正：抓取包含 payload 參數在內的完整 query string
     query_string = str(request.query_params)
     user_agent = request.headers.get("user-agent", "Unknown")
 
@@ -38,40 +40,66 @@ async def get_user_data(user_id: str, request: Request, payload: str = ""):
     if is_attack:
         # --- 進入防禦模式 (Mirage Mode) ---
         risk_score = int(confidence * 100)
-        print(f"\n[ALERT] 偵測到惡意請求！來源: {client_ip} | 風險: {risk_score} | 手法: {attack_vector}")
         
-        # 3. 檢查「欺敵記憶庫」，確保同個駭客看到的東西是一樣的
-        cached_data = get_memory(client_ip, user_id)
-        if cached_data:
-            # 即使命中快取，也要更新「戰情日誌」，讓前端知道這傢伙又來了
-            log_attack_event(client_ip, risk_score, attack_vector, query_string, user_agent)
-            print("[MEMORY] 快取命中！已同步推送到戰情日誌。")
-            return cached_data
+        # 3. 讀取記憶與計算行為特徵 (Dwell Time / Interaction Depth)
+        mem = get_memory(client_ip, user_id)
+        
+        dwell_time = 0.0
+        interaction_depth = 1
+        hits = 1
+        fake_data = None
+
+        if mem:
+            # 計算滯留時間：本次 Request - 上次上次系統 Response
+            last_seen_dt = datetime.strptime(mem['last_seen'], "%Y-%m-%d %H:%M:%S.%f")
+            current_dt = datetime.now()
+            dwell_time = (current_dt - last_seen_dt).total_seconds()
             
-        # 4. 若無快取，由 AI 幻象引擎生成誘餌
-        print("[MIRAGE] 正在生成全新的幻象個資...")
-        fake_data = generate_fake_data(user_id)
-        
-        # 5. 雙軌儲存：
-        # (A) 寫入後端記憶，維持之後連線的一致性
-        save_deception_state(client_ip, user_id, fake_data)
-        
-        # (B) 寫入戰情日誌，供隊友前端 Dashboard 渲染圖表
-        log_attack_event(client_ip, risk_score, attack_vector, query_string, user_agent)
-        
+            interaction_depth = mem['depth'] + 1
+            hits = mem['hits'] + 1
+            fake_data = mem['payload']
+            print(f"[MEMORY] 偵測到回頭客！滯留時間: {dwell_time}s | 互動深度: {interaction_depth}")
+        else:
+            # 初次攻擊，生成新誘餌
+            fake_data = generate_fake_data(user_id)
+            print("[MIRAGE] 生成全新幻象個資...")
+
+        # --- T2: 系統準備回傳時間 ---
+        end_perf = time.perf_counter()
+        response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        process_ms = int((end_perf - start_perf) * 1000)
+
+        # 4. 封裝 17 欄位數據 (完全對齊試算表)
+        log_data = {
+            "request_at": request_at,
+            "response_at": response_at,
+            "process_ms": process_ms,
+            "attacker_ip": client_ip,
+            "location": "Processing...",  # 預留給 GeoIP 擴充
+            "is_proxy": 0,                # 預留給 Proxy 偵測擴充
+            "user_agent": user_agent,
+            "tls_fingerprint": "N/A",     # 預留給 JA3 擴充
+            "raw_payload": query_string,
+            "response_payload": fake_data,
+            "query_id": user_id,
+            "attack_vector": attack_vector,
+            "risk_level": risk_score,
+            "hits": hits,
+            "interaction_depth": interaction_depth,
+            "dwell_time": dwell_time,
+            "mitigation_status": "Camouflaged"
+        }
+
+        # 5. 執行雙軌儲存
+        log_attack_event(log_data)  # 寫入 traffic_logs.db
+        save_deception_state(client_ip, user_id, attack_vector, risk_score, fake_data) # 寫入 mirage_memory.db
+
+        print(f"[ALERT] 採證完成！風險分數: {risk_score} | 處理耗時: {process_ms}ms")
         return fake_data
 
     else:
-        # --- 進入正常模式 (Real Mode) ---
-        # 隱私原則：正常流量不進日誌庫，也不進記憶庫
-        return {
-            "user_id": user_id,
-            "name": "王小明 (真實用戶)",
-            "email": "wang.real@company.com",
-            "balance": 150.0,
-            "status": "Normal"
-        }
+        # --- 進入正常模式 ---
+        return {"user_id": user_id, "name": "真實用戶", "status": "Normal"}
 
 if __name__ == "__main__":
-    print("[SYSTEM] Mirage-Sentinel API Gateway 啟動中...")
     uvicorn.run(app, host="0.0.0.0", port=8000)
