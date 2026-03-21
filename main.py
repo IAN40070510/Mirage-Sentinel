@@ -10,7 +10,7 @@ from core.sentinel import analyze_intent
 from core.mirage import generate_fake_data
 
 # 匯入雙核心資料庫
-from core.deception_db import setup_deception_db, get_memory, update_deception_state as save_deception_state
+from core.deception_db import setup_deception_db, get_memory, save_deception_state
 from core.traffic_db import setup_traffic_db, log_attack_event
 
 @asynccontextmanager
