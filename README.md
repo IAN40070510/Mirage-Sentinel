@@ -1,4 +1,4 @@
-Mirage-Sentinel (幻影哨兵)
+# Mirage-Sentinel (幻影哨兵)
 
 > **次世代動態欺敵與隔離防禦系統 (Dynamic Deception and Isolation Defense System)**
 > 
