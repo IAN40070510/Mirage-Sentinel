@@ -10,7 +10,7 @@ def generate_fake_data(query_id: str) -> dict:
     讓駭客的爬蟲程式無法察覺欄位異動
     """
     
-    # 🌟 規格對齊重點：
+    # 規格對齊重點：
     # 真實模式回傳：user_id, name, email, balance, status
     
     # 情境 1：高權限標靶 (666) -> 給他超級大肥羊資料，誘使他繼續深入
@@ -27,7 +27,7 @@ def generate_fake_data(query_id: str) -> dict:
     elif query_id.lower() == "admin":
         return {
             "user_id": "ADMIN_001",
-            "name": "系統管理員",
+            "name": "假系統管理員",
             "email": "root@company.corp",
             "balance": 0.0,
             "status": "Root"
