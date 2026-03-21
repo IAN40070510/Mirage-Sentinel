@@ -214,7 +214,7 @@ __marimo__/
 # 實體資料庫檔案 (避免把戰鬥日誌和欺敵記憶庫傳上 GitHub)
 *.db
 data/*.db
-sqlite_memory.db
+data/mirage_memory.db
 
 # AI 模型與特徵轉換檔 (模型檔案龐大，不應進入版控)
 models/*.pkl

@@ -6,3 +6,5 @@ faker
 pyahocorasick
 rbloom
 python-dotenv
+python-multipart
+ahocorasick-rs

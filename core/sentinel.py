@@ -4,10 +4,11 @@ import ahocorasick
 from rbloom import Bloom
 
 # 雲端路徑校準：自動定位根目錄 ---
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
-# 確保指向跟 main.py 同層的 SecLists
-SECLISTS_PATH = os.path.join(PROJECT_ROOT, "SecLists")
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__)) # 指向 core/
+PROJECT_ROOT = os.path.dirname(CURRENT_DIR)               # 指向 Mirage-Sentinel/
+
+# 修正：精準指向新的 data/datasets/SecLists 路徑
+SECLISTS_PATH = os.path.join(PROJECT_ROOT, "data", "datasets", "SecLists")
 
 # --- 核心偵測引擎 ---
 class HoneypotDetector:
@@ -16,6 +17,7 @@ class HoneypotDetector:
         self.automaton = ahocorasick.Automaton()
         self.bloom = Bloom(expected_items=100000, false_positive_rate=0.0001)
         
+        # 修正：根據你的檔案分佈調整路徑 (如果 LFI-Jhaddix.txt 在 SecLists 根目錄下)
         self.configs = {
             "lfi": {"path": "LFI-Jhaddix.txt", "weight": 0.50},
             "paths": {"path": "common.txt", "weight": 0.20}
@@ -25,7 +27,8 @@ class HoneypotDetector:
     def _initialize_engine(self):
         """預載入字典數據到記憶體"""
         loaded_count = 0
-        print(f"[DEBUG] 掃描路徑: {self.seclists_root}")
+        # 啟動時顯示絕對路徑，方便除錯
+        print(f"[DEBUG] Sentinel 掃描路徑: {os.path.abspath(self.seclists_root)}")
 
         for category, config in self.configs.items():
             full_path = os.path.join(self.seclists_root, config["path"])
@@ -45,7 +48,7 @@ class HoneypotDetector:
         
         # 關鍵防禦：若 loaded_count 為 0，也要塞一個空字串避免 automaton 崩潰
         if loaded_count == 0:
-            print("[CRITICAL] 完全沒載入任何字典！插入保底字串防禦 500 錯誤。")
+            print("[CRITICAL] 完全沒載入任何字典！請檢查 data/datasets/SecLists/ 是否存在對應檔案。")
             self.automaton.add_word("mirage_sentinel_init_safe_node", ("none", "none"))
             
         self.automaton.make_automaton()
@@ -65,10 +68,11 @@ class HoneypotDetector:
         
         clean_text = self._recursive_url_decode(raw_input)
         
+        # 快速過濾
         if clean_text in self.bloom:
             return True, 1.0, "exact_match"
 
-        # 有了保底機制，這裡絕對不會再報 AttributeError
+        # 多模式匹配
         matches = list(self.automaton.iter(clean_text))
         if not matches:
             return False, 0.0, "None"
@@ -86,10 +90,10 @@ class HoneypotDetector:
         confidence = min(round(total_score, 2), 1.0)
         attack_vector = ", ".join(matched_categories) if matched_categories else "None"
         
+        # 信心門檻設定為 0.4
         return (confidence >= 0.4), confidence, attack_vector
 
 # --- 初始化偵測器實例 ---
-# 使用自動偵測的絕對路徑
 _detector = HoneypotDetector(SECLISTS_PATH)
 
 def analyze_intent(text: str):
