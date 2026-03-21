@@ -30,17 +30,25 @@ class HoneypotDetector:
             with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
                 for line in f:
                     p = line.strip().lower()
-                    # --- [關鍵修正]：略過太短的 ID 或純數字，避免誤殺 1001 ---
-                    if p and not p.startswith("#") and len(p) > 4: 
+                    if not p or p.startswith("#"): continue
+                    
+                    # --- [關鍵修正邏輯] ---
+                    # 1. 如果是 paths (common.txt)，維持長度檢查，保護 1001 不被抓
+                    # 2. 如果是 sqli 或 lfi，長度 >= 1 就要載入，因為符號才是關鍵！
+                    should_load = False
+                    if category == "paths" and len(p) > 4:
+                        should_load = True
+                    elif category in ["sqli", "lfi"] and len(p) >= 1:
+                        should_load = True
+                    
+                    if should_load:
                         self.bloom.add(p)
                         if p not in self.automaton:
                             self.automaton.add_word(p, (p, category))
                             loaded_count += 1
         
-        if loaded_count == 0:
-            self.automaton.add_word("mirage_safe", ("none", "none"))
         self.automaton.make_automaton()
-        print(f"[*] Sentinel 引擎就緒。載入筆數: {loaded_count}")
+        print(f"[*] Sentinel 核心已武裝！載入筆數: {loaded_count}")
 
     def _recursive_url_decode(self, text: str, depth=0) -> str:
         if depth > 3 or not text: return text
