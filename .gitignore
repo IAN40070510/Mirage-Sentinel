@@ -211,13 +211,13 @@ __marimo__/
 # =========================
 .DS_Store
 
-# 實體資料庫檔案 (避免把戰鬥日誌和欺敵記憶庫傳上 GitHub)
+# 實體資料庫檔案 (忽略本地產生的 db)
 *.db
 data/*.db
-data/mirage_memory.db
 
-# AI 模型與特徵轉換檔 (模型檔案龐大，不應進入版控)
+# AI 模型與特徵轉換檔
 models/*.pkl
 
-# 原始訓練資料集 (避免巨量駭客攻擊 CSV 塞爆 Git)
-data/datasets/
+# 原始訓練資料集 (忽略大的數據集，但「不忽略」SecLists)
+data/datasets/*
+!data/datasets/SecLists/
