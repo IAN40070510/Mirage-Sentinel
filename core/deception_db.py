@@ -16,34 +16,69 @@ def setup_deception_db():
                 attacker_ip TEXT,
                 query_id TEXT,
                 fake_data_payload TEXT,
-                
-                # --- 新增：Agent 餵給 AI 的情報欄位 ---
-                last_vector TEXT,        -- 紀錄駭客上次用的招式 (如 SQLi)
-                max_risk_seen INTEGER,   -- 紀錄看過的最高風險分數
-                interaction_count INTEGER DEFAULT 1, -- 互動次數，次數越高 AI 越客製化
-                
+                -- SQL 註解必須使用雙橫線 --
+                last_vector TEXT,
+                max_risk_seen INTEGER,
+                interaction_count INTEGER DEFAULT 1,
                 hits INTEGER DEFAULT 1,
-                last_seen TIMESTAMP
+                last_seen TEXT
             )
         ''')
+    print(f"[*] Deception Memory Engine Ready: {DB_PATH}")
 
 def get_memory(ip: str, query_id: str):
-    """讀取記憶：若駭客重複攻擊，回傳一樣的假資料並增加 hits"""
+    """
+    讀取記憶：回傳字典以供 main.py 計算滯留時間與深度
+    """
     with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.execute('SELECT fake_data_payload FROM deception_memory WHERE attacker_ip = ? AND query_id = ?', (ip, query_id))
+        cursor = conn.execute('''
+            SELECT fake_data_payload, last_seen, interaction_count, hits 
+            FROM deception_memory 
+            WHERE attacker_ip = ? AND query_id = ?
+        ''', (ip, query_id))
         result = cursor.fetchone()
+        
         if result:
-            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            conn.execute('''
-                UPDATE deception_memory 
-                SET hits = hits + 1, interaction_count = interaction_count + 1, last_seen = ? 
-                WHERE attacker_ip = ? AND query_id = ?
-            ''', (now, ip, query_id))
-            return json.loads(result[0])
+            return {
+                "payload": json.loads(result[0]),
+                "last_seen": result[1],
+                "depth": result[2],
+                "hits": result[3]
+            }
     return None
 
+def save_deception_state(ip: str, query_id: str, vector: str, risk: int, payload: dict = None):
+    """
+    儲存或更新記憶：確保資料一致性 (Upsert 邏輯)
+    """
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    with sqlite3.connect(DB_PATH) as conn:
+        # 檢查是否已存在紀錄
+        cursor = conn.execute('SELECT id FROM deception_memory WHERE attacker_ip = ? AND query_id = ?', (ip, query_id))
+        exists = cursor.fetchone()
+
+        if exists:
+            # 更新已有的紀錄
+            conn.execute('''
+                UPDATE deception_memory SET 
+                hits = hits + 1, 
+                interaction_count = interaction_count + 1, 
+                last_vector = ?, 
+                max_risk_seen = CASE WHEN ? > max_risk_seen THEN ? ELSE max_risk_seen END,
+                last_seen = ? 
+                WHERE attacker_ip = ? AND query_id = ?
+            ''', (vector, risk, risk, now, ip, query_id))
+        else:
+            # 第一次攻擊，插入新紀錄
+            if payload:
+                conn.execute('''
+                    INSERT INTO deception_memory (
+                        attacker_ip, query_id, fake_data_payload, last_vector, max_risk_seen, last_seen
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                ''', (ip, query_id, json.dumps(payload, ensure_ascii=False), vector, risk, now))
+
 def get_attacker_intelligence(ip: str):
-    """關鍵函數：提取駭客畫像，準備餵給 Mirage Engine"""
+    """提取駭客畫像，供 AI 引擎參考"""
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.execute('''
             SELECT last_vector, max_risk_seen, interaction_count 
@@ -58,13 +93,3 @@ def get_attacker_intelligence(ip: str):
                 "count": result[2]
             }
     return None
-
-def save_deception_state(ip: str, query_id: str, payload: dict, vector: str, risk: int):
-    """寫入記憶：同步存入本次攻擊的特徵"""
-    with sqlite3.connect(DB_PATH) as conn:
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        conn.execute('''
-            INSERT INTO deception_memory (
-                attacker_ip, query_id, fake_data_payload, last_vector, max_risk_seen, last_seen
-            ) VALUES (?, ?, ?, ?, ?, ?)
-        ''', (ip, query_id, json.dumps(payload), vector, risk, now))
