@@ -205,3 +205,19 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# =========================
+# Mirage-Sentinel Custom
+# =========================
+.DS_Store
+
+# 實體資料庫檔案 (避免把戰鬥日誌和欺敵記憶庫傳上 GitHub)
+*.db
+data/*.db
+sqlite_memory.db
+
+# AI 模型與特徵轉換檔 (模型檔案龐大，不應進入版控)
+models/*.pkl
+
+# 原始訓練資料集 (避免巨量駭客攻擊 CSV 塞爆 Git)
+data/datasets/
