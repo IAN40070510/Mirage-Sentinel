@@ -6,11 +6,13 @@ from datetime import datetime
 # 路徑定位
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
-DB_PATH = os.path.join(PROJECT_ROOT, "data", "traffic_logs.db")
+DB_PATH = os.path.join(PROJECT_ROOT, "data", "traffic_nexus.db")
 ERROR_LOG_DIR = os.path.join(PROJECT_ROOT, "data", "error_log")
 
 def get_db_connection():
-    return sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row 
+    return conn
 
 def get_hacker_dwell_time(attacker_ip: str) -> dict:
     """透過資料庫比對，若上一次攻擊距離這次攻擊不到10分鐘視為滯留"""
@@ -18,43 +20,43 @@ def get_hacker_dwell_time(attacker_ip: str) -> dict:
         cursor = conn.cursor()
         # 取出該 IP 最新兩筆時間
         cursor.execute('''
-            SELECT request_at FROM attack_events 
+            SELECT timestamp FROM nexus_activity 
             WHERE attacker_ip = ? 
-            ORDER BY request_at DESC LIMIT 2
+            ORDER BY timestamp DESC LIMIT 2
         ''', (attacker_ip,))
         rows = cursor.fetchall()
         
         # 取得第一筆與最後一筆算總長度
         cursor.execute('''
-            SELECT request_at FROM attack_events 
+            SELECT timestamp FROM nexus_activity 
             WHERE attacker_ip = ? 
-            ORDER BY request_at ASC
+            ORDER BY timestamp ASC
         ''', (attacker_ip,))
         all_rows = cursor.fetchall()
 
     if not all_rows:
-        return {"ip": attacker_ip, "dwell_seconds": 0, "is_staying": False}
+        return {"ip": attacker_ip, "dwell_seconds": 0, "is_active": False}
         
     now = datetime.now()
-    latest_time = datetime.strptime(all_rows[-1][0], "%Y-%m-%d %H:%M:%S.%f")
-    first_time = datetime.strptime(all_rows[0][0], "%Y-%m-%d %H:%M:%S.%f")
+    latest_time = datetime.strptime(all_rows[-1][0], "%Y-%m-%d %H:%M:%S")
+    first_time = datetime.strptime(all_rows[0][0], "%Y-%m-%d %H:%M:%S")
     
-    is_staying = False
+    is_active = False
     if len(rows) >= 2:
         last_req = datetime.strptime(rows[0][0], "%Y-%m-%d %H:%M:%S.%f")
         prev_req = datetime.strptime(rows[1][0], "%Y-%m-%d %H:%M:%S.%f")
         if (last_req - prev_req).total_seconds() <= 600:
-            is_staying = True
+            is_active = True
     elif len(rows) == 1:
         if (now - latest_time).total_seconds() <= 600:
-            is_staying = True
+            is_active = True
             
     dwell_seconds = int((latest_time - first_time).total_seconds())
 
     return {
         "ip": attacker_ip,
         "dwell_seconds": dwell_seconds,
-        "is_staying": is_staying
+        "is_active": is_active
     }
 
 def analyze_interaction_depth(attacker_ip: str, query_id: str) -> dict:
@@ -62,9 +64,9 @@ def analyze_interaction_depth(attacker_ip: str, query_id: str) -> dict:
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT request_at FROM attack_events 
+            SELECT timestamp FROM nexus_activity 
             WHERE attacker_ip = ? AND query_id = ?
-            ORDER BY request_at DESC
+            ORDER BY timestamp DESC
         ''', (attacker_ip, query_id))
         rows = cursor.fetchall()
         
@@ -89,9 +91,9 @@ def get_attack_timeline(attacker_ip: str) -> dict:
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT request_at, attack_vector FROM attack_events 
+            SELECT timestamp, attack_vector FROM nexus_activity 
             WHERE attacker_ip = ?
-            ORDER BY request_at ASC
+            ORDER BY timestamp ASC
         ''', (attacker_ip,))
         rows = cursor.fetchall()
         
@@ -128,7 +130,7 @@ def get_command_heatmap() -> dict:
         cursor = conn.cursor()
         cursor.execute('''
             SELECT raw_payload, COUNT(*) as count 
-            FROM attack_events 
+            FROM nexus_activity 
             GROUP BY raw_payload 
             ORDER BY count DESC 
             LIMIT 10

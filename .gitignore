@@ -221,3 +221,10 @@ models/*.pkl
 # 原始訓練資料集 (忽略大的數據集，但「不忽略」SecLists)
 data/datasets/*
 !data/datasets/SecLists/
+
+# 其他敏感資料或本地配置檔 Muxiang
+sqlite/*.db
+data/error_log/
+__pycache__/
+.env
+.venv/

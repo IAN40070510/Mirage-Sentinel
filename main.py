@@ -10,6 +10,9 @@ from core.mirage import generate_fake_data
 from core.deception_db import setup_deception_db, get_memory, save_deception_state
 from core.traffic_db import setup_traffic_db, log_attack_event
 
+# 前端API匯入
+from api import dashboard
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """啟動時初始化雙軌資料庫，開啟全時監控"""
@@ -24,6 +27,9 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# 掛載前端專用的 API 路徑
+app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Dashboard"])
+
 @app.get("/api/v1/user/{user_id}")
 async def get_user_data(
     user_id: str, 
@@ -31,7 +37,7 @@ async def get_user_data(
     request: Request = None
 ):
     start_perf = time.perf_counter()
-    request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")[:-3]
     client_ip = request.client.host
     user_agent = request.headers.get("user-agent", "Unknown")
     
@@ -57,7 +63,7 @@ async def get_user_data(
         
         dwell_time, interaction_depth, hits = 0.0, 1, 1
         if mem:
-            last_seen_dt = datetime.strptime(mem['last_seen'], "%Y-%m-%d %H:%M:%S.%f")
+            last_seen_dt = datetime.strptime(mem['last_seen'], "%Y-%m-%d %H:%M:%S")
             dwell_time = round((datetime.now() - last_seen_dt).total_seconds(), 2)
             interaction_depth = mem['depth'] + 1
             hits = mem['hits'] + 1
@@ -66,7 +72,7 @@ async def get_user_data(
             fake_data = generate_fake_data(user_id)
 
         process_ms = int((time.perf_counter() - start_perf) * 1000)
-        response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")[:-3]
 
         # 17 欄位數據採證
         log_attack_event({
@@ -89,3 +95,6 @@ async def get_user_data(
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
+    
+    # 私人開發環境使用 localhost，並啟用 reload 以便快速迭代
+    # uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
