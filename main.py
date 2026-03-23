@@ -158,12 +158,18 @@ async def get_user_data(
 async def simulate_attack(
     user_id: str = Query(..., description="用戶 ID"),
     payload: str = Query(..., description="模擬的攻擊指令"),
+    attacker_ip: str = Query("192.168.0.1", description="攻擊者 IP（可選）"),
     background_tasks: BackgroundTasks = None
 ):
-    """模擬攻擊請求，測試系統的攻擊檢測與沙盒隔離功能"""
+    """模擬攻擊請求，測試系統的攻擊檢測與沙盒隔離功能
+    
+    可自定義攻擊者 IP 測試欺騙記憶庫追踪：
+    - 同 IP + 同 user_id → 返回相同的假資料
+    - 不同 IP + 同 user_id → 返回不同的假資料
+    """
     start_perf = time.perf_counter()
     request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")[:-3]
-    client_ip = "192.168.0.1"  # 模擬攻擊者 IP
+    client_ip = attacker_ip  # 使用傳入的攻擊者 IP
     user_agent = "Simulated-Attack-Client"
 
     detection_target = f"{user_id} {payload}".strip()
@@ -187,12 +193,32 @@ async def simulate_attack(
     }
 
     if should_intercept:
-        fake_data = await run_attack_in_sandbox(event_payload)
+        risk_score = int(confidence * 100)
+        mem = get_memory(client_ip, user_id)
+
+        # 計算滯留時間、交互深度、點擊次數
+        dwell_time, interaction_depth, hits = 0.0, 1, 1
+        if mem:
+            last_seen_dt = datetime.strptime(mem["last_seen"], "%Y-%m-%d %H:%M:%S")
+            dwell_time = round((datetime.now() - last_seen_dt).total_seconds(), 2)
+            interaction_depth = mem["depth"] + 1
+            hits = mem["hits"] + 1
+            fake_data = mem["payload"]
+        else:
+            fake_data = await run_attack_in_sandbox(event_payload)
+
+        process_ms = int((time.perf_counter() - start_perf) * 1000)
+        response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")[:-3]
+
         event_payload.update({
-            "response_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")[:-3],
-            "process_ms": int((time.perf_counter() - start_perf) * 1000),
+            "response_at": response_at,
+            "process_ms": process_ms,
             "response_payload": fake_data,
             "mitigation_status": "Sandboxed",
+            "hits": hits,
+            "interaction_depth": interaction_depth,
+            "dwell_time": dwell_time,
+            "risk_level": risk_score,
         })
 
         if background_tasks:
@@ -200,10 +226,18 @@ async def simulate_attack(
         else:
             log_traffic_event(event_payload)
 
+        # 保存欺騙狀態到記憶庫
+        save_deception_state(client_ip, user_id, attack_vector, risk_score, fake_data)
+
         return {
             "status": "attack_detected",
             "fake_data": fake_data,
-            "event_log": event_payload
+            "event_log": event_payload,
+            "deception_memory": {
+                "dwell_time": dwell_time,
+                "interaction_depth": interaction_depth,
+                "hits": hits
+            }
         }
 
     return {
