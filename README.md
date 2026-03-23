@@ -226,7 +226,7 @@ curl -X POST "http://127.0.0.1:8000/api/v1/simulate_attack?user_id=1001&payload=
 ## 幻象模型必做規格（Llama3.1 8B）
 
 1. 模型用途：惡意請求命中後，生成高一致性的欺敵回應
-2. 一致性要求：同 attacker_ip + query_id 須維持相同角色與資料敘事
+2. 一致性要求：同駭客攻擊須維持相同角色與資料敘事
 3. 安全要求：不得回傳真實後端資料，不得暴露系統內部路徑與金鑰
 4. 失敗保護：Llama 逾時或失敗時，需回退至既有 Faker/模板回應
 5. 記錄要求：每次生成需寫入 traffic_logs 與 mirage_memory 供稽核
