@@ -96,5 +96,5 @@ async def get_user_data(
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
     
-    # 私人開發環境使用 localhost，並啟用 reload 以便快速迭代
-    # uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    # 私人開發環境使用 localhost
+    # uvicorn.run("main:app", host="127.0.0.1", port=8000)

@@ -151,5 +151,34 @@ def auto_updates() -> dict:
         "update_log": f"{current_time}已更新"
     }
 
+def get_ip_details(ip : str) -> dict:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT *
+        FROM nexus_activity 
+        WHERE attacker_ip = ? 
+    ''', (ip,))
+
+    row = cursor.fetchone()
+
+    conn.close()
+    return dict(row)
+
+def compare_traffic():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    return
+
+def set_log_category():
+    return
+
+# def execute_terminal_cmd():
+#     return
+
+
+
 if __name__ == "__main__":
     pass
+
