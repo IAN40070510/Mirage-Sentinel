@@ -1,110 +1,244 @@
-Markdown
-# Mirage-Sentinel (幻影哨兵)
+# Mirage-Sentinel
 
-> **基於 AI Agent 之自主偽裝與隔離防禦系統**
-> *(Autonomous Camouflage and Isolation Defense System Based on AI Agent)*
->
-> **專案負責人**：林柏璋 (112AB0055) 暨開發團隊
+Mirage-Sentinel 是一個以 FastAPI 為核心的主動式防禦 API Gateway。
+系統會先做攻擊意圖判斷，對高風險請求導向沙盒並回傳假資料，同時寫入攻防日誌與欺敵記憶。
 
----
+## 專案目標
 
-## 專案簡介
+1. 偵測惡意請求（SQLi、XSS、LFI、命令注入等）
+2. 將高風險流量隔離到沙盒服務
+3. 回傳一致的假資料（Deception）拖延攻擊者
+4. 記錄完整攻防軌跡供儀表板分析
 
-在現代軟體安全與逆向工程的攻防對弈中，傳統防火牆與 WAF 往往受限於被動的「阻擋」邏輯，難以掌握攻擊者的真實意圖。**Mirage-Sentinel** 突破此框架，建構於 API 閘道器（API Gateway）之上，將防禦理念昇華為**「主動欺敵與資源消耗」**。
+## 目前功能
 
-當系統偵測到惡意探測（如 SQL Injection、XSS、LFI）時，AI Agent 將不會直接切斷連線，而是將攻擊者無縫引導至「幻象引擎（Mirage Engine）」。系統會即時生成具備高度真實性的誘餌資料（Honeypot Data），在消耗駭客攻擊成本與時間的同時，同步側錄其攻擊特徵與行為模式，實現「誘捕、隔離、溯源」三位一體的次世代防禦體系。
+1. 攻擊檢測與風險分數：由 `core/sentinel.py` 分析請求意圖
+2. 沙盒隔離：由 `core/sandbox.py` 將惡意請求轉送至 `sandbox_service.py`
+3. 假資料生成：由 `core/mirage.py` 產生誘餌資料
+4. 狀態記憶：`data/mirage_memory.db` 會保存同一攻擊者的欺敵狀態
+5. 攻防日誌：`data/traffic_logs.db` 記錄攻擊向量、風險、處置狀態
+6. 監控 API：`api/dashboard.py` 提供唯讀查詢（需 API Key）
 
----
+## 系統流程
 
-## 核心模組與架構 (MVP 階段)
+1. Client 呼叫 API 入口 `main.py`
+2. Sentinel 判斷是否為高風險攻擊
+3. 若為攻擊：
+   - 讀取 `mirage_memory.db` 是否已有記憶
+   - 有記憶時回傳同一份假資料
+   - 無記憶時導向沙盒，產生新假資料並寫回記憶
+4. 同步寫入 `traffic_logs.db` 供後續分析
 
-本系統底層採用 **CQRS (命令查詢職責分離)** 架構設計，以確保高併發流量下的極致效能，目前具備四大核心模組：
-
-1. **核心 API 閘道 (FastAPI Gateway)**
-   - 基於 `FastAPI` 打造的高效能異步路由，作為系統的最前線，負責攔截所有外部請求，並精準分流正常用戶與惡意攻擊者。
-
-2. **哨兵攔截引擎 (Sentinel Agent)**
-   - 結合 **Aho-Corasick 多字串比對演算法** 與 **Bloom Filter 布隆過濾器**，並串接 OWASP SecLists 惡意字典檔。
-   - 具備微秒級（Microsecond）的攻擊意圖分析能力，動態賦予流量風險評估值 (`risk_level`)。
-
-3. **幻象資料模擬器 (Mirage Agent)**
-   - 具備**情境感知（Context-aware）**能力的動態誘餌生成器。
-   - 整合 `Faker` 動態生成符合台灣繁體中文情境的假個資、假薪資結構或擬真系統報錯訊息，根據駭客的探測手法「量身打造」回傳內容。
-
-4. **物理雙核記憶體 (Dual-DB Architecture)**
-   - **`mirage_memory.db` (內部狀態庫)**：確保「欺敵一致性」。當同一 IP 重複發動攻擊時，系統會極速查閱此庫並回傳相同的誘餌資料，防止駭客識破偽裝。
-   - **`traffic_logs.db` (戰情倉儲)**：背景異步寫入完整的攻防紀錄（IP、特徵、風險分數），作為後續威脅情報分析的資料基石。
-
----
-
-## 專案目錄結構
+## 專案結構
 
 ```text
 Mirage-Sentinel/
-│
-├── main.py                  # 【後端入口】FastAPI 主程式 (API Gateway, 路由分發)
-│
-├── frontend/                # 【前端戰情室】完全交給隊友發揮的專屬開發區
-│   ├── dashboard.py         # 主程式入口 (不限制框架，讓他們自己決定結構)
-│   └── requirements.txt     # (可選) 前端專屬的套件清單
-│
-├── core/                    # 【核心大腦】AI Agent 防禦系統的底層邏輯
-│   ├── __init__.py
-│   ├── sentinel.py          # 哨兵 Agent：載入機器學習模型，執行極速意圖判定
-│   ├── mirage.py            # 幻象 Agent：串接 LLM，動態生成誘餌與假資料
-│   └── database.py          # 資料庫操作：負責讀寫日誌與記憶庫
-│
-├── data/                    # 【資料與狀態】(建議 .gitignore 忽略敏感資料)
-│   ├── traffic_logs.db      # 戰鬥日誌 (留給前端撈取畫圖的唯一來源)
-│   ├── mirage_memory.db     # Agent 的欺敵狀態記憶庫
-│   └── datasets/            # 存放用來訓練 AI 的原始 CSV 資料
-│
-├── models/                  # 【AI 模型庫】存放訓練好的靜態模型檔
-│   ├── sentinel_model.pkl   # XGBoost 或 Random Forest 模型大腦
-│   └── vectorizer.pkl       # 特徵轉換器
-│
-├── scripts/                 # 【自動化工具】開發與測試必備腳本
-│   ├── train_model.py       # 讀取 datasets 並產出 .pkl 檔的訓練腳本
-│   └── attack_simulation.py # 紅隊攻擊模擬器 (負責生數據給隊友畫圖)
-│
-├── Dockerfile               # 【部署】定義後端與 AI Agent 的容器環境
-├── docker-compose.yml       # 【部署】一鍵啟動後端與前端的多容器編排檔
-│
-├── .env                     # 環境變數 (存放 API Key，絕對不可上傳)
-├── .env.example             # 環境變數範例檔
-├── requirements.txt         # 後端專案依賴套件清單
-└── README.md                # 專案說明與啟動文件
-本機端安裝與測試指南
-1. 環境安裝
-請確保您的開發環境已安裝 Python 3.10 以上版本，並執行以下指令初始化專案：
+├── main.py
+├── sandbox_service.py
+├── api/
+│   └── dashboard.py
+├── core/
+│   ├── sentinel.py
+│   ├── mirage.py
+│   ├── sandbox.py
+│   ├── deception_db.py
+│   ├── traffic_db.py
+│   └── nexus_db.py
+├── data/
+│   ├── datasets/
+│   ├── mirage_memory.db
+│   └── traffic_logs.db
+├── frontend/
+├── Dockerfile
+├── docker-compose.yml
+└── requirements.txt
+```
 
-Bash
-git clone [https://github.com/IAN40070510/Mirage-Sentinel.git](https://github.com/IAN40070510/Mirage-Sentinel.git)
-cd Mirage-Sentinel
+## 環境需求
+
+1. Python 3.10+
+2. Docker + Docker Compose（選用）
+
+## 本機啟動
+
+```bash
 pip install -r requirements.txt
-2. 啟動防禦伺服器
-Bash
-uvicorn main:app --reload --port 8000
-3. API 攻防演習 (透過 Swagger UI)
-伺服器啟動後，請開啟瀏覽器前往 API 互動測試面板：http://127.0.0.1:8000/docs 進行攻防演練：
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
 
-良民測試 (正常流量)
+Swagger 文件：`http://127.0.0.1:8000/docs`
 
-Payload: (留白) 或輸入常規業務字串。
+## Docker 啟動
 
-結果: 哨兵系統放行，正確回傳真實後端用戶資料。
+```bash
+docker compose up --build
+```
 
-駭客測試 (惡意流量攔截與欺敵)
+服務預設：
 
-Payload: 填入 DROP TABLE、UNION SELECT 或 <script> 等惡意指令。
+1. API Gateway：`http://127.0.0.1:8000`
+2. Sandbox Service：`http://127.0.0.1:8001`
 
-結果: 哨兵 Agent 瞬間觸發警報，自動將連線切換至幻象模式。攻擊者將收到逼真的假資料（Honeypot），同時其攻擊情報與風險分數已默默寫入底層戰情倉儲。
+## 主要 API
 
-未來展望與開發藍圖 (Next Steps)
-[ ] CTI 戰情室儀表板：開發 Streamlit 前端視覺化介面，以唯讀模式介接 traffic_logs.db，將全球威脅熱點、攻擊手法與駭客滯留時間進行深度可視化。
+1. `GET /api/v1/user/{user_id}`
+   - 正式入口
+   - `payload` 可用於測試攻擊字串
 
-[ ] Docker 容器化部署：配合實務上的 Linux 伺服器維運標準，撰寫 Dockerfile 與 docker-compose.yml，實現前後端雙引擎與資料庫掛載的標準化一鍵部署。
+2. `POST /api/v1/simulate_attack`
+   - 測試入口
+   - 參數：`user_id`、`payload`（選填）、`attacker_ip`（可切換攻擊者）
+   - 用於驗證同攻擊者是否拿到同一份假資料
 
-[ ] AI 幻象模型升級：導入 LLM (大型語言模型) 徹底取代靜態 Faker，賦予 Mirage Agent 處理複雜對話與極致擬真系統狀態的動態欺敵能力。
+3. `GET /api/v1/dashboard/*`
+   - 監控查詢 API
+   - 需在 Header 帶 `X-API-Key`
 
-[ ] 主動式隔離與自動封鎖：整合外部防火牆 API (如 Cloudflare WAF 或 Linux iptables)，當特定 IP 累積達絕對風險閾值時，自動執行網路層級的硬性隔離與封鎖。
+## API Key（目前狀態）
+
+目前程式採用固定字串：
+
+```python
+API_KEY = "your-secure-api-key"
+```
+
+建議下一步改為環境變數（`.env`），避免硬編碼金鑰。
+
+## 記憶機制說明
+
+欺敵記憶鍵值目前為：
+
+1. `attacker_ip`
+2. `query_id`（對應 user_id）
+
+效果：同一攻擊者重複攻擊同一目標時，系統會回傳一致的假資料，並更新欺敵成效指標。
+
+## 互動深度（Deception Interaction Depth）
+
+互動深度不再是單純請求次數，而是「騙術成功度」的綜合評分（`depth_score`，0~100）。
+
+四個評分維度如下：
+
+1. 攻擊鏈轉換率（`funnel_level`）
+   - L1：淺層探測
+   - L2：持續互動（命中記憶）
+   - L3：深層探勘（跨端點、憑證/內部資源探測跡象）
+2. 戰場停留時間（`dwell_seconds`）
+3. 端點探索廣度（`endpoint_coverage`）
+4. 惡意負載演化（`payload_evolution_score`）
+
+實作位置：`core/deception_metrics.py`
+
+## 深度分析 API
+
+1. `GET /api/v1/dashboard/interaction_depth/{ip}?query_id=...`
+   - 回傳 `depth_score` 與四維度分項分數
+2. `POST /api/v1/simulate_attack`
+   - 回傳 `deception_memory`，含 `funnel_level`、`endpoint_coverage`、`payload_evolution_score`
+
+## 範例回應 JSON
+
+`POST /api/v1/simulate_attack`
+
+```json
+{
+   "status": "attack_detected",
+   "fake_data": {
+      "user_id": "1001",
+      "name": "王小明",
+      "email": "demo@example.com",
+      "balance": 982341,
+      "status": "active"
+   },
+   "event_log": {
+      "request_at": "2026-03-24 21:10:45",
+      "response_at": "2026-03-24 21:10:45",
+      "process_ms": 27,
+      "attacker_ip": "10.10.10.1",
+      "raw_payload": "1001 ../../../../etc/passwd",
+      "query_id": "1001",
+      "attack_vector": "LFI",
+      "risk_level": 92,
+      "is_attack": 1,
+      "mitigation_status": "Sandboxed",
+      "interaction_depth": 74,
+      "dwell_time": 181.0,
+      "hits": 3
+   },
+   "deception_memory": {
+      "dwell_time": 181.0,
+      "interaction_depth": 74,
+      "hits": 3,
+      "funnel_level": 3,
+      "endpoint_coverage": 4,
+      "payload_evolution_score": 68
+   }
+}
+```
+
+`GET /api/v1/dashboard/interaction_depth/{ip}?query_id=1001`
+
+```json
+{
+   "ip": "10.10.10.1",
+   "query_id": "1001",
+   "depth_score": 74,
+   "funnel_level": 3,
+   "dwell_seconds": 181,
+   "endpoint_coverage": 4,
+   "payload_evolution_score": 68,
+   "dimension_scores": {
+      "funnel": 100,
+      "dwell_time": 20,
+      "endpoint_coverage": 80,
+      "payload_evolution": 68
+   }
+}
+```
+
+## 測試範例
+
+```bash
+# 正常請求
+curl "http://127.0.0.1:8000/api/v1/user/1001"
+
+# 攻擊測試
+curl "http://127.0.0.1:8000/api/v1/user/1001?payload=DROP%20TABLE%20users"
+
+# 切換攻擊者測試記憶
+curl -X POST "http://127.0.0.1:8000/api/v1/simulate_attack?user_id=1001&payload=../../../../etc/passwd&attacker_ip=10.10.10.1"
+```
+
+## 已知限制
+
+1. 正常流量分支目前回傳示意資料，尚未串接真實業務後端
+2. API Key 仍為硬編碼，尚未完成環境變數化
+3. AI 模型層仍在規劃中
+
+## 開發路線圖
+
+1. 必做：導入 XGBoost 快篩層（特徵工程 + 訓練 + 推論整合）
+2. 必做：導入幻象生成模型 Llama3.1 8B（Mirage Agent）
+3. 選做：Regex 前置規則層
+4. 選做：向量相似度比對層
+5. 選做：DistilBERT 語意複判層
+
+## 幻象模型必做規格（Llama3.1 8B）
+
+1. 模型用途：惡意請求命中後，生成高一致性的欺敵回應
+2. 一致性要求：同 attacker_ip + query_id 須維持相同角色與資料敘事
+3. 安全要求：不得回傳真實後端資料，不得暴露系統內部路徑與金鑰
+4. 失敗保護：Llama 逾時或失敗時，需回退至既有 Faker/模板回應
+5. 記錄要求：每次生成需寫入 traffic_logs 與 mirage_memory 供稽核
+
+## 必做驗收清單
+
+1. XGBoost 可完成訓練、載入與線上推論
+2. Mirage Agent 已串接 Llama3.1 8B 並能回傳欺敵資料
+3. 同 attacker_ip + query_id 的重複攻擊可維持相同假資料與可追蹤深度分數
+4. Llama3.1 8B 異常時可自動回退，不影響 API 可用性
+5. Dashboard 可查到攻擊事件、風險分數與處置狀態
+
+## 授權
+
+此專案目前未附正式開源授權。若要對外釋出，建議補上 LICENSE。

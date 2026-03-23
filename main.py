@@ -7,8 +7,8 @@ from fastapi.security import APIKeyHeader
 
 # 核心模組匯入
 from core.sentinel import analyze_intent
-from core.mirage import generate_fake_data
 from core.deception_db import setup_deception_db, get_memory, save_deception_state
+from core.deception_metrics import compute_interaction_metrics
 from core.traffic_db import setup_traffic_db, log_traffic_event
 from core.sandbox import run_attack_in_sandbox
 
@@ -22,14 +22,6 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 def verify_api_key(api_key: str = Security(api_key_header)):
     if api_key != API_KEY:
         raise HTTPException(status_code=403, detail="Unauthorized access")
-
-
-def parse_db_timestamp(ts: str) -> datetime:
-    """相容解析 DB 時間格式：支援含毫秒與不含毫秒。"""
-    try:
-        return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S.%f")
-    except ValueError:
-        return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -95,28 +87,35 @@ async def get_user_data(
         risk_score = int(confidence * 100)
         mem = get_memory(client_ip, user_id)
 
-        dwell_time, interaction_depth, hits = 0.0, 1, 1
+        metrics = compute_interaction_metrics(
+            attacker_ip=client_ip,
+            query_id=user_id,
+            current_payload=detection_target,
+            has_memory_hit=bool(mem),
+        )
+
+        dwell_time = float(metrics["dwell_seconds"])
+        interaction_depth = int(metrics["depth_score"])
+        hits = 1
         if mem:
-            last_seen_dt = parse_db_timestamp(mem["last_seen"])
-            dwell_time = round((datetime.now() - last_seen_dt).total_seconds(), 2)
-            interaction_depth = mem["depth"] + 1
             hits = mem["hits"] + 1
             fake_data = mem["payload"]
         else:
-            fake_data = generate_fake_data(user_id)
+            fake_data = None
 
         process_ms = int((time.perf_counter() - start_perf) * 1000)
         response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")[:-3]
 
-        # 攻擊被導向隔離 Docker 沙盒執行（若可用）並取得假資料
-        fake_data = await run_attack_in_sandbox({
-            **event_payload,
-            "response_at": response_at,
-            "process_ms": process_ms,
-            "hits": hits,
-            "interaction_depth": interaction_depth,
-            "dwell_time": dwell_time,
-        })
+        # 只有第一次命中才導向沙盒；已有記憶則沿用同一份假資料
+        if fake_data is None:
+            fake_data = await run_attack_in_sandbox({
+                **event_payload,
+                "response_at": response_at,
+                "process_ms": process_ms,
+                "hits": hits,
+                "interaction_depth": interaction_depth,
+                "dwell_time": dwell_time,
+            })
 
 
         event_payload.update({
@@ -136,7 +135,10 @@ async def get_user_data(
             log_traffic_event(event_payload)
 
         save_deception_state(client_ip, user_id, attack_vector, risk_score, fake_data)
-        print(f"[ALERT] 哨兵攔截：{attack_vector} (信心: {confidence}) | 深度: {interaction_depth} | 隔離: Docker沙盒")
+        print(
+            f"[ALERT] 哨兵攔截：{attack_vector} (信心: {confidence}) | "
+            f"深度分數: {interaction_depth} | 漏斗層級: {metrics['funnel_level']} | 隔離: Docker沙盒"
+        )
         return fake_data
 
     else:
@@ -213,12 +215,18 @@ async def simulate_attack(
         risk_score = int(confidence * 100)
         mem = get_memory(client_ip, user_id)
 
-        # 計算滯留時間、交互深度、點擊次數
-        dwell_time, interaction_depth, hits = 0.0, 1, 1
+        metrics = compute_interaction_metrics(
+            attacker_ip=client_ip,
+            query_id=user_id,
+            current_payload=detection_target,
+            has_memory_hit=bool(mem),
+        )
+
+        # 計算欺敵互動深度（四維度）與點擊次數
+        dwell_time = float(metrics["dwell_seconds"])
+        interaction_depth = int(metrics["depth_score"])
+        hits = 1
         if mem:
-            last_seen_dt = parse_db_timestamp(mem["last_seen"])
-            dwell_time = round((datetime.now() - last_seen_dt).total_seconds(), 2)
-            interaction_depth = mem["depth"] + 1
             hits = mem["hits"] + 1
             fake_data = mem["payload"]
         else:
@@ -255,8 +263,11 @@ async def simulate_attack(
             "deception_memory": {
                 "dwell_time": dwell_time,
                 "interaction_depth": interaction_depth,
-                "hits": hits
-            }
+                "hits": hits,
+                "funnel_level": metrics["funnel_level"],
+                "endpoint_coverage": metrics["endpoint_coverage"],
+                "payload_evolution_score": metrics["payload_evolution_score"],
+            },
         }
 
     return {

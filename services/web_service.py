@@ -3,6 +3,7 @@ import os
 import json
 from datetime import datetime
 from core.traffic_db import get_recent_traffic
+from core.deception_metrics import compute_interaction_metrics
 
 # 路徑定位
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -64,24 +65,42 @@ def get_hacker_dwell_time(attacker_ip: str) -> dict:
     }
 
 def analyze_interaction_depth(attacker_ip: str, query_id: str) -> dict:
-    """透過 IP 與 query_id 對應互動深度"""
+    """以欺敵成效量化互動深度（漏斗、停留、覆蓋、演化）。"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute('''
-            SELECT t.request_at
+        cursor.execute(
+            '''
+            SELECT 1
             FROM traffic_logs t
             JOIN clients c ON t.client_id = c.id
-            WHERE c.ip = ? AND t.query_id = ?
-            ORDER BY t.request_at DESC
-        ''', (attacker_ip, query_id))
-        rows = cursor.fetchall()
+            WHERE c.ip = ? AND t.query_id = ? AND t.is_attack = 1
+            LIMIT 1
+            ''',
+            (attacker_ip, query_id),
+        )
+        has_memory_hit = cursor.fetchone() is not None
 
-    depth_level = len(rows)
+    metrics = compute_interaction_metrics(
+        attacker_ip=attacker_ip,
+        query_id=query_id,
+        current_payload=None,
+        has_memory_hit=has_memory_hit,
+    )
 
     return {
         "ip": attacker_ip,
-        "depth_level": depth_level,
-        "total_actions": depth_level
+        "query_id": query_id,
+        "depth_score": metrics["depth_score"],
+        "funnel_level": metrics["funnel_level"],
+        "dwell_seconds": metrics["dwell_seconds"],
+        "endpoint_coverage": metrics["endpoint_coverage"],
+        "payload_evolution_score": metrics["payload_evolution_score"],
+        "dimension_scores": {
+            "funnel": metrics["funnel_score"],
+            "dwell_time": metrics["dwell_score"],
+            "endpoint_coverage": metrics["coverage_score"],
+            "payload_evolution": metrics["payload_evolution_score"],
+        },
     }
 
 
