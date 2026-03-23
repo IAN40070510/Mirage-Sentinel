@@ -26,6 +26,11 @@ async def get_interaction_depth(ip: str, query_id: str):
 async def get_attack_timeline(ip: str):
     return ws.get_attack_timeline(ip)
 
+# 近期流量紀錄 (依Excel欄位格式)
+@router.get("/recent_traffic", summary="獲取近期流量日誌")
+async def get_recent_traffic(limit: int = 100):
+    return ws.fetch_recent_traffic(limit)
+
 # 糾錯機制
 @router.post("/misjudgment", summary="標記誤判並存入資料夾")
 async def log_misjudgment_event(req: MisjudgmentRequest):
