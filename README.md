@@ -235,7 +235,7 @@ curl -X POST "http://127.0.0.1:8000/api/v1/simulate_attack?user_id=1001&payload=
 
 1. XGBoost 可完成訓練、載入與線上推論
 2. Mirage Agent 已串接 Llama3.1 8B 並能回傳欺敵資料
-3. 同 attacker_ip + query_id 的重複攻擊可維持相同假資料與可追蹤深度分數
+3. 同 attacker_ip的重複攻擊可維持邏輯與過往回覆相同的假資料與可追蹤深度分數
 4. Llama3.1 8B 異常時可自動回退，不影響 API 可用性
 5. Dashboard 可查到攻擊事件、風險分數與處置狀態
 
