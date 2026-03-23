@@ -8,3 +8,4 @@ rbloom
 python-dotenv
 python-multipart
 ahocorasick-rs
+httpx
