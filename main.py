@@ -157,15 +157,24 @@ async def get_user_data(
 @app.post("/api/v1/simulate_attack", summary="模擬攻擊請求")
 async def simulate_attack(
     user_id: str = Query(..., description="用戶 ID"),
-    payload: str = Query(..., description="模擬的攻擊指令"),
+    payload: str = Query("", description="""模擬的攻擊指令（選填，留空為正常請求）
+    
+常見攻擊模板：
+  • SQL 注入: ' OR '1'='1 / DROP TABLE users / UNION SELECT * FROM admin
+  • LFI: ../../../../etc/passwd / ../../config.php / /etc/shadow
+  • XSS: <script>alert('xss')</script> / javascript:alert(1)
+  • RCE: ; ls -la / $(whoami) / `id`
+  • 目錄遍歷: ../../../ / ..\\..\\..\\
+    """),
     attacker_ip: str = Query("192.168.0.1", description="攻擊者 IP（可選）"),
     background_tasks: BackgroundTasks = None
 ):
     """模擬攻擊請求，測試系統的攻擊檢測與沙盒隔離功能
     
-    可自定義攻擊者 IP 測試欺騙記憶庫追踪：
-    - 同 IP + 同 user_id → 返回相同的假資料
-    - 不同 IP + 同 user_id → 返回不同的假資料
+可自定義攻擊者 IP 測試欺騙記憶庫追踪：
+- 同 IP + 同 user_id → 返回相同的假資料
+- 不同 IP + 同 user_id → 返回不同的假資料
+- 不傳 payload 或留空 → 測試正常請求流程
     """
     start_perf = time.perf_counter()
     request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")[:-3]
