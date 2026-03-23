@@ -23,6 +23,14 @@ def verify_api_key(api_key: str = Security(api_key_header)):
     if api_key != API_KEY:
         raise HTTPException(status_code=403, detail="Unauthorized access")
 
+
+def parse_db_timestamp(ts: str) -> datetime:
+    """相容解析 DB 時間格式：支援含毫秒與不含毫秒。"""
+    try:
+        return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S.%f")
+    except ValueError:
+        return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """啟動時初始化雙軌資料庫，開啟全時監控"""
@@ -48,7 +56,7 @@ app.include_router(
 @app.get("/api/v1/user/{user_id}")
 async def get_user_data(
     user_id: str,
-    payload: str = Query(None, description="惡意指令測試區"),
+    payload: str = Query(None, description="指令測試區"),
     request: Request = None,
     background_tasks: BackgroundTasks = None,
 ):
@@ -89,7 +97,7 @@ async def get_user_data(
 
         dwell_time, interaction_depth, hits = 0.0, 1, 1
         if mem:
-            last_seen_dt = datetime.strptime(mem["last_seen"], "%Y-%m-%d %H:%M:%S")
+            last_seen_dt = parse_db_timestamp(mem["last_seen"])
             dwell_time = round((datetime.now() - last_seen_dt).total_seconds(), 2)
             interaction_depth = mem["depth"] + 1
             hits = mem["hits"] + 1
@@ -208,7 +216,7 @@ async def simulate_attack(
         # 計算滯留時間、交互深度、點擊次數
         dwell_time, interaction_depth, hits = 0.0, 1, 1
         if mem:
-            last_seen_dt = datetime.strptime(mem["last_seen"], "%Y-%m-%d %H:%M:%S")
+            last_seen_dt = parse_db_timestamp(mem["last_seen"])
             dwell_time = round((datetime.now() - last_seen_dt).total_seconds(), 2)
             interaction_depth = mem["depth"] + 1
             hits = mem["hits"] + 1
@@ -237,11 +245,13 @@ async def simulate_attack(
 
         # 保存欺騙狀態到記憶庫
         save_deception_state(client_ip, user_id, attack_vector, risk_score, fake_data)
+        latest_memory = get_memory(client_ip, user_id)
 
         return {
             "status": "attack_detected",
             "fake_data": fake_data,
             "event_log": event_payload,
+            "mirage_memory": latest_memory,
             "deception_memory": {
                 "dwell_time": dwell_time,
                 "interaction_depth": interaction_depth,
