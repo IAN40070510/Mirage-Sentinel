@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Query, BackgroundTasks, Security
+from fastapi import FastAPI, Request, Query, BackgroundTasks, Security, HTTPException
 import uvicorn
 import time
 from datetime import datetime
