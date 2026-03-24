@@ -164,19 +164,7 @@ def get_command_heatmap() -> dict:
         "top_commands": top_commands
     }
 
-<<<<<<< Updated upstream
-def auto_updates() -> dict:
-    """每5秒自動讀取資料庫更新儀表板"""
-    # 僅回傳當前時間與已更新字串
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    return {
-        "update_log": f"{current_time}已更新"
-    }
-
-def get_ip_details(ip: str) -> dict:
-=======
 def get_ip_details(ip : str) -> dict:
->>>>>>> Stashed changes
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
