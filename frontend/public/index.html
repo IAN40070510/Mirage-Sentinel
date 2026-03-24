@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cyber Security Monitoring Dashboard</title>
+  <link rel="stylesheet" href="./style.css" />
+  <script src="./main.js" defer></script>
+</head>
+<body>
+  <div class="screen">
+    <div class="glow"></div>
+    <div class="stream-layer" id="streamLayer"></div>
+
+    <div class="hud">
+      <div class="hud-box">threat stream / live monitoring</div>
+      <div class="hud-box" id="statusText">status: server synced</div>
+    </div>
+
+    <div class="window main-window draggable" id="mainWindow">
+      <div class="window-header drag-handle">
+        <div class="window-title">selected ip detail</div>
+        <div class="window-dots"><span></span><span></span><span></span></div>
+      </div>
+      <div class="window-body">
+        <div class="section-title">目前選定目標</div>
+        <div class="traffic-meta">
+          <div>IP: <span class="strong" id="detailIp">-</span></div>
+          <div>Risk: <span class="strong" id="detailRisk">-</span></div>
+        </div>
+
+        <div class="main-grid">
+          <div class="info-card">
+            <div class="label">來源地區</div>
+            <div class="value" id="detailGeo">-</div>
+          </div>
+          <div class="info-card">
+            <div class="label">目前流量</div>
+            <div class="value" id="detailTraffic">-</div>
+          </div>
+          <div class="info-card">
+            <div class="label">協定 / Port</div>
+            <div class="value" id="detailProto">-</div>
+          </div>
+          <div class="info-card">
+            <div class="label">最近行為</div>
+            <div class="value" id="detailBehavior">-</div>
+          </div>
+        </div>
+
+        <div class="log-block" id="detailPayload">等待 API 資料...</div>
+
+        <div class="section-title section-gap">最近紀錄</div>
+        <div class="log-list" id="detailRecentLogs">
+          <div class="log-item"><span class="log-time">--</span>等待 API 資料...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="window sub-window draggable w1">
+      <div class="window-header drag-handle">
+        <div class="window-title">live ip traffic</div>
+        <div class="window-dots"><span></span><span></span><span></span></div>
+      </div>
+      <div class="window-body fixed-window-body">
+        <div class="section-title">資料庫全部 IP</div>
+        <div class="ip-list" id="ipTrafficList">
+          <div class="ip-item">
+            <div class="ip-top">
+              <span class="strong">loading...</span>
+              <span>-</span>
+            </div>
+            <div class="muted">等待 API 資料</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="window sub-window draggable w2">
+      <div class="window-header drag-handle">
+        <div class="window-title">traffic overview</div>
+        <div class="window-dots"><span></span><span></span><span></span></div>
+      </div>
+      <div class="window-body fixed-window-body chart-window-body">
+        <div class="traffic-meta">
+          <div>Normal: <span id="normalPercent">72%</span></div>
+          <div>Attack: <span id="attackPercent">28%</span></div>
+        </div>
+        <canvas id="trafficChart" width="180" height="180"></canvas>
+        <div class="log-block" id="trafficSummary">
+normal traffic stable
+attack traffic controlled
+        </div>
+      </div>
+    </div>
+
+    <div class="window sub-window draggable w3">
+      <div class="window-header drag-handle">
+        <div class="window-title">top 10 attack methods</div>
+        <div class="window-dots"><span></span><span></span><span></span></div>
+      </div>
+      <div class="window-body fixed-window-body">
+        <div class="attack-list" id="attackMethodList">
+          <div class="attack-row">
+            <div class="rank">-</div>
+            <div class="attack-name">loading...</div>
+            <div class="bar-wrap"><div class="bar" style="width: 0%"></div></div>
+            <div>0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="window sub-window draggable w4">
+      <div class="window-header drag-handle">
+        <div class="window-title">live log</div>
+        <div class="window-dots"><span></span><span></span><span></span></div>
+      </div>
+      <div class="window-body fixed-window-body">
+        <div class="log-list">
+          <div class="log-item"><span class="log-time">static</span>此區塊保留框架，不由 JavaScript 載入資料。</div>
+          <div class="log-item"><span class="log-time">static</span>如需接資料庫 log，請由 server.js 提供對應 API。</div>
+          <div class="log-item"><span class="log-time">static</span>目前不透過前端 JS 呼叫資訊。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cmd-bar">
+      <div class="cmd-top">command input</div>
+      <div class="cmd-input-wrap">
+        <div class="cmd-prefix">root@matrix:~$</div>
+        <input
+          type="text"
+          class="cmd-input"
+          placeholder="保留框架，未綁定任何前端資料呼叫"
+        />
+        <button class="cmd-send" type="button">EXEC</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

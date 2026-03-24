@@ -164,6 +164,7 @@ def get_command_heatmap() -> dict:
         "top_commands": top_commands
     }
 
+<<<<<<< Updated upstream
 def auto_updates() -> dict:
     """每5秒自動讀取資料庫更新儀表板"""
     # 僅回傳當前時間與已更新字串
@@ -173,6 +174,9 @@ def auto_updates() -> dict:
     }
 
 def get_ip_details(ip: str) -> dict:
+=======
+def get_ip_details(ip : str) -> dict:
+>>>>>>> Stashed changes
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
@@ -195,20 +199,6 @@ def get_ip_details(ip: str) -> dict:
 def fetch_recent_traffic(limit: int = 100) -> dict:
     items = get_recent_traffic(limit)
     return {"recent_traffic": items}
-
-
-def compare_traffic():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    return
-
-def set_log_category():
-    return
-
-# def execute_terminal_cmd():
-#     return
-
 
 
 if __name__ == "__main__":
