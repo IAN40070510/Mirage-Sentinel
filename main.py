@@ -40,7 +40,7 @@ app = FastAPI(
 # 掛載前端專用的 API 路徑
 app.include_router(
     dashboard.router,
-    prefix="/api/v1/dashboard", 
+    prefix="/api/v1", 
     tags=["Dashboard"],
     dependencies=[Security(verify_api_key)]
 )
@@ -88,7 +88,7 @@ async def get_user_data(
         mem = get_memory(client_ip, user_id)
 
         metrics = compute_interaction_metrics(
-            attacker_ip=client_ip,
+            client_ip=client_ip,
             query_id=user_id,
             current_payload=detection_target,
             has_memory_hit=bool(mem),
@@ -176,7 +176,7 @@ async def simulate_attack(
   • RCE: ; ls -la / $(whoami) / `id`
   • 目錄遍歷: ../../../ / ..\\..\\..\\
     """),
-    attacker_ip: str = Query("192.168.0.1", description="攻擊者 IP（可選）"),
+    client_ip: str = Query("192.168.0.1", description="攻擊者 IP（可選）"),
     background_tasks: BackgroundTasks = None
 ):
     """模擬攻擊請求，測試系統的攻擊檢測與沙盒隔離功能
@@ -188,7 +188,6 @@ async def simulate_attack(
     """
     start_perf = time.perf_counter()
     request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    client_ip = attacker_ip  # 使用傳入的攻擊者 IP
     user_agent = "Simulated-Attack-Client"
 
     detection_target = f"{user_id} {payload}".strip()
@@ -199,7 +198,7 @@ async def simulate_attack(
 
     event_payload = {
         "request_at": request_at,
-        "attacker_ip": client_ip,
+        "client_ip": client_ip,
         "location": "Simulated",
         "is_proxy": 0,
         "user_agent": user_agent,
@@ -216,7 +215,7 @@ async def simulate_attack(
         mem = get_memory(client_ip, user_id)
 
         metrics = compute_interaction_metrics(
-            attacker_ip=client_ip,
+            client_ip=client_ip,
             query_id=user_id,
             current_payload=detection_target,
             has_memory_hit=bool(mem),

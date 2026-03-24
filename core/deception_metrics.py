@@ -49,7 +49,7 @@ def _funnel_level(payload: str, endpoint_coverage: int, has_memory_hit: bool) ->
 
 
 def compute_interaction_metrics(
-    attacker_ip: str,
+    client_ip: str,
     query_id: str,
     current_payload: str | None,
     has_memory_hit: bool,
@@ -68,7 +68,7 @@ def compute_interaction_metrics(
             WHERE c.ip = ? AND t.is_attack = 1
             ORDER BY t.request_at ASC
             """,
-            (attacker_ip,),
+            (client_ip,),
         )
         rows = cursor.fetchall()
 
@@ -84,11 +84,11 @@ def compute_interaction_metrics(
         if row[2]:
             payloads.append(row[2])
 
-    now = datetime.now()
-    # 停留時間：首筆攻擊至今（秒）
+    # 停留時間：首筆攻擊到最後一筆攻擊（秒）
     if attack_times:
         first_seen = attack_times[0]
-        dwell_seconds = max(int((now - first_seen).total_seconds()), 0)
+        last_seen = attack_times[-1]
+        dwell_seconds = max(int((last_seen - first_seen).total_seconds()), 0)
     else:
         dwell_seconds = 0
 

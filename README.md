@@ -87,7 +87,7 @@ docker compose up --build
 
 2. `POST /api/v1/simulate_attack`
    - 測試入口
-   - 參數：`user_id`、`payload`（選填）、`attacker_ip`（可切換攻擊者）
+   - 參數：`user_id`、`payload`（選填）、`client_ip`（可切換攻擊者）
    - 用於驗證同攻擊者是否拿到同一份假資料
 
 3. `GET /api/v1/dashboard/*`
@@ -108,7 +108,7 @@ API_KEY = "your-secure-api-key"
 
 欺敵記憶鍵值目前為：
 
-1. `attacker_ip`
+1. `client_ip`
 2. `query_id`（對應 user_id）
 
 效果：同一攻擊者重複攻擊同一目標時，系統會回傳一致的假資料，並更新欺敵成效指標。
@@ -131,7 +131,7 @@ API_KEY = "your-secure-api-key"
 
 ## 深度分析 API
 
-1. `GET /api/v1/dashboard/interaction_depth/{ip}?query_id=...`
+1. `GET /api/v1/dashboard/interaction_depth/{client_ip}?query_id=...`
    - 回傳 `depth_score` 與四維度分項分數
 2. `POST /api/v1/simulate_attack`
    - 回傳 `deception_memory`，含 `funnel_level`、`endpoint_coverage`、`payload_evolution_score`
@@ -154,7 +154,7 @@ API_KEY = "your-secure-api-key"
       "request_at": "2026-03-24 21:10:45",
       "response_at": "2026-03-24 21:10:45",
       "process_ms": 27,
-      "attacker_ip": "10.10.10.1",
+      "client_ip": "10.10.10.1",
       "raw_payload": "1001 ../../../../etc/passwd",
       "query_id": "1001",
       "attack_vector": "LFI",
@@ -176,11 +176,11 @@ API_KEY = "your-secure-api-key"
 }
 ```
 
-`GET /api/v1/dashboard/interaction_depth/{ip}?query_id=1001`
+`GET /api/v1/dashboard/interaction_depth/{client_ip}?query_id=1001`
 
 ```json
 {
-   "ip": "10.10.10.1",
+   "client_ip": "10.10.10.1",
    "query_id": "1001",
    "depth_score": 74,
    "funnel_level": 3,
@@ -206,7 +206,7 @@ curl "http://127.0.0.1:8000/api/v1/user/1001"
 curl "http://127.0.0.1:8000/api/v1/user/1001?payload=DROP%20TABLE%20users"
 
 # 切換攻擊者測試記憶
-curl -X POST "http://127.0.0.1:8000/api/v1/simulate_attack?user_id=1001&payload=../../../../etc/passwd&attacker_ip=10.10.10.1"
+curl -X POST "http://127.0.0.1:8000/api/v1/simulate_attack?user_id=1001&payload=../../../../etc/passwd&client_ip=10.10.10.1"
 ```
 
 ## 已知限制
@@ -235,7 +235,7 @@ curl -X POST "http://127.0.0.1:8000/api/v1/simulate_attack?user_id=1001&payload=
 
 1. XGBoost 可完成訓練、載入與線上推論
 2. Mirage Agent 已串接 Llama3.1 8B 並能回傳欺敵資料
-3. 同 attacker_ip的重複攻擊可維持邏輯與過往回覆相同的假資料與可追蹤深度分數
+3. 同 client_ip 的重複攻擊可維持邏輯與過往回覆相同的假資料與可追蹤深度分數
 4. Llama3.1 8B 異常時可自動回退，不影響 API 可用性
 5. Dashboard 可查到攻擊事件、風險分數與處置狀態
 

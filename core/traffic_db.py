@@ -86,9 +86,9 @@ def log_traffic_event(data: dict):
     conn = get_connection()
     cursor = conn.cursor()
 
-    client_ip = data.get("attacker_ip") or data.get("client_ip")
+    client_ip = data.get("client_ip")
     if not client_ip:
-        raise ValueError("log_traffic_event requires 'attacker_ip' or 'client_ip' in data")
+        raise ValueError("log_traffic_event requires 'client_ip' in data")
 
     if not data.get("request_at"):
         data["request_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -157,7 +157,7 @@ def get_recent_traffic(limit: int = 100):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT t.*, c.ip AS attacker_ip, f.user_agent, f.tls_fingerprint, d.attack_vector,
+        SELECT t.*, c.ip AS client_ip, f.user_agent, f.tls_fingerprint, d.attack_vector,
                d.risk_level, d.hits, d.interaction_depth, d.dwell_time, d.mitigation_status
         FROM traffic_logs t
         JOIN clients c ON t.client_id = c.id

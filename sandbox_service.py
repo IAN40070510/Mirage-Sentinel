@@ -9,7 +9,7 @@ app = FastAPI(title="Mirage-Sentinel Sandbox Service", version="1.0")
 logger = logging.getLogger(__name__)
 
 class AttackRequest(BaseModel):
-    attacker_ip: str
+    client_ip: str
     query_id: str
     raw_payload: str
     attack_vector: str = None
@@ -20,7 +20,7 @@ async def simulate_attack(req: AttackRequest):
     """沙盒服務：解析攻擊請求、記錄行為、模擬回應"""
     try:
         # 1. 解析請求 (Parse Request)
-        attacker_ip = req.attacker_ip
+        client_ip = req.client_ip
         query_id = req.query_id
         raw_payload = req.raw_payload
         attack_vector = req.attack_vector or "unknown"
@@ -29,7 +29,7 @@ async def simulate_attack(req: AttackRequest):
         # 2. 記錄行為 (Record Behavior)
         sandbox_log = {
             "timestamp": datetime.now().isoformat(),
-            "attacker_ip": attacker_ip,
+            "client_ip": client_ip,
             "query_id": query_id,
             "raw_payload": raw_payload,
             "attack_vector": attack_vector,
@@ -48,6 +48,8 @@ async def simulate_attack(req: AttackRequest):
         }
 
     except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
         logger.error(f"Sandbox simulation error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Sandbox error: {str(e)}")
 

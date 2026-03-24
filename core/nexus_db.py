@@ -21,7 +21,7 @@ def get_attack_summary(limit: int = 100):
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT t.id, t.request_at, t.response_at, c.ip AS attacker_ip,
+        SELECT t.id, t.request_at, t.response_at, c.ip AS client_ip,
                f.user_agent, f.tls_fingerprint, d.attack_vector, d.risk_level,
                d.hits, d.interaction_depth, d.dwell_time, d.mitigation_status
         FROM traffic_logs t
@@ -60,11 +60,11 @@ def get_traffic_stats():
     }
 
 
-def get_client_profile(ip: str):
+def get_client_profile(client_ip: str):
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT id, ip, polluted_status FROM clients WHERE ip = ?", (ip,))
+    cursor.execute("SELECT id, ip, polluted_status FROM clients WHERE ip = ?", (client_ip,))
     client = cursor.fetchone()
     if not client:
         conn.close()
@@ -80,16 +80,9 @@ def get_client_profile(ip: str):
         LIMIT 50
     """, (client["id"],))
 
-<<<<<<< Updated upstream
     events = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return {
         "client": dict(client),
         "events": events
     }
-=======
-# if __name__ == "__main__":
-#     init_security_db()
-#     save_cache("192.168.1.1", "Mozilla/5.0", "tls_1", False, {"cmd": "whoami"}, "SQLi", 5, {"res": "ok"}, "q_101")
-#     print(get_cache("192.168.1.1", "q_101"))
->>>>>>> Stashed changes

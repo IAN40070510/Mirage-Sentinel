@@ -1,7 +1,5 @@
-import json
 import logging
 import httpx
-from datetime import datetime
 
 from core.mirage import generate_fake_data
 
@@ -15,7 +13,7 @@ async def run_attack_in_sandbox(request_payload: dict, timeout_seconds: int = 12
       1) 透過 HTTP 調用 sandbox service (FastAPI 中介) 來解析請求、記錄行為、模擬回應。
       2) 若 sandbox service 不可用，降級為本機 fake data。
     """
-    attacker_ip = request_payload.get("attacker_ip", "unknown")
+    client_ip = request_payload.get("client_ip", "unknown")
     query_id = request_payload.get("query_id", "unknown")
 
     # 優先使用 sandbox service 進行隔離模擬
@@ -24,7 +22,7 @@ async def run_attack_in_sandbox(request_payload: dict, timeout_seconds: int = 12
             response = await client.post(
                 "http://sandbox:8001/simulate_attack",
                 json={
-                    "attacker_ip": attacker_ip,
+                    "client_ip": client_ip,
                     "query_id": query_id,
                     "raw_payload": request_payload.get("raw_payload", ""),
                     "attack_vector": request_payload.get("attack_vector"),
