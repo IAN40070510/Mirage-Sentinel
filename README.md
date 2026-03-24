@@ -96,13 +96,11 @@ docker compose up --build
 
 ## API Key（目前狀態）
 
-目前程式採用固定字串：
+目前程式從 `.env` 讀取：
 
-```python
-API_KEY = "your-secure-api-key"
+```env
+API_KEY=replace-with-a-strong-random-key
 ```
-
-建議下一步改為環境變數（`.env`），避免硬編碼金鑰。
 
 ## 記憶機制說明
 

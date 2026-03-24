@@ -1,9 +1,11 @@
 from fastapi import FastAPI, Request, Query, BackgroundTasks, Security, HTTPException
 import uvicorn
 import time
+import os
 from datetime import datetime
 from contextlib import asynccontextmanager
 from fastapi.security import APIKeyHeader
+from dotenv import load_dotenv
 
 # 核心模組匯入
 from core.sentinel import analyze_intent
@@ -15,8 +17,11 @@ from core.sandbox import run_attack_in_sandbox
 # 前端API匯入
 from api import dashboard
 
+# 載入環境變數
+load_dotenv()
+
 # 定義 API 金鑰
-API_KEY = "your-secure-api-key"
+API_KEY = os.getenv("API_KEY", "").strip()
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 def verify_api_key(api_key: str = Security(api_key_header)):
@@ -26,6 +31,8 @@ def verify_api_key(api_key: str = Security(api_key_header)):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """啟動時初始化雙軌資料庫，開啟全時監控"""
+    if not API_KEY:
+        raise RuntimeError("API_KEY is not configured. Please set API_KEY in .env")
     setup_deception_db()
     setup_traffic_db()
     print("[SYSTEM] Mirage-Sentinel 全時哨兵監控模式已啟動。")
@@ -52,6 +59,9 @@ async def get_user_data(
     request: Request = None,
     background_tasks: BackgroundTasks = None,
 ):
+    if request is None:
+        raise HTTPException(status_code=400, detail="Request context is required")
+
     start_perf = time.perf_counter()
     request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # 一進入口立即捕捉（毫秒）
     client_ip = request.client.host
