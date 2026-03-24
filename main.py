@@ -22,6 +22,7 @@ load_dotenv()
 
 # 定義 API 金鑰
 API_KEY = os.getenv("API_KEY", "").strip()
+DEFAULT_DEV_API_KEY = "dev-local-api-key-change-me"
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 def verify_api_key(api_key: str = Security(api_key_header)):
@@ -31,8 +32,10 @@ def verify_api_key(api_key: str = Security(api_key_header)):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """啟動時初始化雙軌資料庫，開啟全時監控"""
+    global API_KEY
     if not API_KEY:
-        raise RuntimeError("API_KEY is not configured. Please set API_KEY in .env")
+        API_KEY = DEFAULT_DEV_API_KEY
+        print("[WARN] API_KEY 未設定，使用開發預設值。正式環境請務必設定 API_KEY。")
     setup_deception_db()
     setup_traffic_db()
     print("[SYSTEM] Mirage-Sentinel 全時哨兵監控模式已啟動。")
