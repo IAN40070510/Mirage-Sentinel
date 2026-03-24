@@ -53,7 +53,7 @@ async def get_user_data(
     background_tasks: BackgroundTasks = None,
 ):
     start_perf = time.perf_counter()
-    request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")[:-3]  # 一進入口立即捕捉
+    request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # 一進入口立即捕捉（毫秒）
     client_ip = request.client.host
     user_agent = request.headers.get("user-agent", "Unknown")
 
@@ -71,7 +71,7 @@ async def get_user_data(
     response_at = None
     event_payload = {
         "request_at": request_at,
-        "attacker_ip": client_ip,
+        "client_ip": client_ip,
         "location": "Cloud/Render",
         "is_proxy": 0,
         "user_agent": user_agent,
@@ -104,7 +104,7 @@ async def get_user_data(
             fake_data = None
 
         process_ms = int((time.perf_counter() - start_perf) * 1000)
-        response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")[:-3]
+        response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
         # 只有第一次命中才導向沙盒；已有記憶則沿用同一份假資料
         if fake_data is None:
@@ -143,7 +143,7 @@ async def get_user_data(
 
     else:
         process_ms = int((time.perf_counter() - start_perf) * 1000)
-        response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")[:-3]
+        response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
         event_payload.update({
             "response_at": response_at,
@@ -187,7 +187,7 @@ async def simulate_attack(
 - 不傳 payload 或留空 → 測試正常請求流程
     """
     start_perf = time.perf_counter()
-    request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")[:-3]
+    request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     client_ip = attacker_ip  # 使用傳入的攻擊者 IP
     user_agent = "Simulated-Attack-Client"
 
@@ -233,7 +233,7 @@ async def simulate_attack(
             fake_data = await run_attack_in_sandbox(event_payload)
 
         process_ms = int((time.perf_counter() - start_perf) * 1000)
-        response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")[:-3]
+        response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
         event_payload.update({
             "response_at": response_at,

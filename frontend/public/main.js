@@ -229,8 +229,8 @@ function createRows() {
     const speed = sizeClass === "large"
       ? rand(0.20, 0.48)
       : sizeClass === "medium"
-      ? rand(0.38, 0.85)
-      : rand(0.52, 1.15);
+        ? rand(0.38, 0.85)
+        : rand(0.52, 1.15);
 
     const direction = Math.random() > 0.5 ? 1 : -1;
     const green = randInt(170, 255);
