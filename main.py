@@ -2,10 +2,14 @@ from fastapi import FastAPI, Request, Query, BackgroundTasks, Security, HTTPExce
 import uvicorn
 import time
 import os
+import logging
 from datetime import datetime
 from contextlib import asynccontextmanager
 from fastapi.security import APIKeyHeader
 from dotenv import load_dotenv
+
+# 配置日誌
+logger = logging.getLogger(__name__)
 
 # 核心模組匯入
 from core.sentinel import analyze_intent
@@ -27,7 +31,9 @@ DEFAULT_DEV_API_KEY = "dev-local-api-key-change-me"
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 def verify_api_key(api_key: str = Security(api_key_header)):
-    if api_key != API_KEY:
+    """統一使用 web_service 中的 API key 驗証邏輯"""
+    from services import web_service as ws
+    if not api_key or not ws.validate_api_key(api_key):
         raise HTTPException(status_code=403, detail="Unauthorized access")
 
 @asynccontextmanager
@@ -36,10 +42,10 @@ async def lifespan(app: FastAPI):
     global API_KEY
     if not API_KEY:
         API_KEY = DEFAULT_DEV_API_KEY
-        print("[WARN] API_KEY 未設定，使用開發預設值。正式環境請務必設定 API_KEY。")
+        logger.warning("API_KEY 未設定，使用開發預設值。正式環境請務必設定 API_KEY。")
     setup_deception_db()
     setup_traffic_db()
-    print("[SYSTEM] Mirage-Sentinel 全時哨兵監控模式已啟動。")
+    logger.info("Mirage-Sentinel 全時哨兵監控模式已啟動。")
     yield
 
 app = FastAPI(
@@ -48,12 +54,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# 掛載前端專用的 API 路徑
+# 掛載前端專用的 API 路徑（API Key 驗證由 router 内部處理）
 app.include_router(
     dashboard.router,
     prefix="/api/v1", 
-    tags=["Dashboard"],
-    dependencies=[Security(verify_api_key)]
+    tags=["Dashboard"]
 )
 
 app.add_middleware(
@@ -67,7 +72,7 @@ app.add_middleware(
 @app.get("/api/v1/user/{user_id}")
 async def get_user_data(
     user_id: str,
-    payload: str = Query(None, description="指令測試區"),
+    payload: str = Query(None, max_length=2000, description="指令測試區 (最多 2000 字)"),
     request: Request = None,
     background_tasks: BackgroundTasks = None,
 ):
@@ -81,11 +86,11 @@ async def get_user_data(
 
     # 組合偵測目標
     current_payload = payload if payload else ""
-    detection_target = f"{user_id} {current_payload}".strip()
+    detection_target = f"{user_id} {current_payload}".strip() if current_payload else str(user_id)
 
     # --- [核心邏輯：全量哨兵審核] ---
     is_attack, confidence, attack_vector = analyze_intent(detection_target)
-    print(f"[DEBUG] 請求：{detection_target} | 信心度：{confidence} | 命中：{attack_vector}")
+    logger.debug(f"請求：{detection_target} | 信心度：{confidence} | 命中：{attack_vector}")
 
     should_intercept = is_attack and confidence > 0.75
 
@@ -157,8 +162,8 @@ async def get_user_data(
             log_traffic_event(event_payload)
 
         save_deception_state(client_ip, user_id, attack_vector, risk_score, fake_data)
-        print(
-            f"[ALERT] 哨兵攔截：{attack_vector} (信心: {confidence}) | "
+        logger.info(
+            f"哨兵攔截：{attack_vector} (信心: {confidence}) | "
             f"深度分數: {interaction_depth} | 漏斗層級: {metrics['funnel_level']} | 隔離: Docker沙盒"
         )
         return fake_data

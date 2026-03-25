@@ -1,6 +1,17 @@
-const API_BASE = "http://localhost:8000/api/v1/dashboard";
-const API_KEY = "dev-local-api-key-change-me";
+// API 設定由 server.js 代理層注入 key（前端使用同源路由 /api/dashboard）
+let API_BASE = "/api/dashboard";  // 走代理，由 server.js 的 fetchDashboardJson 注入 X-API-Key header
+let API_KEY = "dev-local-api-key-change-me";  // 前端不使用，代理層自動注入
 const AUTO_REFRESH_MS = 5000;
+
+// 初始化時從 server 獲取配置
+async function initConfig() {
+  try {
+    const config = await fetch("/api/config").then(r => r.json());
+    console.log("[CONFIG] Server configuration loaded.");
+  } catch (err) {
+    console.warn("[CONFIG] Failed to load config, using defaults.", err);
+  }
+}
 
 let selectedIp = null;
 let latestIpList = [];
@@ -693,7 +704,9 @@ function bindOverviewTabs() {
 // =========================
 // init
 // =========================
-function init() {
+async function init() {
+  await initConfig();
+  
   bindOverviewTabs();
   bindCommandInput();
   bindReloadButton();

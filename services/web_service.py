@@ -1,8 +1,11 @@
 import sqlite3
 import os
 import json
+import logging
 from datetime import datetime
 from core.traffic_db import get_recent_traffic as core_get_recent_traffic
+
+logger = logging.getLogger(__name__)
 
 # 路徑定位
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -10,9 +13,15 @@ PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
 DB_PATH = os.path.join(PROJECT_ROOT, "data", "traffic_logs.db")
 ERROR_LOG_DIR = os.path.join(PROJECT_ROOT, "data", "error_log")
 
+# SQLite 連接優化（雖然 SQLite 不支援真正的連接池，但可以優化連接設置）
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row 
+    """取得資料庫連接，並進行最佳化設置"""
+    conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    # 啟用 WAL 模式以改進並發性能
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")  # 提高寫入速度
+    conn.execute("PRAGMA cache_size=-64000")   # 使用 64MB 快取
     return conn
 
 def _parse_ts(ts: str) -> datetime:
@@ -25,54 +34,91 @@ def _parse_ts(ts: str) -> datetime:
 
 
 def get_hacker_dwell_time(client_ip: str) -> dict:
-    """以攻擊流量紀錄估算同一 client_ip 的滯留時間與活躍狀態。"""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            '''
-            SELECT t.request_at
-            FROM traffic_logs t
-            JOIN clients c ON c.id = t.client_id
-            WHERE c.ip = ? AND t.is_attack = 1
-            ORDER BY t.request_at ASC
-            ''',
-            (client_ip,)
-        )
-        rows = cursor.fetchall()
+    """以攻擊流量紀錄估算同一 client_ip 的滯留時間與活躍狀態。
+    
+    Args:
+        client_ip: 客戶端 IP 地址
+        
+    Returns:
+        包含滯留時間資訊的字典
+        
+    Raises:
+        ValueError: 如果時間戳格式無效
+        Exception: 如果資料庫查詢失敗
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                SELECT t.request_at
+                FROM traffic_logs t
+                JOIN clients c ON c.id = t.client_id
+                WHERE c.ip = ? AND t.is_attack = 1
+                ORDER BY t.request_at ASC
+                ''',
+                (client_ip,)
+            )
+            rows = cursor.fetchall()
 
-    if not rows:
-        return {"client_ip": client_ip, "dwell_seconds": 0, "is_active": False}
+        if not rows:
+            return {"client_ip": client_ip, "dwell_seconds": 0, "is_active": False}
 
-    first_time = _parse_ts(rows[0][0])
-    latest_time = _parse_ts(rows[-1][0])
-    dwell_seconds = int(max((latest_time - first_time).total_seconds(), 0))
-    is_active = (datetime.now() - latest_time).total_seconds() <= 600
+        first_time = _parse_ts(rows[0][0])
+        latest_time = _parse_ts(rows[-1][0])
+        dwell_seconds = int(max((latest_time - first_time).total_seconds(), 0))
+        is_active = (datetime.now() - latest_time).total_seconds() <= 600
 
-    return {"client_ip": client_ip, "dwell_seconds": dwell_seconds, "is_active": is_active}
+        return {"client_ip": client_ip, "dwell_seconds": dwell_seconds, "is_active": is_active}
+    except Exception as e:
+        logger.error(f"Failed to get dwell time for {client_ip}: {repr(e)}")
+        return {"client_ip": client_ip, "dwell_seconds": 0, "is_active": False, "error": str(e)}
 
 def analyze_interaction_depth(client_ip: str, query_id: str) -> dict:
-    """依 client_ip + query_id 回傳互動深度（以攻擊事件次數表示）。"""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            '''
-            SELECT COUNT(*)
-            FROM traffic_logs t
-            JOIN clients c ON c.id = t.client_id
-            WHERE c.ip = ? AND t.query_id = ? AND t.is_attack = 1
-            ''',
-            (client_ip, query_id)
-        )
-        total_actions = int((cursor.fetchone() or [0])[0])
+    """依 client_ip + query_id 回傳互動深度（以攻擊事件次數表示）。
+    
+    Args:
+        client_ip: 客戶端 IP 地址
+        query_id: 查詢 ID
+        
+    Returns:
+        包含互動深度的字典
+        
+    Raises:
+        Exception: 如果資料庫查詢失敗
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                SELECT COUNT(*)
+                FROM traffic_logs t
+                JOIN clients c ON c.id = t.client_id
+                WHERE c.ip = ? AND t.query_id = ? AND t.is_attack = 1
+                ''',
+                (client_ip, query_id)
+            )
+            total_actions = int((cursor.fetchone() or [0])[0])
 
-    return {
-        "client_ip": client_ip,
-        "query_id": query_id,
-        "interaction_depth": total_actions,
-        # Backward compatibility for existing frontend/testing code.
-        "depth_level": total_actions,
-        "total_actions": total_actions,
-    }
+        return {
+            "client_ip": client_ip,
+            "query_id": query_id,
+            "interaction_depth": total_actions,
+            # Backward compatibility for existing frontend/testing code.
+            "depth_level": total_actions,
+            "total_actions": total_actions,
+        }
+    except Exception as e:
+        logger.error(f"Failed to analyze interaction depth for {client_ip}: {repr(e)}")
+        return {
+            "client_ip": client_ip,
+            "query_id": query_id,
+            "interaction_depth": 0,
+            "depth_level": 0,
+            "total_actions": 0,
+            "error": str(e)
+        }
 
 def get_attack_timeline(attacker_ip: str) -> dict:
     """視覺化呈現該 IP 的攻擊行為路徑。"""
@@ -286,8 +332,6 @@ def compare_traffic(limit: int = 1000) -> dict:
         "normal_requests": normal_requests,
         "attack_ratio": attack_ratio,
         "normal_ratio": normal_ratio,
-        "attack_count": attack_requests,
-        "normal_count": normal_requests,
         "attack_traffic": attack_traffic,
     }
 

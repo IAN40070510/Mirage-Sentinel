@@ -1,7 +1,10 @@
 import sqlite3
 import os
 import json
+import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 # 路徑定位
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -78,7 +81,7 @@ def setup_traffic_db():
 
     conn.commit()
     conn.close()
-    print(f"[*] Traffic Log Engine Ready: {DB_PATH}")
+    logger.info(f"Traffic Log Engine Ready: {DB_PATH}")
 
 
 def log_traffic_event(data: dict):

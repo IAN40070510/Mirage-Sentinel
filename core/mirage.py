@@ -44,5 +44,6 @@ def generate_fake_data(query_id: str) -> dict:
         }
 
 if __name__ == "__main__":
-    # 測試是否對齊規格
-    print("測試 [一般查詢]:", generate_fake_data("1001"))
+    # 測試代碼 - 可選執行
+    # print("測試 [一般查詢]:", generate_fake_data("1001"))
+    pass

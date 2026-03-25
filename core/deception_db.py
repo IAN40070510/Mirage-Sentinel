@@ -1,7 +1,10 @@
 import sqlite3
 import json
 import os
+import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
@@ -51,7 +54,7 @@ def setup_deception_db():
         ''')
         _migrate_attacker_ip_to_client_ip(conn)
         _ensure_unique_memory_key(conn)
-    print(f"[*] Deception Memory Engine Ready: {DB_PATH}")
+    logger.info(f"Deception Memory Engine Ready: {DB_PATH}")
 
 def get_memory(client_ip: str, query_id: str):
     """

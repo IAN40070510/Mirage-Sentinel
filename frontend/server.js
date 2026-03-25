@@ -12,6 +12,16 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
+/**
+ * 前端配置端點（使用了會推崇、不可暴露）
+ */
+app.get("/api/config", (req, res) => {
+  res.json({
+    apiBase: process.env.BACKEND_API_BASE_URL || "http://localhost:8000/api/v1/dashboard",
+    // 沒有在 JSON 暴露該 key，前端需要適當由鍵代理來載入 X-API-Key header
+  });
+});
+
 async function fetchDashboardJson(path, options = {}) {
   const mergedOptions = {
     ...options,

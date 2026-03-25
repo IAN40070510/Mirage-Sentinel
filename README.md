@@ -240,3 +240,40 @@ curl -X POST "http://127.0.0.1:8000/api/v1/simulate_attack?user_id=1001&payload=
 ## 授權
 
 此專案目前未附正式開源授權。若要對外釋出，建議補上 LICENSE。
+
+---
+
+## 最近更新（v1.6.1）
+
+### 新增功能與改進
+
+1. **結構化日誌系統**
+   - 所有儀表板 API 端點現已使用 `logging` 模塊取代 `print()` 語句
+   - 改進錯誤追蹤與監控能力
+
+2. **Sandbox 重試機制**
+   - 實現指數退避重試策略（最多 3 次重試）
+   - 重試等待時間：1 秒、2 秒、4 秒
+   - 失敗時自動降級為本機假資料生成
+
+3. **Request 驗證層**
+   - 新增 Pydantic 驗證模型：`TrafficQueryParams`、`RecentTrafficParams`、`LiveIpsParams`
+   - 使用 `Field` 和 `validator` 對查詢參數進行嚴格驗證
+   - 無效請求返回 400 Bad Request 而不是 500 ERROR
+
+4. **前端配置系統**
+   - `/api/config` 端點提供安全的配置分發（無 API_KEY 暴露）
+   - 前端動態初始化配置而非硬編碼
+
+5. **驗證邏輯統一**
+   - 所有 API Key 驗證統一使用 `web_service.validate_api_key()`
+   - 消除重複驗證邏輯
+
+6. **資料庫優化**
+   - SQLite WAL（Write-Ahead Logging）模式
+   - 連接超時設置（10 秒）
+   - 64MB 快取池以改進查詢性能
+
+7. **API 標頭一致性**
+   - 所有儀表板端點明確定義 `alias="X-API-Key"` 
+   - 提高 API 文檔清晰度

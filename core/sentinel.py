@@ -1,7 +1,10 @@
 import os
+import logging
 import urllib.parse
 import ahocorasick
 from rbloom import Bloom
+
+logger = logging.getLogger(__name__)
 
 # 雲端路徑定位
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__)) 
@@ -48,7 +51,7 @@ class HoneypotDetector:
                             loaded_count += 1
         
         self.automaton.make_automaton()
-        print(f"[*] Sentinel 核心已武裝！載入筆數: {loaded_count}")
+        logger.info(f"Sentinel 核心已武裝！載入筆數: {loaded_count}")
 
     def _recursive_url_decode(self, text: str, depth=0) -> str:
         if depth > 3 or not text: return text
