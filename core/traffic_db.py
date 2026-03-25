@@ -94,7 +94,7 @@ def log_traffic_event(data: dict):
         raise ValueError("log_traffic_event requires 'client_ip' in data")
 
     if not data.get("request_at"):
-        data["request_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        data["request_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
     user_agent = data.get("user_agent")
     tls_fingerprint = data.get("tls_fingerprint")
