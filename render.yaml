@@ -18,7 +18,22 @@ services:
           name: sentinel-cache
           property: connectionString
 
-  # 2. 狀態記憶庫 (Redis) - 移動到 services 區塊內
+  # 2. 前端代理與儀表板 (Express)
+  - type: web
+    name: mirage-frontend
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: frontend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: BACKEND_API_BASE_URL
+        value: https://mirage-sentinel.onrender.com/api/v1/dashboard
+      - key: API_KEY
+        sync: false
+
+  # 3. 狀態記憶庫 (Redis)
   - type: redis
     name: sentinel-cache
     plan: free
