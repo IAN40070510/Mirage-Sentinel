@@ -6,11 +6,17 @@ const DASHBOARD_API_KEY = process.env.API_KEY || "dev-local-api-key-change-me";
 
 app.use(express.json());
 
-async function fetchDashboardJson(path) {
-  const res = await fetch(`${DASHBOARD_BASE_URL}${path}`, {
+async function fetchDashboardJson(path, options = {}) {
+  const mergedOptions = {
+    ...options,
     headers: {
       "X-API-Key": DASHBOARD_API_KEY,
+      ...(options.headers || {}),
     },
+  };
+
+  const res = await fetch(`${DASHBOARD_BASE_URL}${path}`, {
+    ...mergedOptions,
   });
 
   if (!res.ok) {
@@ -188,4 +194,42 @@ app.get("/api/dwell/:ip", (req, res) => {
 
 app.listen(3000, () => {
   console.log("Server running on http://localhost:3000");
+});
+
+
+/**
+ * 流量比較（正常/攻擊）
+ */
+app.get("/api/traffic-compare", (req, res) => {
+  const limit = Number(req.query.limit || 1000);
+  fetchDashboardJson(`/traffic_compare?limit=${encodeURIComponent(limit)}`)
+    .then(data => {
+      res.json(data);
+    })
+    .catch(err => {
+      res.status(500).json({ error: err.message });
+    });
+});
+
+
+/**
+ * 前端指令框轉發
+ */
+app.post("/api/terminal-cmd", (req, res) => {
+  fetchDashboardJson(`/terminal_cmd`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      command_text: req.body?.command_text || "",
+      selected_ip: req.body?.selected_ip || null,
+    }),
+  })
+    .then(data => {
+      res.json(data);
+    })
+    .catch(err => {
+      res.status(500).json({ error: err.message });
+    });
 });

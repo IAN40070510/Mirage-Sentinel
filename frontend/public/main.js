@@ -1,5 +1,4 @@
-const API_BASE = "http://localhost:8000/dashboard";
-const API_KEY = "replace-with-a-strong-random-key";
+const API_BASE = "/api";
 
 let selectedIp = null;
 
@@ -37,13 +36,21 @@ const statusText = document.getElementById("statusText");
 const overviewTabs = document.querySelectorAll(".overview-tab");
 const overviewPanels = document.querySelectorAll(".overview-panel");
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // 共用 fetch
 function fetchJson(url, options = {}) {
   const mergedOptions = {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      "X-API-KEY": API_KEY,
       ...(options.headers || {})
     }
   };
@@ -58,23 +65,24 @@ function fetchJson(url, options = {}) {
 
 // API
 function apiFetchAllIps() {
-  return fetchJson(`${API_BASE}/live_ips?limit=500`);
+  return fetchJson(`${API_BASE}/live-ips?limit=500`);
 }
 
 function apiFetchIpDetails(ip) {
-  return fetchJson(`${API_BASE}/ip_bundle/${encodeURIComponent(ip)}`);
+  return fetchJson(`${API_BASE}/dashboard?ip=${encodeURIComponent(ip)}`)
+    .then((resp) => resp?.data || {});
 }
 
 function apiFetchTopAttackMethods() {
-  return fetchJson(`${API_BASE}/command_heatmap`);
+  return fetchJson(`${API_BASE}/attacks`);
 }
 
 function apiFetchTrafficCompare() {
-  return fetchJson(`${API_BASE}/traffic_compare?limit=1000`);
+  return fetchJson(`${API_BASE}/traffic-compare?limit=1000`);
 }
 
 function apiExecuteCommand(commandText) {
-  return fetchJson(`${API_BASE}/terminal_cmd`, {
+  return fetchJson(`${API_BASE}/terminal-cmd`, {
     method: "POST",
     body: JSON.stringify({
       command_text: commandText,
@@ -344,14 +352,16 @@ function renderAttackOverview(data) {
       `;
     } else {
       targetList.forEach((item) => {
+        const safeTarget = escapeHtml(item.target);
+        const safeType = escapeHtml(item.primaryType);
         const div = document.createElement("div");
         div.className = "attack-analysis-item";
         div.innerHTML = `
           <div class="ip-top">
-            <span class="strong">${item.target}</span>
+            <span class="strong">${safeTarget}</span>
             <span>${item.count} hits</span>
           </div>
-          <div class="muted">type: ${item.primaryType} / sources: ${item.sourceCount}</div>
+          <div class="muted">type: ${safeType} / sources: ${item.sourceCount}</div>
         `;
         attackAnalysisList.appendChild(div);
       });
