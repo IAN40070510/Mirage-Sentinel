@@ -1,7 +1,10 @@
-const API_BASE = "http://localhost:8000/dashboard";
-const API_KEY = "replace-with-a-strong-random-key";
+const API_BASE = "http://localhost:8000/api/v1/dashboard";
+const API_KEY = "dev-local-api-key-change-me";
+const AUTO_REFRESH_MS = 5000;
 
 let selectedIp = null;
+let latestIpList = [];
+let refreshTimer = null;
 
 // DOM
 const ipTrafficList = document.getElementById("ipTrafficList");
@@ -26,37 +29,69 @@ const trafficAttackCount = document.getElementById("trafficAttackCount");
 const trafficNormalRatio = document.getElementById("trafficNormalRatio");
 const trafficAttackRatio = document.getElementById("trafficAttackRatio");
 
-const attackAnalysisList = document.getElementById("attackAnalysisList");
-const attackOverviewSummary = document.getElementById("attackOverviewSummary");
-
 const commandInput = document.getElementById("commandInput");
 const commandSendBtn = document.getElementById("commandSendBtn");
+const reloadBtn = document.getElementById("reloadBtn");
 const layer = document.getElementById("streamLayer");
 const statusText = document.getElementById("statusText");
 
 const overviewTabs = document.querySelectorAll(".overview-tab");
 const overviewPanels = document.querySelectorAll(".overview-panel");
 
-// 共用 fetch
+// =========================
+// 共用工具
+// =========================
 function fetchJson(url, options = {}) {
   const mergedOptions = {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      "X-API-KEY": API_KEY,
+      "X-API-Key": API_KEY,
       ...(options.headers || {})
     }
   };
 
   return fetch(url, mergedOptions).then((res) => {
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
+      return res.text().then((text) => {
+        throw new Error(`HTTP ${res.status} ${text}`);
+      });
     }
     return res.json();
   });
 }
 
+function toArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function toObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function safeNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function formatUpdateTime(date = new Date()) {
+  const y = date.getFullYear();
+  const m = date.getMonth() + 1;
+  const d = date.getDate();
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  return `${y}/${m}/${d} ${hh}:${mm} 更新`;
+}
+
+function setStatusTime(date = new Date()) {
+  if (statusText) {
+    statusText.textContent = formatUpdateTime(date);
+  }
+}
+
+// =========================
 // API
+// =========================
 function apiFetchAllIps() {
   return fetchJson(`${API_BASE}/live_ips?limit=500`);
 }
@@ -73,6 +108,10 @@ function apiFetchTrafficCompare() {
   return fetchJson(`${API_BASE}/traffic_compare?limit=1000`);
 }
 
+function apiAutoUpdateCheck() {
+  return fetchJson(`${API_BASE}/auto_updates`);
+}
+
 function apiExecuteCommand(commandText) {
   return fetchJson(`${API_BASE}/terminal_cmd`, {
     method: "POST",
@@ -83,7 +122,9 @@ function apiExecuteCommand(commandText) {
   });
 }
 
-// traffic overview tab 切換
+// =========================
+// Tab 切換
+// =========================
 function bindOverviewTabs() {
   if (!overviewTabs.length || !overviewPanels.length) return;
 
@@ -104,7 +145,72 @@ function bindOverviewTabs() {
   });
 }
 
-// render
+// =========================
+// 正規化 API 回傳
+// =========================
+function normalizeLiveIpsResponse(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.items)) return data.items;
+  return [];
+}
+
+function normalizeCommandHeatmapResponse(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.top_commands)) return data.top_commands;
+  return [];
+}
+
+function normalizeTrafficCompareResponse(data) {
+  const obj = toObject(data);
+
+  const totalRequests = safeNumber(
+    obj.total_requests ?? obj.total ?? obj.total_count,
+    0
+  );
+
+  const normalRequests = safeNumber(
+    obj.normal_requests ?? obj.normal_count ?? obj.normal,
+    0
+  );
+
+  const attackRequests = safeNumber(
+    obj.attack_requests ?? obj.attack_count ?? obj.attack,
+    0
+  );
+
+  return {
+    total_requests: totalRequests,
+    normal_requests: normalRequests,
+    attack_requests: attackRequests
+  };
+}
+
+function normalizeIpBundleResponse(data) {
+  const obj = toObject(data);
+  const details = toObject(obj.details);
+
+  let timeline = [];
+  if (Array.isArray(obj.timeline)) timeline = obj.timeline;
+  else if (Array.isArray(obj.full_trajectory)) timeline = obj.full_trajectory;
+  else if (Array.isArray(obj.full_trajectory?.timeline)) timeline = obj.full_trajectory.timeline;
+
+  return {
+    client_ip: obj.client_ip ?? details.attacker_ip ?? details.client_ip ?? details.ip ?? selectedIp ?? "-",
+    country: obj.country ?? details.location ?? details.country ?? "-",
+    traffic: safeNumber(obj.traffic ?? details.hits ?? 0, 0),
+    risk: obj.risk ?? (details.risk_level >= 70 ? "HIGH" : details.risk_level > 0 ? "MEDIUM" : "LOW"),
+    protocol: obj.protocol ?? details.tls_fingerprint ?? "-",
+    port: obj.port ?? details.query_id ?? "-",
+    behavior: obj.behavior ?? details.attack_vector ?? "-",
+    payload: obj.payload ?? details.raw_payload ?? "等待 API 資料...",
+    timeline,
+    details
+  };
+}
+
+// =========================
+// Render
+// =========================
 function renderIpList(list) {
   if (!ipTrafficList) return;
   ipTrafficList.innerHTML = "";
@@ -124,9 +230,9 @@ function renderIpList(list) {
 
   list.forEach((item) => {
     const ip = item.client_ip || item.ip || "-";
-    const traffic = item.request_count || item.traffic || item.count || 0;
+    const traffic = safeNumber(item.traffic ?? item.total_requests ?? item.request_count ?? item.count, 0);
     const country = item.country || item.location || "-";
-    const risk = item.risk || (item.is_attack ? "HIGH" : "LOW");
+    const risk = item.risk || (safeNumber(item.attack_requests, 0) > 0 ? "HIGH" : "LOW");
 
     const div = document.createElement("div");
     div.className = "ip-item" + (selectedIp === ip ? " active" : "");
@@ -140,7 +246,7 @@ function renderIpList(list) {
 
     div.addEventListener("click", () => {
       selectedIp = ip;
-      renderIpList(list);
+      renderIpList(latestIpList);
       loadIpDetail();
     });
 
@@ -148,56 +254,17 @@ function renderIpList(list) {
   });
 }
 
-function buildRisk(detail, dwell) {
-  if (detail && detail.risk) return detail.risk;
-  if (dwell && dwell.is_active) return "HIGH";
-  return "LOW";
-}
-
-function buildTraffic(detail, timeline) {
-  if (detail && detail.traffic) return detail.traffic;
-  if (Array.isArray(timeline)) return timeline.length;
-  return 0;
-}
-
-function buildProto(detail) {
-  if (!detail) return "-";
-  if (detail.protocol && detail.port) return `${detail.protocol} / ${detail.port}`;
-  if (detail.protocol) return detail.protocol;
-  if (detail.port) return `PORT / ${detail.port}`;
-  return "-";
-}
-
-function buildBehavior(detail, timeline) {
-  if (detail && detail.behavior) return detail.behavior;
-  if (Array.isArray(timeline) && timeline.length > 0) {
-    const first = timeline[0];
-    return first.action || first.event || first.description || "-";
-  }
-  return "-";
-}
-
-function buildPayload(detail) {
-  if (!detail) return "等待 API 資料...";
-  return detail.payload || detail.raw_payload || detail.request_body || "等待 API 資料...";
-}
-
 function renderDetail(data) {
-  const detail = data?.details || data || {};
-  const dwell = data?.summary || data?.dwell || null;
-  const timeline = Array.isArray(data?.full_trajectory)
-    ? data.full_trajectory
-    : Array.isArray(data?.timeline)
-      ? data.timeline
-      : [];
+  const detail = normalizeIpBundleResponse(data);
+  const timeline = toArray(detail.timeline);
 
-  if (detailIp) detailIp.textContent = detail.client_ip || detail.ip || selectedIp || "-";
-  if (detailRisk) detailRisk.textContent = buildRisk(detail, dwell);
-  if (detailGeo) detailGeo.textContent = detail.country || detail.location || "-";
-  if (detailTraffic) detailTraffic.textContent = `${buildTraffic(detail, timeline)}`;
-  if (detailProto) detailProto.textContent = buildProto(detail);
-  if (detailBehavior) detailBehavior.textContent = buildBehavior(detail, timeline);
-  if (detailPayload) detailPayload.textContent = buildPayload(detail);
+  if (detailIp) detailIp.textContent = detail.client_ip || "-";
+  if (detailRisk) detailRisk.textContent = detail.risk || "-";
+  if (detailGeo) detailGeo.textContent = detail.country || "-";
+  if (detailTraffic) detailTraffic.textContent = `${safeNumber(detail.traffic, 0)}`;
+  if (detailProto) detailProto.textContent = detail.protocol && detail.port ? `${detail.protocol} / ${detail.port}` : (detail.protocol || detail.port || "-");
+  if (detailBehavior) detailBehavior.textContent = detail.behavior || "-";
+  if (detailPayload) detailPayload.textContent = detail.payload || "等待 API 資料...";
 
   if (!detailRecentLogs) return;
   detailRecentLogs.innerHTML = "";
@@ -215,18 +282,20 @@ function renderDetail(data) {
     const div = document.createElement("div");
     div.className = "log-item";
     div.innerHTML = `
-      <span class="log-time">${log.timestamp || log.time || index + 1}</span>
+      <span class="log-time">${log.time || log.timestamp || index + 1}</span>
       ${log.action || log.event || log.description || "-"}
     `;
     detailRecentLogs.appendChild(div);
   });
 }
 
-function renderAttacks(list) {
+function renderAttacks(data) {
   if (!attackMethodList) return;
   attackMethodList.innerHTML = "";
 
-  if (!Array.isArray(list) || list.length === 0) {
+  const list = normalizeCommandHeatmapResponse(data);
+
+  if (!list.length) {
     attackMethodList.innerHTML = `
       <div class="attack-row">
         <div class="rank">-</div>
@@ -241,8 +310,8 @@ function renderAttacks(list) {
   const normalized = list.map((item) => {
     if (typeof item === "string") return { name: item, count: 1 };
     return {
-      name: item.name || item.command || item.raw_payload || "-",
-      count: Number(item.count || 0)
+      name: item.name || item.cmd || item.command || item.raw_payload || "-",
+      count: safeNumber(item.count, 0)
     };
   });
 
@@ -265,9 +334,11 @@ function renderAttacks(list) {
 }
 
 function renderTrafficOverview(data) {
-  const normalCount = Number(data?.normal_count || data?.normal || 0);
-  const attackCount = Number(data?.attack_count || data?.attack || 0);
-  const total = normalCount + attackCount;
+  const result = normalizeTrafficCompareResponse(data);
+
+  const normalCount = result.normal_requests;
+  const attackCount = result.attack_requests;
+  const total = result.total_requests || (normalCount + attackCount);
 
   const normalRatio = total > 0 ? `${Math.round((normalCount / total) * 100)}%` : "0%";
   const attackRatio = total > 0 ? `${Math.round((attackCount / total) * 100)}%` : "0%";
@@ -287,88 +358,6 @@ total traffic: ${total}`;
   }
 
   drawTrafficPlaceholder(normalCount, attackCount);
-}
-
-function renderAttackOverview(data) {
-  const attackTraffic = Array.isArray(data?.attack_traffic) ? data.attack_traffic : [];
-  const groupedTargets = new Map();
-
-  attackTraffic.forEach((item) => {
-    const target =
-      item.target ||
-      item.destination ||
-      item.dst_ip ||
-      item.attack_target ||
-      "unknown-target";
-
-    const sourceIp = item.client_ip || item.ip || "-";
-    const attackType = item.attack_type || item.behavior || item.event || "attack";
-
-    if (!groupedTargets.has(target)) {
-      groupedTargets.set(target, {
-        target,
-        count: 0,
-        sources: new Set(),
-        types: {}
-      });
-    }
-
-    const entry = groupedTargets.get(target);
-    entry.count += 1;
-    entry.sources.add(sourceIp);
-    entry.types[attackType] = (entry.types[attackType] || 0) + 1;
-  });
-
-  const targetList = Array.from(groupedTargets.values()).map((item) => {
-    const primaryType = Object.entries(item.types).sort((a, b) => b[1] - a[1])[0]?.[0] || "-";
-    return {
-      target: item.target,
-      count: item.count,
-      sourceCount: item.sources.size,
-      primaryType
-    };
-  }).sort((a, b) => b.count - a.count);
-
-  if (attackAnalysisList) {
-    attackAnalysisList.innerHTML = "";
-
-    if (!targetList.length) {
-      attackAnalysisList.innerHTML = `
-        <div class="attack-analysis-item">
-          <div class="ip-top">
-            <span class="strong">no attack target</span>
-            <span>-</span>
-          </div>
-          <div class="muted">尚未取得 API 資料</div>
-        </div>
-      `;
-    } else {
-      targetList.forEach((item) => {
-        const div = document.createElement("div");
-        div.className = "attack-analysis-item";
-        div.innerHTML = `
-          <div class="ip-top">
-            <span class="strong">${item.target}</span>
-            <span>${item.count} hits</span>
-          </div>
-          <div class="muted">type: ${item.primaryType} / sources: ${item.sourceCount}</div>
-        `;
-        attackAnalysisList.appendChild(div);
-      });
-    }
-  }
-
-  if (attackOverviewSummary) {
-    const totalTargets = targetList.length;
-    const totalEvents = targetList.reduce((sum, item) => sum + item.count, 0);
-    const topTarget = targetList[0]?.target || "-";
-
-    attackOverviewSummary.textContent =
-`target count: ${totalTargets}
-attack event count: ${totalEvents}
-top target: ${topTarget}
-status: ${totalTargets > 0 ? "multiple attack targets detected" : "no attack target data"}`;
-  }
 }
 
 function drawTrafficPlaceholder(normalCount, attackCount) {
@@ -395,26 +384,39 @@ function drawTrafficPlaceholder(normalCount, attackCount) {
   ctx.fillText(`${normalCount} / ${attackCount}`, cx, cy + 14);
 }
 
-// load
+// =========================
+// 載入資料
+// =========================
 function loadIpList() {
-  apiFetchAllIps()
+  return apiFetchAllIps()
     .then((data) => {
-      renderIpList(data);
-      if (!selectedIp && Array.isArray(data) && data.length > 0) {
-        selectedIp = data[0].client_ip || data[0].ip;
-        loadIpDetail();
+      // console.log("live_ips API回傳:", data);
+      latestIpList = normalizeLiveIpsResponse(data);
+      renderIpList(latestIpList);
+
+      if (!selectedIp && latestIpList.length > 0) {
+        selectedIp = latestIpList[0].client_ip || latestIpList[0].ip;
+      } else if (selectedIp) {
+        const exists = latestIpList.some((item) => (item.client_ip || item.ip) === selectedIp);
+        if (!exists && latestIpList.length > 0) {
+          selectedIp = latestIpList[0].client_ip || latestIpList[0].ip;
+        }
       }
     })
     .catch((err) => {
       console.error("IP list error:", err);
+      latestIpList = [];
       renderIpList([]);
     });
 }
 
 function loadIpDetail() {
-  if (!selectedIp) return;
+  if (!selectedIp) {
+    renderDetail({});
+    return Promise.resolve();
+  }
 
-  apiFetchIpDetails(selectedIp)
+  return apiFetchIpDetails(selectedIp)
     .then((data) => {
       renderDetail(data);
     })
@@ -425,7 +427,7 @@ function loadIpDetail() {
 }
 
 function loadAttacks() {
-  apiFetchTopAttackMethods()
+  return apiFetchTopAttackMethods()
     .then((data) => {
       renderAttacks(data);
     })
@@ -436,18 +438,19 @@ function loadAttacks() {
 }
 
 function loadTrafficOverview() {
-  apiFetchTrafficCompare()
+  return apiFetchTrafficCompare()
     .then((data) => {
       renderTrafficOverview(data);
-      renderAttackOverview(data);
     })
     .catch((err) => {
       console.error("Traffic overview error:", err);
       renderTrafficOverview({});
-      renderAttackOverview({});
     });
 }
 
+// =========================
+// 指令輸入
+// =========================
 function bindCommandInput() {
   if (!commandInput || !commandSendBtn) return;
 
@@ -470,7 +473,44 @@ function bindCommandInput() {
   });
 }
 
+function bindReloadButton() {
+  if (!reloadBtn) return;
+  reloadBtn.addEventListener("click", () => {
+    refreshDashboard(true);
+  });
+}
+
+function refreshDashboard(manual = false) {
+  if (manual) {
+    setStatusTime(new Date());
+  }
+
+  return apiAutoUpdateCheck()
+    .catch((err) => {
+      console.warn("auto_updates error:", err);
+      return null;
+    })
+    .then(() => Promise.all([
+      loadIpList(),
+      loadAttacks(),
+      loadTrafficOverview()
+    ]))
+    .then(() => loadIpDetail())
+    .then(() => {
+      setStatusTime(new Date());
+    });
+}
+
+function startAutoRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(() => {
+    refreshDashboard(false);
+  }, AUTO_REFRESH_MS);
+}
+
+// =========================
 // 拖曳
+// =========================
 let activeWindow = null;
 let offsetX = 0;
 let offsetY = 0;
@@ -519,7 +559,9 @@ document.addEventListener("mouseup", () => {
   activeWindow = null;
 });
 
+// =========================
 // 背景動畫
+// =========================
 const tokens = [
   "POST", "GET", "DROP", "payload", "inject", "overflow",
   "auth_bypass", "token", "session", "beacon", "scan",
@@ -626,34 +668,42 @@ function animate() {
   requestAnimationFrame(animate);
 }
 
-// 狀態文字
-const statusList = [
-  "status: active",
-  "status: monitoring",
-  "status: live traffic",
-  "status: threat watch",
-  "status: server synced"
-];
+// =========================
+// traffic overview tab
+// =========================
+function bindOverviewTabs() {
+  if (!overviewTabs.length || !overviewPanels.length) return;
 
-function startStatusRotation() {
-  if (!statusText) return;
-  setInterval(() => {
-    statusText.textContent = pick(statusList);
-  }, 1500);
+  overviewTabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const targetId = tab.dataset.panel;
+
+      overviewTabs.forEach((btn) => btn.classList.remove("active"));
+      overviewPanels.forEach((panel) => panel.classList.remove("active"));
+
+      tab.classList.add("active");
+
+      const targetPanel = document.getElementById(targetId);
+      if (targetPanel) {
+        targetPanel.classList.add("active");
+      }
+    });
+  });
 }
 
+// =========================
 // init
+// =========================
 function init() {
   bindOverviewTabs();
   bindCommandInput();
+  bindReloadButton();
 
-  loadIpList();
-  loadAttacks();
-  loadTrafficOverview();
+  refreshDashboard(true);
+  startAutoRefresh();
 
   createRows();
   animate();
-  startStatusRotation();
 }
 
 window.addEventListener("resize", createRows);

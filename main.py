@@ -16,6 +16,7 @@ from core.sandbox import run_attack_in_sandbox
 
 # 前端API匯入
 from api import dashboard
+from fastapi.middleware.cors import CORSMiddleware
 
 # 載入環境變數
 load_dotenv()
@@ -53,6 +54,14 @@ app.include_router(
     prefix="/api/v1", 
     tags=["Dashboard"],
     dependencies=[Security(verify_api_key)]
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 開發先開放全部
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 @app.get("/api/v1/user/{user_id}")
@@ -289,7 +298,7 @@ async def simulate_attack(
     }
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # uvicorn.run(app, host="0.0.0.0", port=8000)
     
     # 私人開發環境使用 localhost
-    # uvicorn.run("main:app", host="127.0.0.1", port=8000)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000)

@@ -14,7 +14,10 @@
 
     <div class="hud">
       <div class="hud-box">threat stream / live monitoring</div>
-      <div class="hud-box" id="statusText">status: server synced</div>
+      <div class="hud-box status-box">
+        <span id="statusText">尚未更新</span>
+        <button id="reloadBtn" type="button" class="reload-btn">Reload</button>
+      </div>
     </div>
 
     <div class="window main-window draggable" id="mainWindow">
@@ -87,15 +90,15 @@
           <button class="overview-tab active" type="button" data-panel="overview-panel-traffic">
             流量總覽
           </button>
-          <button class="overview-tab" type="button" data-panel="overview-panel-attack">
-            攻擊分析
+          <button class="overview-tab" type="button" data-panel="overview-panel-placeholder">
+            其他內容
           </button>
         </div>
 
         <div class="overview-panel active" id="overview-panel-traffic">
           <div class="traffic-meta">
-            <div>Normal: <span id="normalPercent">72%</span></div>
-            <div>Attack: <span id="attackPercent">28%</span></div>
+            <div>Normal: <span id="normalPercent">-</span></div>
+            <div>Attack: <span id="attackPercent">-</span></div>
           </div>
 
           <div class="chart-placeholder">
@@ -122,28 +125,13 @@
             </div>
           </div>
 
-          <div class="log-block" id="trafficSummary">
-等待 API 資料...
-          </div>
+          <div class="log-block" id="trafficSummary">等待 API 資料...</div>
         </div>
 
-        <!-- 改成全部攻擊對象分析 -->
-        <div class="overview-panel" id="overview-panel-attack">
-          <div class="section-title">全部攻擊對象分析</div>
-
-          <div class="attack-target-analysis-list" id="attackAnalysisList">
-            <div class="attack-analysis-item">
-              <div class="ip-top">
-                <span class="strong">loading...</span>
-                <span>-</span>
-              </div>
-              <div class="muted">等待 API 資料</div>
-            </div>
-          </div>
-
-          <div class="section-title section-gap">整體摘要</div>
-          <div class="log-block" id="attackOverviewSummary">
-等待 API 資料...
+        <div class="overview-panel" id="overview-panel-placeholder">
+          <div class="section-title">暫定無內容</div>
+          <div class="log-block">
+此分頁目前先保留框架，之後可再加入其他流量分析內容。
           </div>
         </div>
       </div>

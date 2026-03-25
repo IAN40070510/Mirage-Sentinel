@@ -131,11 +131,32 @@ body::after {
   background: rgba(0, 20, 10, 0.2);
   padding: 8px 12px;
   font-size: 12px;
-  letter-spacing: 1.4px;
+  letter-spacing: 1.2px;
   text-transform: uppercase;
   color: rgba(0, 255, 136, 0.85);
   backdrop-filter: blur(2px);
   box-shadow: inset 0 0 8px rgba(0, 255, 136, 0.04);
+}
+
+.status-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.reload-btn {
+  border: 1px solid rgba(0, 255, 136, 0.22);
+  background: rgba(0, 255, 136, 0.06);
+  color: rgba(0, 255, 136, 0.9);
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.reload-btn:hover {
+  background: rgba(0, 255, 136, 0.14);
 }
 
 .window {
@@ -233,15 +254,13 @@ body::after {
 
 .ip-list,
 .attack-list,
-.log-list,
-.attack-target-analysis-list {
+.log-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.ip-item,
-.attack-analysis-item {
+.ip-item {
   border: 1px solid rgba(0, 255, 136, 0.12);
   background: rgba(0, 0, 0, 0.14);
   padding: 12px 14px;
@@ -250,8 +269,7 @@ body::after {
   transition: 0.16s ease;
 }
 
-.ip-item:hover,
-.attack-analysis-item:hover {
+.ip-item:hover {
   border-color: rgba(0, 255, 136, 0.26);
   background: rgba(0, 255, 136, 0.06);
 }

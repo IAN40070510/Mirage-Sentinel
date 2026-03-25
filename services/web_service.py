@@ -6,156 +6,270 @@ from datetime import datetime
 # 路徑定位
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
-DB_PATH = os.path.join(PROJECT_ROOT, "data", "traffic_nexus.db")
+DB_PATH = os.path.join(PROJECT_ROOT, "data", "traffic_logs.db")
 ERROR_LOG_DIR = os.path.join(PROJECT_ROOT, "data", "error_log")
+
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row 
+    conn.row_factory = sqlite3.Row
     return conn
+
+
+def _safe_parse_datetime(value: str | None):
+    """兼容有無毫秒的時間格式。"""
+    if not value:
+        return None
+
+    formats = [
+        "%Y-%m-%d %H:%M:%S.%f",
+        "%Y-%m-%d %H:%M:%S"
+    ]
+
+    for fmt in formats:
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+
+    return None
+
 
 def get_hacker_dwell_time(attacker_ip: str) -> dict:
     """透過資料庫比對，若上一次攻擊距離這次攻擊不到10分鐘視為滯留"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        # 取出該 IP 最新兩筆時間
-        cursor.execute('''
-            SELECT timestamp FROM nexus_activity 
-            WHERE attacker_ip = ? 
-            ORDER BY timestamp DESC LIMIT 2
-        ''', (attacker_ip,))
-        rows = cursor.fetchall()
-        
-        # 取得第一筆與最後一筆算總長度
-        cursor.execute('''
-            SELECT timestamp FROM nexus_activity 
-            WHERE attacker_ip = ? 
-            ORDER BY timestamp ASC
-        ''', (attacker_ip,))
+        cursor.execute(
+            '''
+            SELECT t.request_at
+            FROM traffic_logs t
+            JOIN clients c ON c.id = t.client_id
+            WHERE c.ip = ? AND t.is_attack = 1
+            ORDER BY t.request_at DESC
+            LIMIT 2
+            ''',
+            (attacker_ip,)
+        )
+        latest_two = cursor.fetchall()
+
+        cursor.execute(
+            '''
+            SELECT t.request_at
+            FROM traffic_logs t
+            JOIN clients c ON c.id = t.client_id
+            WHERE c.ip = ? AND t.is_attack = 1
+            ORDER BY t.request_at ASC
+            ''',
+            (attacker_ip,)
+        )
         all_rows = cursor.fetchall()
 
     if not all_rows:
         return {"ip": attacker_ip, "dwell_seconds": 0, "is_active": False}
-        
-    now = datetime.now()
-    latest_time = datetime.strptime(all_rows[-1][0], "%Y-%m-%d %H:%M:%S")
-    first_time = datetime.strptime(all_rows[0][0], "%Y-%m-%d %H:%M:%S")
-    
+
+    first_time = _safe_parse_datetime(all_rows[0]["request_at"])
+    last_time = _safe_parse_datetime(all_rows[-1]["request_at"])
+
+    if not first_time or not last_time:
+        return {"ip": attacker_ip, "dwell_seconds": 0, "is_active": False}
+
     is_active = False
-    if len(rows) >= 2:
-        last_req = datetime.strptime(rows[0][0], "%Y-%m-%d %H:%M:%S.%f")
-        prev_req = datetime.strptime(rows[1][0], "%Y-%m-%d %H:%M:%S.%f")
-        if (last_req - prev_req).total_seconds() <= 600:
+    now = datetime.now()
+
+    if len(latest_two) >= 2:
+        last_req = _safe_parse_datetime(latest_two[0]["request_at"])
+        prev_req = _safe_parse_datetime(latest_two[1]["request_at"])
+        if last_req and prev_req and (last_req - prev_req).total_seconds() <= 600:
             is_active = True
-    elif len(rows) == 1:
-        if (now - latest_time).total_seconds() <= 600:
+    elif len(latest_two) == 1:
+        only_req = _safe_parse_datetime(latest_two[0]["request_at"])
+        if only_req and (now - only_req).total_seconds() <= 600:
             is_active = True
-            
-    dwell_seconds = int((latest_time - first_time).total_seconds())
+
+    dwell_seconds = int((last_time - first_time).total_seconds())
 
     return {
         "ip": attacker_ip,
-        "dwell_seconds": dwell_seconds,
+        "dwell_seconds": max(dwell_seconds, 0),
         "is_active": is_active
     }
 
+
 def analyze_interaction_depth(attacker_ip: str, query_id: str) -> dict:
-    """透過att_id與query_id比對，若上一次攻擊距離這次攻擊不到10分鐘視為仍在互動"""
+    """透過 attacker_ip 與 query_id 比對互動深度"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute('''
-            SELECT timestamp FROM nexus_activity 
-            WHERE attacker_ip = ? AND query_id = ?
-            ORDER BY timestamp DESC
-        ''', (attacker_ip, query_id))
+        cursor.execute(
+            '''
+            SELECT t.request_at
+            FROM traffic_logs t
+            JOIN clients c ON c.id = t.client_id
+            WHERE c.ip = ? AND t.query_id = ? AND t.is_attack = 1
+            ORDER BY t.request_at DESC
+            ''',
+            (attacker_ip, query_id)
+        )
         rows = cursor.fetchall()
-        
-    depth_level = 0
+
     total_actions = len(rows)
-    
-    if total_actions > 0:
-        latest_time = datetime.strptime(rows[0][0], "%Y-%m-%d %H:%M:%S.%f")
-        if (datetime.now() - latest_time).total_seconds() <= 600:
-            depth_level = total_actions
-        else:
-            depth_level = total_actions
+    depth_level = total_actions
+
+    latest_time = _safe_parse_datetime(rows[0]["request_at"]) if rows else None
+    if latest_time:
+        _still_active = (datetime.now() - latest_time).total_seconds() <= 600
+        # 目前 depth_level 就直接等於總互動次數，保留欄位方便未來擴充
+        depth_level = total_actions
 
     return {
         "ip": attacker_ip,
+        "query_id": query_id,
         "depth_level": depth_level,
         "total_actions": total_actions
     }
+
 
 def get_attack_timeline(attacker_ip: str) -> dict:
     """視覺化呈現該駭客的行為路徑"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute('''
-            SELECT timestamp, attack_vector FROM nexus_activity 
-            WHERE attacker_ip = ?
-            ORDER BY timestamp ASC
-        ''', (attacker_ip,))
+        cursor.execute(
+            '''
+            SELECT
+                t.request_at,
+                COALESCE(a.attack_vector, 'unknown') AS attack_vector
+            FROM traffic_logs t
+            JOIN clients c ON c.id = t.client_id
+            LEFT JOIN attack_details a ON a.traffic_log_id = t.id
+            WHERE c.ip = ? AND t.is_attack = 1
+            ORDER BY t.request_at ASC
+            ''',
+            (attacker_ip,)
+        )
         rows = cursor.fetchall()
-        
+
     timeline = []
     for row in rows:
-        dt = datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S.%f")
-        time_str = dt.strftime("%H:%M")
-        action = row[1]
-        timeline.append({"time": time_str, "action": action})
-        
+        dt = _safe_parse_datetime(row["request_at"])
+        time_str = dt.strftime("%H:%M") if dt else "--:--"
+        timeline.append({
+            "time": time_str,
+            "action": row["attack_vector"]
+        })
+
     return {
         "ip": attacker_ip,
         "timeline": timeline
     }
 
+
 def log_misjudgment(attacker_ip: str, reason: str) -> None:
     """可將IP存入誤判資料夾，以供後續AI調整"""
     os.makedirs(ERROR_LOG_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filepath = os.path.join(ERROR_LOG_DIR, f"misjudgment_{attacker_ip.replace('.', '_')}_{timestamp}.json")
-    
+    filepath = os.path.join(
+        ERROR_LOG_DIR,
+        f"misjudgment_{attacker_ip.replace('.', '_')}_{timestamp}.json"
+    )
+
     data = {
         "attacker_ip": attacker_ip,
         "reason": reason,
         "logged_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
-    
+
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
+
 
 def get_command_heatmap() -> dict:
     """判斷最常輸入指令前十"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute('''
-            SELECT raw_payload, COUNT(*) as count 
-            FROM nexus_activity 
-            GROUP BY raw_payload 
-            ORDER BY count DESC 
+        cursor.execute(
+            '''
+            SELECT
+                COALESCE(a.raw_payload, '(empty)') AS raw_payload,
+                COUNT(*) AS count
+            FROM attack_details a
+            JOIN traffic_logs t ON t.id = a.traffic_log_id
+            WHERE t.is_attack = 1
+            GROUP BY COALESCE(a.raw_payload, '(empty)')
+            ORDER BY count DESC, raw_payload ASC
             LIMIT 10
-        ''')
+            '''
+        )
         rows = cursor.fetchall()
-        
-    top_commands = [{"cmd": row[0], "count": row[1]} for row in rows]
-    
+
+    top_commands = [{"cmd": row["raw_payload"], "count": row["count"]} for row in rows]
+
     return {
         "top_commands": top_commands
     }
 
-def get_ip_details(ip : str) -> dict:
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT *
-        FROM nexus_activity 
-        WHERE attacker_ip = ? 
-    ''', (ip,))
 
-    row = cursor.fetchone()
+def get_ip_details(ip: str) -> dict:
+    """取得特定 IP 最新一筆詳細資訊"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            SELECT
+                c.ip AS attacker_ip,
+                c.polluted_status,
+                t.request_at,
+                t.response_at,
+                t.process_ms,
+                t.query_id,
+                t.is_attack,
+                t.location,
+                t.is_proxy,
+                f.user_agent,
+                f.tls_fingerprint,
+                a.raw_payload,
+                a.response_payload,
+                a.attack_vector,
+                a.risk_level,
+                a.hits,
+                a.interaction_depth,
+                a.dwell_time,
+                a.mitigation_status
+            FROM clients c
+            LEFT JOIN traffic_logs t ON t.client_id = c.id
+            LEFT JOIN fingerprints f ON f.id = t.fingerprint_id
+            LEFT JOIN attack_details a ON a.traffic_log_id = t.id
+            WHERE c.ip = ?
+            ORDER BY t.request_at DESC
+            LIMIT 1
+            ''',
+            (ip,)
+        )
+        row = cursor.fetchone()
 
-    conn.close()
+    if not row:
+        return {
+            "attacker_ip": ip,
+            "polluted_status": 0,
+            "request_at": None,
+            "response_at": None,
+            "process_ms": None,
+            "query_id": None,
+            "is_attack": 0,
+            "location": "-",
+            "is_proxy": 0,
+            "user_agent": None,
+            "tls_fingerprint": None,
+            "raw_payload": None,
+            "response_payload": None,
+            "attack_vector": None,
+            "risk_level": 0,
+            "hits": 0,
+            "interaction_depth": 0,
+            "dwell_time": 0.0,
+            "mitigation_status": None,
+        }
+
     return dict(row)
+
 
 if __name__ == "__main__":
     pass
@@ -163,7 +277,7 @@ if __name__ == "__main__":
 
 def validate_api_key(api_key: str) -> bool:
     """簡單 API key 驗證，供上層 router / middleware 使用。"""
-    return api_key == "replace-with-a-strong-random-key"
+    return api_key == "dev-local-api-key-change-me"
 
 
 def fetch_all_client_ips(limit: int = 500) -> dict:
@@ -193,6 +307,7 @@ def fetch_all_client_ips(limit: int = 500) -> dict:
     for row in rows:
         total_requests = int(row["total_requests"] or 0)
         attack_requests = int(row["attack_requests"] or 0)
+
         if attack_requests >= 10 or int(row["polluted_status"] or 0) == 1:
             risk = "HIGH"
         elif attack_requests > 0:
@@ -235,6 +350,28 @@ def compare_traffic(limit: int = 1000) -> dict:
         )
         row = cursor.fetchone()
 
+        cursor.execute(
+            '''
+            SELECT
+                c.ip AS client_ip,
+                t.request_at,
+                t.location,
+                t.is_proxy,
+                t.is_attack,
+                a.attack_vector,
+                a.raw_payload,
+                a.risk_level,
+                a.mitigation_status
+            FROM traffic_logs t
+            JOIN clients c ON c.id = t.client_id
+            LEFT JOIN attack_details a ON a.traffic_log_id = t.id
+            ORDER BY t.request_at DESC
+            LIMIT ?
+            ''',
+            (limit,)
+        )
+        detail_rows = cursor.fetchall()
+
     total_requests = int((row["total_requests"] or 0) if row else 0)
     attack_requests = int((row["attack_requests"] or 0) if row else 0)
     normal_requests = int((row["normal_requests"] or 0) if row else 0)
@@ -242,12 +379,33 @@ def compare_traffic(limit: int = 1000) -> dict:
     attack_ratio = round((attack_requests / total_requests) * 100, 2) if total_requests else 0
     normal_ratio = round((normal_requests / total_requests) * 100, 2) if total_requests else 0
 
+    all_traffic = []
+    attack_traffic = []
+
+    for row in detail_rows:
+        item = {
+            "client_ip": row["client_ip"],
+            "request_at": row["request_at"],
+            "location": row["location"] or "-",
+            "is_proxy": int(row["is_proxy"] or 0),
+            "is_attack": int(row["is_attack"] or 0),
+            "attack_type": row["attack_vector"] or "-",
+            "raw_payload": row["raw_payload"] or "-",
+            "risk_level": int(row["risk_level"] or 0),
+            "mitigation_status": row["mitigation_status"] or "-",
+        }
+        all_traffic.append(item)
+        if item["is_attack"] == 1:
+            attack_traffic.append(item)
+
     return {
         "total_requests": total_requests,
         "attack_requests": attack_requests,
         "normal_requests": normal_requests,
         "attack_ratio": attack_ratio,
         "normal_ratio": normal_ratio,
+        "all_traffic": all_traffic,
+        "attack_traffic": attack_traffic,
     }
 
 
@@ -301,11 +459,11 @@ def get_dashboard_ip_bundle(client_ip: str) -> dict:
             SELECT
                 MAX(t.location) AS location,
                 COUNT(t.id) AS traffic,
-                MAX(d.attack_vector) AS attack_vector,
-                MAX(d.raw_payload) AS raw_payload
+                MAX(a.attack_vector) AS attack_vector,
+                MAX(a.raw_payload) AS raw_payload
             FROM traffic_logs t
             JOIN clients c ON c.id = t.client_id
-            LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+            LEFT JOIN attack_details a ON a.traffic_log_id = t.id
             WHERE c.ip = ?
             ''',
             (client_ip,)
@@ -328,12 +486,76 @@ def get_dashboard_ip_bundle(client_ip: str) -> dict:
         "country": (row["location"] if row else None) or "-",
         "traffic": traffic,
         "risk": risk,
-        "protocol": details.get("protocol", "-"),
-        "port": details.get("port", "-"),
+        "protocol": details.get("tls_fingerprint", "-"),
+        "port": details.get("query_id", "-"),
         "behavior": attack_vector,
         "payload": raw_payload,
         "timeline": timeline_data.get("timeline", []),
         "dwell_seconds": dwell.get("dwell_seconds", 0),
         "is_active": dwell.get("is_active", False),
         "details": details,
+    }
+
+
+def fetch_recent_traffic(limit: int = 100, mode: str = "all") -> list:
+    """取得近期流量紀錄，mode=all 或 attacks。"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        sql = '''
+            SELECT
+                t.id,
+                t.request_at,
+                t.response_at,
+                t.process_ms,
+                t.query_id,
+                t.is_attack,
+                t.location,
+                t.is_proxy,
+                c.ip AS client_ip,
+                c.polluted_status,
+                f.user_agent,
+                f.tls_fingerprint,
+                a.raw_payload,
+                a.response_payload,
+                a.attack_vector,
+                a.risk_level,
+                a.hits,
+                a.interaction_depth,
+                a.dwell_time,
+                a.mitigation_status
+            FROM traffic_logs t
+            JOIN clients c ON c.id = t.client_id
+            LEFT JOIN fingerprints f ON f.id = t.fingerprint_id
+            LEFT JOIN attack_details a ON a.traffic_log_id = t.id
+        '''
+
+        params = []
+        if mode == "attacks":
+            sql += " WHERE t.is_attack = 1 "
+
+        sql += " ORDER BY t.request_at DESC LIMIT ? "
+        params.append(limit)
+
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+
+    return [dict(row) for row in rows]
+
+
+def auto_updates() -> dict:
+    """給儀表板輪詢使用的簡易更新資訊。"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) AS total FROM traffic_logs")
+        total_logs = int(cursor.fetchone()["total"] or 0)
+
+        cursor.execute("SELECT MAX(request_at) AS latest_request_at FROM traffic_logs")
+        latest_request_at = cursor.fetchone()["latest_request_at"]
+
+    return {
+        "status": "ok",
+        "total_logs": total_logs,
+        "latest_request_at": latest_request_at,
+        "checked_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }

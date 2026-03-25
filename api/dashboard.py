@@ -67,13 +67,14 @@ async def get_interaction_depth(
         result = ws.analyze_interaction_depth(client_ip, query_id)
         return result
     except Exception as e:
+        print("error:", repr(e))
         raise HTTPException(status_code=500, detail=f"分析互動深度失敗: {str(e)}")
 
 
 @router.get("/attack_timeline/{client_ip}", summary="獲取攻擊行為路徑時間軸")
 async def get_attack_timeline(
     client_ip: str,
-    x_api_key: str | None = Header(default=None)
+    x_api_key: str | None = Header(default=None, alias="X-API-Key")
 ):
     """
     取得該 client_ip 的時間軸行為資料
@@ -83,6 +84,7 @@ async def get_attack_timeline(
         result = ws.get_attack_timeline(client_ip)
         return result
     except Exception as e:
+        print("error:", repr(e))
         raise HTTPException(status_code=500, detail=f"取得攻擊時間軸失敗: {str(e)}")
 
 
@@ -90,12 +92,13 @@ async def get_attack_timeline(
 async def get_recent_traffic(
     limit: int = Query(100, ge=1, le=500, description="筆數上限"),
     mode: str = Query("all", pattern="^(all|attacks)$", description="all=全流量, attacks=僅攻擊"),
-    x_api_key: str | None = Header(default=None)
+    x_api_key: str | None = Header(default=None, alias="X-API-Key")
 ):
     verify_api_key(x_api_key)
     try:
         return ws.fetch_recent_traffic(limit, mode)
     except Exception as e:
+        print("error:", repr(e))
         raise HTTPException(status_code=500, detail=f"取得近期流量失敗: {str(e)}")
 
 
@@ -107,6 +110,7 @@ async def get_auto_updates(
     try:
         return ws.auto_updates()
     except Exception as e:
+        print("error:", repr(e))
         raise HTTPException(status_code=500, detail=f"取得更新狀態失敗: {str(e)}")
 
 
@@ -128,6 +132,7 @@ async def log_misjudgment_event(
     except HTTPException:
         raise
     except Exception as e:
+        print("error:", repr(e))
         raise HTTPException(status_code=500, detail=f"記錄誤判失敗: {str(e)}")
 
 
@@ -140,9 +145,9 @@ async def get_top_commands(
     """
     verify_api_key(x_api_key)
     try:
-        result = ws.get_command_heatmap()
-        return result
+        return ws.get_command_heatmap()["top_commands"]
     except Exception as e:
+        print("error:", repr(e))
         raise HTTPException(status_code=500, detail=f"取得指令熱區圖資料失敗: {str(e)}")
 
 
@@ -163,6 +168,7 @@ async def get_ip_detail(
     except HTTPException:
         raise
     except Exception as e:
+        print("error:", repr(e))
         raise HTTPException(status_code=500, detail=f"取得 IP 詳細資料失敗: {str(e)}")
 
 
@@ -177,7 +183,7 @@ async def get_hacker_report(
     verify_api_key(x_api_key)
     try:
         analysis = ws.get_hacker_dwell_time(client_ip)
-        timeline = ws.get_attack_timeline(client_ip)
+        timeline = ws.get_attack_timeline(client_ip)["timeline"]
         details = ws.get_ip_details(client_ip)
 
         if not details:
@@ -192,10 +198,8 @@ async def get_hacker_report(
     except HTTPException:
         raise
     except Exception as e:
+        print("error:", repr(e))
         raise HTTPException(status_code=500, detail=f"生成報告失敗: {str(e)}")
-
-
-# ===== 新增對應 web_service 新 function 的 API =====
 
 @router.get("/live_ips", summary="取得資料庫中所有 IP 與簡易流量資訊")
 async def get_live_ips(
@@ -204,8 +208,9 @@ async def get_live_ips(
 ):
     verify_api_key(x_api_key)
     try:
-        return ws.fetch_all_client_ips(limit)
+        return ws.fetch_all_client_ips(limit)["items"]
     except Exception as e:
+        print("error:", repr(e))
         raise HTTPException(status_code=500, detail=f"取得 IP 清單失敗: {str(e)}")
 
 
@@ -216,8 +221,15 @@ async def get_traffic_compare(
 ):
     verify_api_key(x_api_key)
     try:
-        return ws.compare_traffic(limit)
+        data = ws.compare_traffic(limit)
+
+        return {
+            "attack_count": data["attack_requests"],
+            "normal_count": data["normal_requests"],
+            "total": data["total_requests"]
+        }
     except Exception as e:
+        print("error:", repr(e))
         raise HTTPException(status_code=500, detail=f"取得流量比較失敗: {str(e)}")
 
 
@@ -230,6 +242,7 @@ async def post_set_category(
     try:
         return ws.set_log_category(req.category_name, req.items)
     except Exception as e:
+        print("error:", repr(e))
         raise HTTPException(status_code=500, detail=f"設定分類失敗: {str(e)}")
 
 
@@ -242,6 +255,7 @@ async def post_terminal_cmd(
     try:
         return ws.execute_terminal_cmd(req.command_text, req.selected_ip)
     except Exception as e:
+        print("error:", repr(e))
         raise HTTPException(status_code=500, detail=f"執行指令失敗: {str(e)}")
 
 
@@ -254,6 +268,7 @@ async def get_report_payload(
     try:
         return ws.generate_hacker_pdf(client_ip)
     except Exception as e:
+        print("error:", repr(e))
         raise HTTPException(status_code=500, detail=f"取得報告資料失敗: {str(e)}")
 
 
@@ -271,4 +286,5 @@ async def get_ip_bundle(
     except HTTPException:
         raise
     except Exception as e:
+        print("error:", repr(e))
         raise HTTPException(status_code=500, detail=f"取得 IP 整合資料失敗: {str(e)}")
