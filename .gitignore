@@ -215,6 +215,10 @@ __marimo__/
 *.db
 data/*.db
 
+# SQLite WAL 與 SHM 檔
+*.db-wal
+*.db-shm
+
 # AI 模型與特徵轉換檔
 models/*.pkl
 
@@ -222,7 +226,12 @@ models/*.pkl
 data/datasets/*
 !data/datasets/SecLists/
 
-# 其他敏感資料或本地配置檔 Muxiang
+# 前端依賴項
+frontend/node_modules/
+frontend/package.json
+frontend/package-lock.json
+
+# 其他敏感資料或本地配置檔
 sqlite/*.db
 data/error_log/
 __pycache__/
