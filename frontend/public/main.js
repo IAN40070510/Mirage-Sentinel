@@ -1,11 +1,11 @@
-const API_BASE = "http://localhost:3000/api";
+const API_BASE = "http://localhost:8000/dashboard";
+const API_KEY = "replace-with-a-strong-random-key";
 
 let selectedIp = null;
 
 // DOM
 const ipTrafficList = document.getElementById("ipTrafficList");
 const attackMethodList = document.getElementById("attackMethodList");
-
 const detailIp = document.getElementById("detailIp");
 const detailRisk = document.getElementById("detailRisk");
 const detailGeo = document.getElementById("detailGeo");
@@ -15,46 +15,136 @@ const detailBehavior = document.getElementById("detailBehavior");
 const detailPayload = document.getElementById("detailPayload");
 const detailRecentLogs = document.getElementById("detailRecentLogs");
 
-// -------------------------
+const normalPercent = document.getElementById("normalPercent");
+const attackPercent = document.getElementById("attackPercent");
+const trafficSummary = document.getElementById("trafficSummary");
+const chartCanvas = document.getElementById("trafficChart");
+const ctx = chartCanvas ? chartCanvas.getContext("2d") : null;
+
+const trafficNormalCount = document.getElementById("trafficNormalCount");
+const trafficAttackCount = document.getElementById("trafficAttackCount");
+const trafficNormalRatio = document.getElementById("trafficNormalRatio");
+const trafficAttackRatio = document.getElementById("trafficAttackRatio");
+
+const attackHighRiskTarget = document.getElementById("attackHighRiskTarget");
+const attackPrimaryType = document.getElementById("attackPrimaryType");
+const attackSourceCount = document.getElementById("attackSourceCount");
+const attackEventCount = document.getElementById("attackEventCount");
+const attackAnalysisList = document.getElementById("attackAnalysisList");
+const attackOverviewSummary = document.getElementById("attackOverviewSummary");
+
+const commandInput = document.getElementById("commandInput");
+const commandSendBtn = document.getElementById("commandSendBtn");
+const layer = document.getElementById("streamLayer");
+const statusText = document.getElementById("statusText");
+
+const overviewTabs = document.querySelectorAll(".overview-tab");
+const overviewPanels = document.querySelectorAll(".overview-panel");
+
 // 共用 fetch
-// -------------------------
-function fetchJson(url) {
-  return fetch(url).then(res => {
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+function fetchJson(url, options = {}) {
+  const mergedOptions = {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-KEY": API_KEY,
+      ...(options.headers || {})
+    }
+  };
+
+  return fetch(url, mergedOptions).then((res) => {
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
     return res.json();
   });
 }
 
-// -------------------------
-// IP 列表（資料庫全部 IP）
-// -------------------------
-function loadIpList() {
-  fetchJson(`${API_BASE}/live-ips`)
-    .then(data => {
-      renderIpList(data);
-    })
-    .catch(err => {
-      console.error("IP list error:", err);
-    });
+// API
+function apiFetchAllIps() {
+  return fetchJson(`${API_BASE}/live_ips?limit=500`);
 }
 
+function apiFetchIpDetails(ip) {
+  return fetchJson(`${API_BASE}/ip_bundle/${encodeURIComponent(ip)}`);
+}
+
+function apiFetchTopAttackMethods() {
+  return fetchJson(`${API_BASE}/command_heatmap`);
+}
+
+function apiFetchTrafficCompare() {
+  return fetchJson(`${API_BASE}/traffic_compare?limit=1000`);
+}
+
+function apiExecuteCommand(commandText) {
+  return fetchJson(`${API_BASE}/terminal_cmd`, {
+    method: "POST",
+    body: JSON.stringify({
+      command_text: commandText,
+      selected_ip: selectedIp
+    })
+  });
+}
+
+// traffic overview tab 切換
+function bindOverviewTabs() {
+  if (!overviewTabs.length || !overviewPanels.length) return;
+
+  overviewTabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const targetId = tab.dataset.panel;
+
+      overviewTabs.forEach((btn) => btn.classList.remove("active"));
+      overviewPanels.forEach((panel) => panel.classList.remove("active"));
+
+      tab.classList.add("active");
+
+      const targetPanel = document.getElementById(targetId);
+      if (targetPanel) {
+        targetPanel.classList.add("active");
+      }
+    });
+  });
+}
+
+// render
 function renderIpList(list) {
+  if (!ipTrafficList) return;
   ipTrafficList.innerHTML = "";
 
-  list.forEach(item => {
-    const div = document.createElement("div");
-    div.className = "ip-item";
+  if (!Array.isArray(list) || list.length === 0) {
+    ipTrafficList.innerHTML = `
+      <div class="ip-item">
+        <div class="ip-top">
+          <span class="strong">no data</span>
+          <span>-</span>
+        </div>
+        <div class="muted">尚未取得 API 資料</div>
+      </div>
+    `;
+    return;
+  }
 
+  list.forEach((item) => {
+    const ip = item.client_ip || item.ip || "-";
+    const traffic = item.request_count || item.traffic || item.count || 0;
+    const country = item.country || item.location || "-";
+    const risk = item.risk || (item.is_attack ? "HIGH" : "LOW");
+
+    const div = document.createElement("div");
+    div.className = "ip-item" + (selectedIp === ip ? " active" : "");
     div.innerHTML = `
       <div class="ip-top">
-        <span class="strong">${item.ip}</span>
-        <span>${item.traffic || 0} req/min</span>
+        <span class="strong">${ip}</span>
+        <span>${traffic}</span>
       </div>
-      <div class="muted">${item.country || "-"} / ${item.risk || "-"}</div>
+      <div class="muted">${country} / ${risk}</div>
     `;
 
     div.addEventListener("click", () => {
-      selectedIp = item.ip;
+      selectedIp = ip;
+      renderIpList(list);
       loadIpDetail();
     });
 
@@ -62,80 +152,333 @@ function renderIpList(list) {
   });
 }
 
-// -------------------------
-// 主視窗（IP 詳細）
-// -------------------------
-function loadIpDetail() {
-  if (!selectedIp) return;
+function buildRisk(detail, dwell) {
+  if (detail && detail.risk) return detail.risk;
+  if (dwell && dwell.is_active) return "HIGH";
+  return "LOW";
+}
 
-  fetchJson(`${API_BASE}/ip/${selectedIp}`)
-    .then(data => {
-      renderDetail(data);
-    })
-    .catch(err => {
-      console.error("IP detail error:", err);
-    });
+function buildTraffic(detail, timeline) {
+  if (detail && detail.traffic) return detail.traffic;
+  if (Array.isArray(timeline)) return timeline.length;
+  return 0;
+}
+
+function buildProto(detail) {
+  if (!detail) return "-";
+  if (detail.protocol && detail.port) return `${detail.protocol} / ${detail.port}`;
+  if (detail.protocol) return detail.protocol;
+  if (detail.port) return `PORT / ${detail.port}`;
+  return "-";
+}
+
+function buildBehavior(detail, timeline) {
+  if (detail && detail.behavior) return detail.behavior;
+  if (Array.isArray(timeline) && timeline.length > 0) {
+    const first = timeline[0];
+    return first.action || first.event || first.description || "-";
+  }
+  return "-";
+}
+
+function buildPayload(detail) {
+  if (!detail) return "等待 API 資料...";
+  return detail.payload || detail.raw_payload || detail.request_body || "等待 API 資料...";
 }
 
 function renderDetail(data) {
-  detailIp.textContent = data.ip || "-";
-  detailRisk.textContent = data.risk || "-";
-  detailGeo.textContent = data.country || "-";
-  detailTraffic.textContent = (data.traffic || 0) + " req/min";
-  detailProto.textContent = data.protocol || "-";
-  detailBehavior.textContent = data.behavior || "-";
-  detailPayload.textContent = data.payload || "-";
+  const detail = data?.details || data || {};
+  const dwell = data?.summary || data?.dwell || null;
+  const timeline = Array.isArray(data?.full_trajectory)
+    ? data.full_trajectory
+    : Array.isArray(data?.timeline)
+      ? data.timeline
+      : [];
 
+  if (detailIp) detailIp.textContent = detail.client_ip || detail.ip || selectedIp || "-";
+  if (detailRisk) detailRisk.textContent = buildRisk(detail, dwell);
+  if (detailGeo) detailGeo.textContent = detail.country || detail.location || "-";
+  if (detailTraffic) detailTraffic.textContent = `${buildTraffic(detail, timeline)}`;
+  if (detailProto) detailProto.textContent = buildProto(detail);
+  if (detailBehavior) detailBehavior.textContent = buildBehavior(detail, timeline);
+  if (detailPayload) detailPayload.textContent = buildPayload(detail);
+
+  if (!detailRecentLogs) return;
   detailRecentLogs.innerHTML = "";
-}
 
-// -------------------------
-// 攻擊排行榜
-// -------------------------
-function loadAttacks() {
-  fetchJson(`${API_BASE}/attacks`)
-    .then(data => {
-      renderAttacks(data);
-    })
-    .catch(err => {
-      console.error("attack error:", err);
-    });
+  if (!timeline.length) {
+    detailRecentLogs.innerHTML = `
+      <div class="log-item">
+        <span class="log-time">--</span>等待 API 資料...
+      </div>
+    `;
+    return;
+  }
+
+  timeline.slice(0, 5).forEach((log, index) => {
+    const div = document.createElement("div");
+    div.className = "log-item";
+    div.innerHTML = `
+      <span class="log-time">${log.timestamp || log.time || index + 1}</span>
+      ${log.action || log.event || log.description || "-"}
+    `;
+    detailRecentLogs.appendChild(div);
+  });
 }
 
 function renderAttacks(list) {
+  if (!attackMethodList) return;
   attackMethodList.innerHTML = "";
 
-  list.slice(0, 10).forEach((item, i) => {
+  if (!Array.isArray(list) || list.length === 0) {
+    attackMethodList.innerHTML = `
+      <div class="attack-row">
+        <div class="rank">-</div>
+        <div class="attack-name">no data</div>
+        <div class="bar-wrap"><div class="bar" style="width: 0%"></div></div>
+        <div>0</div>
+      </div>
+    `;
+    return;
+  }
+
+  const normalized = list.map((item) => {
+    if (typeof item === "string") return { name: item, count: 1 };
+    return {
+      name: item.name || item.command || item.raw_payload || "-",
+      count: Number(item.count || 0)
+    };
+  });
+
+  const maxValue = Math.max(...normalized.map((item) => item.count), 1);
+
+  normalized.slice(0, 10).forEach((item, i) => {
     const div = document.createElement("div");
     div.className = "attack-row";
+    const width = Math.max(5, (item.count / maxValue) * 100);
 
     div.innerHTML = `
       <div class="rank">${i + 1}</div>
-      <div>${item.name || item.command}</div>
-      <div>${item.count || 0}</div>
+      <div class="attack-name">${item.name}</div>
+      <div class="bar-wrap"><div class="bar" style="width: ${width}%"></div></div>
+      <div>${item.count}</div>
     `;
 
     attackMethodList.appendChild(div);
   });
 }
 
-// -------------------------
-// 拖曳功能（保留）
-// -------------------------
+function renderTrafficOverview(data) {
+  const normalCount = Number(data?.normal_count || data?.normal || 0);
+  const attackCount = Number(data?.attack_count || data?.attack || 0);
+  const total = normalCount + attackCount;
+
+  const normalRatio = total > 0 ? `${Math.round((normalCount / total) * 100)}%` : "0%";
+  const attackRatio = total > 0 ? `${Math.round((attackCount / total) * 100)}%` : "0%";
+
+  if (trafficNormalCount) trafficNormalCount.textContent = normalCount;
+  if (trafficAttackCount) trafficAttackCount.textContent = attackCount;
+  if (trafficNormalRatio) trafficNormalRatio.textContent = normalRatio;
+  if (trafficAttackRatio) trafficAttackRatio.textContent = attackRatio;
+  if (normalPercent) normalPercent.textContent = normalRatio;
+  if (attackPercent) attackPercent.textContent = attackRatio;
+
+  if (trafficSummary) {
+    trafficSummary.textContent =
+`normal traffic: ${normalCount}
+attack traffic: ${attackCount}
+total traffic: ${total}`;
+  }
+
+  drawTrafficPlaceholder(normalCount, attackCount);
+}
+
+function renderAttackOverview(data) {
+  const attackTraffic = Array.isArray(data?.attack_traffic) ? data.attack_traffic : [];
+  const attackCount = Number(data?.attack_count || data?.attack || attackTraffic.length || 0);
+
+  if (attackHighRiskTarget) {
+    attackHighRiskTarget.textContent = attackTraffic[0]?.target || attackTraffic[0]?.client_ip || "-";
+  }
+
+  if (attackPrimaryType) {
+    attackPrimaryType.textContent =
+      attackTraffic[0]?.attack_type ||
+      attackTraffic[0]?.behavior ||
+      attackTraffic[0]?.event ||
+      "-";
+  }
+
+  if (attackSourceCount) {
+    const sourceSet = new Set(
+      attackTraffic.map((item) => item.client_ip || item.ip).filter(Boolean)
+    );
+    attackSourceCount.textContent = sourceSet.size || 0;
+  }
+
+  if (attackEventCount) {
+    attackEventCount.textContent = attackCount;
+  }
+
+  if (attackAnalysisList) {
+    attackAnalysisList.innerHTML = "";
+
+    if (!attackTraffic.length) {
+      attackAnalysisList.innerHTML = `
+        <div class="attack-analysis-item">
+          <div class="ip-top">
+            <span class="strong">no attack data</span>
+            <span>-</span>
+          </div>
+          <div class="muted">尚未取得 API 資料</div>
+        </div>
+      `;
+    } else {
+      attackTraffic.slice(0, 6).forEach((item) => {
+        const ip = item.client_ip || item.ip || "-";
+        const type = item.attack_type || item.behavior || item.event || "attack";
+        const target = item.target || item.destination || item.dst_ip || "-";
+
+        const div = document.createElement("div");
+        div.className = "attack-analysis-item";
+        div.innerHTML = `
+          <div class="ip-top">
+            <span class="strong">${ip}</span>
+            <span>${type}</span>
+          </div>
+          <div class="muted">target: ${target}</div>
+        `;
+        attackAnalysisList.appendChild(div);
+      });
+    }
+  }
+
+  if (attackOverviewSummary) {
+    attackOverviewSummary.textContent =
+`attack count: ${attackCount}
+source count: ${attackSourceCount ? attackSourceCount.textContent : 0}
+primary attack: ${attackPrimaryType ? attackPrimaryType.textContent : "-"}
+status: ${attackCount > 0 ? "attack activity detected" : "no attack activity"}`;
+  }
+}
+
+function drawTrafficPlaceholder(normalCount, attackCount) {
+  if (!ctx || !chartCanvas) return;
+
+  ctx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
+
+  const cx = chartCanvas.width / 2;
+  const cy = chartCanvas.height / 2;
+
+  ctx.strokeStyle = "rgba(0,255,136,0.22)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 60, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(0,255,136,0.92)";
+  ctx.font = "bold 16px Consolas";
+  ctx.textAlign = "center";
+  ctx.fillText("Chart", cx, cy - 8);
+
+  ctx.fillStyle = "rgba(0,255,136,0.6)";
+  ctx.font = "12px Consolas";
+  ctx.fillText(`${normalCount} / ${attackCount}`, cx, cy + 14);
+}
+
+// load
+function loadIpList() {
+  apiFetchAllIps()
+    .then((data) => {
+      renderIpList(data);
+      if (!selectedIp && Array.isArray(data) && data.length > 0) {
+        selectedIp = data[0].client_ip || data[0].ip;
+        loadIpDetail();
+      }
+    })
+    .catch((err) => {
+      console.error("IP list error:", err);
+      renderIpList([]);
+    });
+}
+
+function loadIpDetail() {
+  if (!selectedIp) return;
+
+  apiFetchIpDetails(selectedIp)
+    .then((data) => {
+      renderDetail(data);
+    })
+    .catch((err) => {
+      console.error("IP detail error:", err);
+      renderDetail({});
+    });
+}
+
+function loadAttacks() {
+  apiFetchTopAttackMethods()
+    .then((data) => {
+      renderAttacks(data);
+    })
+    .catch((err) => {
+      console.error("Attack ranking error:", err);
+      renderAttacks([]);
+    });
+}
+
+function loadTrafficOverview() {
+  apiFetchTrafficCompare()
+    .then((data) => {
+      renderTrafficOverview(data);
+      renderAttackOverview(data);
+    })
+    .catch((err) => {
+      console.error("Traffic overview error:", err);
+      renderTrafficOverview({});
+      renderAttackOverview({});
+    });
+}
+
+function bindCommandInput() {
+  if (!commandInput || !commandSendBtn) return;
+
+  const submitCommand = () => {
+    const commandText = commandInput.value.trim();
+    if (!commandText) return;
+
+    apiExecuteCommand(commandText)
+      .then((result) => {
+        console.log("Command result:", result);
+      })
+      .catch((err) => {
+        console.error("Command execute error:", err);
+      });
+  };
+
+  commandSendBtn.addEventListener("click", submitCommand);
+  commandInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submitCommand();
+  });
+}
+
+// 拖曳
 let activeWindow = null;
 let offsetX = 0;
 let offsetY = 0;
+let highestZ = 200;
 
-document.querySelectorAll(".draggable").forEach(win => {
+document.querySelectorAll(".draggable").forEach((win) => {
   const handle = win.querySelector(".drag-handle");
+  if (!handle) return;
 
   handle.addEventListener("mousedown", (e) => {
     activeWindow = win;
+    highestZ += 1;
+    win.style.zIndex = highestZ;
 
     const rect = win.getBoundingClientRect();
     const currentTransform = getComputedStyle(win).transform;
 
-    // 如果原本有 transform 置中，拖曳時先轉成固定座標
     if (currentTransform !== "none") {
       win.style.left = rect.left + "px";
       win.style.top = rect.top + "px";
@@ -163,19 +506,11 @@ document.addEventListener("mousemove", (e) => {
   activeWindow.style.top = y + "px";
 });
 
-document.addEventListener("mousemove", (e) => {
-  if (!activeWindow) return;
-
-  activeWindow.style.left = (e.clientX - offsetX) + "px";
-  activeWindow.style.top = (e.clientY - offsetY) + "px";
-});
-
 document.addEventListener("mouseup", () => {
   activeWindow = null;
 });
 
-const layer = document.getElementById("streamLayer");
-
+// 背景動畫
 const tokens = [
   "POST", "GET", "DROP", "payload", "inject", "overflow",
   "auth_bypass", "token", "session", "beacon", "scan",
@@ -197,7 +532,7 @@ function pick(arr) {
 }
 
 function makeLine(length = 120) {
-  let out = [];
+  const out = [];
   for (let i = 0; i < length; i++) {
     out.push(Math.random() < 0.68 ? String(randInt(0, 9)) : pick(tokens));
   }
@@ -264,43 +599,53 @@ function animate() {
 
     if (r.direction === 1 && r.x > ww + r.resetPadding) {
       r.x = -width - randInt(60, 240);
-      if (Math.random() > 0.52) {
-        r.el.textContent = makeLine(randInt(85, 140));
-      }
+      if (Math.random() > 0.52) r.el.textContent = makeLine(randInt(85, 140));
     }
 
     if (r.direction === -1 && r.x < -width - r.resetPadding) {
       r.x = ww + randInt(60, 240);
-      if (Math.random() > 0.52) {
-        r.el.textContent = makeLine(randInt(85, 140));
-      }
+      if (Math.random() > 0.52) r.el.textContent = makeLine(randInt(85, 140));
     }
 
     r.updateCounter++;
     if (r.updateCounter >= r.mutateEvery) {
       r.updateCounter = 0;
-      if (Math.random() > 0.45) {
-        r.el.textContent = makeLine(randInt(85, 140));
-      }
+      if (Math.random() > 0.45) r.el.textContent = makeLine(randInt(85, 140));
     }
   }
 
   requestAnimationFrame(animate);
 }
 
-// -------------------------
-// 初始化
-// -------------------------
+// 狀態文字
+const statusList = [
+  "status: active",
+  "status: monitoring",
+  "status: live traffic",
+  "status: threat watch",
+  "status: server synced"
+];
+
+function startStatusRotation() {
+  if (!statusText) return;
+  setInterval(() => {
+    statusText.textContent = pick(statusList);
+  }, 1500);
+}
+
+// init
 function init() {
+  bindOverviewTabs();
+  bindCommandInput();
+
   loadIpList();
   loadAttacks();
+  loadTrafficOverview();
 
   createRows();
   animate();
+  startStatusRotation();
 }
 
+window.addEventListener("resize", createRows);
 init();
-
-window.addEventListener("resize", () => {
-  createRows();
-});
