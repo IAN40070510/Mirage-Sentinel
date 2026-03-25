@@ -11,7 +11,7 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(CURRENT_DIR)               
 SECLISTS_PATH = os.path.join(PROJECT_ROOT, "data", "datasets", "SecLists")
 
-class HoneypotDetector:
+class SentinelEngine:
     def __init__(self, seclists_root: str):
         self.seclists_root = seclists_root
         self.automaton = ahocorasick.Automaton()
@@ -82,6 +82,6 @@ class HoneypotDetector:
         # 這裡的 True 僅代表「有命中」，最終生死由 main.py 決定
         return (confidence > 0), confidence, attack_vector
 
-_detector = HoneypotDetector(SECLISTS_PATH)
+_detector = SentinelEngine(SECLISTS_PATH)
 def analyze_intent(text: str):
     return _detector.analyze(text)

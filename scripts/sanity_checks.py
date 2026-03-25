@@ -9,9 +9,9 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from core import deception_db, nexus_db, traffic_db
-from core.deception_metrics import compute_interaction_metrics
-from services import web_service
+from core import deception_db, analytics_engine, traffic_db
+from core.deception_engine import compute_interaction_metrics
+from services import dashboard_service
 
 
 def _assert(condition: bool, message: str):
@@ -34,16 +34,16 @@ def run():
 
     original_paths = {
         "traffic_db.DB_PATH": traffic_db.DB_PATH,
-        "nexus_db.DB_PATH": nexus_db.DB_PATH,
-        "web_service.DB_PATH": web_service.DB_PATH,
+        "analytics_engine.DB_PATH": analytics_engine.DB_PATH,
+        "dashboard_service.DB_PATH": dashboard_service.DB_PATH,
         "deception_db.DB_PATH": deception_db.DB_PATH,
     }
 
     try:
         # 將所有資料層指向測試 DB，避免污染正式資料
         traffic_db.DB_PATH = temp_traffic_db
-        nexus_db.DB_PATH = temp_traffic_db
-        web_service.DB_PATH = temp_traffic_db
+        analytics_engine.DB_PATH = temp_traffic_db
+        dashboard_service.DB_PATH = temp_traffic_db
         deception_db.DB_PATH = temp_memory_db
 
         traffic_db.setup_traffic_db()
@@ -126,7 +126,7 @@ def run():
             }
         )
 
-        depth = web_service.analyze_interaction_depth(normal_client, "u3001")
+        depth = dashboard_service.analyze_interaction_depth(normal_client, "u3001")
         _assert(
             depth["interaction_depth"] == 0,
             f"Case 3 failed: interaction_depth={depth['interaction_depth']}，預期 0",
@@ -140,8 +140,8 @@ def run():
     finally:
         # 還原模組 DB 路徑
         traffic_db.DB_PATH = original_paths["traffic_db.DB_PATH"]
-        nexus_db.DB_PATH = original_paths["nexus_db.DB_PATH"]
-        web_service.DB_PATH = original_paths["web_service.DB_PATH"]
+        analytics_engine.DB_PATH = original_paths["analytics_engine.DB_PATH"]
+        dashboard_service.DB_PATH = original_paths["dashboard_service.DB_PATH"]
         deception_db.DB_PATH = original_paths["deception_db.DB_PATH"]
 
 

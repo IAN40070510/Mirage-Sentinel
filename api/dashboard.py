@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter, HTTPException, Query, Header
 from pydantic import BaseModel, Field, validator
-from services import web_service as ws
+from services import dashboard_service as ws
 
 # 配置日誌記錄
 logger = logging.getLogger(__name__)

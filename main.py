@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 # 核心模組匯入
 from core.sentinel import analyze_intent
 from core.deception_db import setup_deception_db, get_memory, save_deception_state
-from core.deception_metrics import compute_interaction_metrics
+from core.deception_engine import compute_interaction_metrics
 from core.traffic_db import setup_traffic_db, log_traffic_event
 from core.sandbox import run_attack_in_sandbox
 
@@ -31,8 +31,8 @@ DEFAULT_DEV_API_KEY = "dev-local-api-key-change-me"
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 def verify_api_key(api_key: str = Security(api_key_header)):
-    """統一使用 web_service 中的 API key 驗証邏輯"""
-    from services import web_service as ws
+    """統一使用 dashboard_service 中的 API key 驗証邏輯"""
+    from services import dashboard_service as ws
     if not api_key or not ws.validate_api_key(api_key):
         raise HTTPException(status_code=403, detail="Unauthorized access")
 

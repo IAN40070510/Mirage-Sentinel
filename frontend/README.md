@@ -10,10 +10,10 @@ Mirage-Sentinel/
 │   └── dashboard.py       # 前端專用 API (例如: /api/v1/dashboard/analysis)
 │
 ├── services/              # [業務邏輯層] 數據處理與分析
-│   └── web_service.py     # 核心分析邏輯 (例如: 計算停留時間、行為分析)
+│   └── dashboard_service.py # 看板分析服務: 算敀留時間、行為分析
 │
 ├── core/                  # [數據存取層] 底層資料庫操作
-│   └── nexus_db.py        # 資料庫連線管理 (DAL) 與 Table Schema 定義
+│   └── analytics_engine.py # 分析引擎：流量統計、攻擊摘要、客戶端分析查詢
 │
 ├── data/                  # [數據存儲層] 實體資料檔案
 │   └── traffic_logs.db    # 存儲攻擊事件的 SQLite 資料庫檔案

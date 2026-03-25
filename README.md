@@ -43,7 +43,7 @@ Mirage-Sentinel/
 │   ├── sandbox.py
 │   ├── deception_db.py
 │   ├── traffic_db.py
-│   └── nexus_db.py
+│   └── analytics_engine.py
 ├── data/
 │   ├── datasets/
 │   ├── mirage_memory.db
@@ -125,7 +125,7 @@ API_KEY=replace-with-a-strong-random-key
 3. 端點探索廣度（`endpoint_coverage`）
 4. 惡意負載演化（`payload_evolution_score`）
 
-實作位置：`core/deception_metrics.py`
+實作位置：`core/deception_engine.py`
 
 ## 深度分析 API
 
@@ -266,7 +266,7 @@ curl -X POST "http://127.0.0.1:8000/api/v1/simulate_attack?user_id=1001&payload=
    - 前端動態初始化配置而非硬編碼
 
 5. **驗證邏輯統一**
-   - 所有 API Key 驗證統一使用 `web_service.validate_api_key()`
+   - 所有 API Key 驗證統一使用 `dashboard_service.validate_api_key()`
    - 消除重複驗證邏輯
 
 6. **資料庫優化**

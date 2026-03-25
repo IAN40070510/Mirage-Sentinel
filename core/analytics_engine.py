@@ -1,7 +1,7 @@
 import sqlite3
 import os
 
-# Nexus 只負責查詢/分析，寫入由 traffic_db 處理。
+# 分析引擎：只負責查詢/分析流量日誌，寫入由 traffic_db 處理
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 CORE_DIR = os.path.dirname(CURRENT_FILE_PATH)
 PROJECT_ROOT = os.path.dirname(CORE_DIR)
