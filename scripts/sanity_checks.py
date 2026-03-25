@@ -127,7 +127,10 @@ def run():
         )
 
         depth = web_service.analyze_interaction_depth(normal_client, "u3001")
-        _assert(depth["funnel_level"] == 1, f"Case 3 failed: funnel_level={depth['funnel_level']}，預期 1")
+        _assert(
+            depth["interaction_depth"] == 0,
+            f"Case 3 failed: interaction_depth={depth['interaction_depth']}，預期 0",
+        )
 
         print("[PASS] Case 1: 唯一鍵 + Upsert 正常")
         print("[PASS] Case 2: dwell_seconds 不會因閒置時間膨脹")
