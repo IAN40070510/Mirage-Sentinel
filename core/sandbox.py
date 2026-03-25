@@ -1,6 +1,7 @@
 import logging
 import httpx
 import asyncio
+import os
 
 from core.mirage import generate_fake_data
 
@@ -22,6 +23,14 @@ async def run_attack_in_sandbox(request_payload: dict, timeout_seconds: int = 12
     """
     client_ip = request_payload.get("client_ip", "unknown")
     query_id = request_payload.get("query_id", "unknown")
+    sandbox_api_url = os.getenv("SANDBOX_API_URL", "http://sandbox:8001/simulate_attack")
+    is_render_env = os.getenv("RENDER", "").lower() == "true"
+
+    # Render 單服務部署通常沒有 sandbox 主機，直接降級可避免無效重試與噪音日誌
+    if is_render_env and "SANDBOX_API_URL" not in os.environ:
+        fake_data = generate_fake_data(query_id)
+        logger.info("[SANDBOX] SANDBOX_API_URL 未設定（Render 環境），直接使用本機假資料。")
+        return fake_data
 
     # 帶有指數退避的重試邏輯
     for attempt in range(max_retries):
@@ -30,7 +39,7 @@ async def run_attack_in_sandbox(request_payload: dict, timeout_seconds: int = 12
             
             async with httpx.AsyncClient(timeout=timeout_seconds) as client:
                 response = await client.post(
-                    "http://sandbox:8001/simulate_attack",
+                    sandbox_api_url,
                     json={
                         "client_ip": client_ip,
                         "query_id": query_id,

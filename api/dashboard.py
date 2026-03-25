@@ -55,6 +55,18 @@ def verify_api_key(x_api_key: str | None):
 
 # ===== 既有 API =====
 
+@router.get("", summary="Dashboard API 入口")
+async def dashboard_root():
+    return {
+        "service": "Mirage Dashboard API",
+        "hint": "Use /api/v1/dashboard/* endpoints with X-API-Key",
+        "examples": [
+            "/api/v1/dashboard/recent_traffic",
+            "/api/v1/dashboard/live_ips",
+            "/api/v1/dashboard/traffic_compare",
+        ],
+    }
+
 @router.get("/dwell_time/{client_ip}", summary="獲取駭客滯留時間與活躍狀態")
 async def get_hacker_analysis(
     client_ip: str,

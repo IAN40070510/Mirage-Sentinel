@@ -69,6 +69,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.get("/")
+async def root():
+    return {
+        "service": "Mirage-Sentinel API Gateway",
+        "docs": "/docs",
+        "openapi": "/openapi.json",
+        "dashboard_base": "/api/v1/dashboard",
+    }
+
+
+@app.get("/healthz")
+async def healthz():
+    return {"status": "ok"}
+
 @app.get("/api/v1/user/{user_id}")
 async def get_user_data(
     user_id: str,
