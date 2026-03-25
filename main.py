@@ -289,7 +289,7 @@ async def simulate_attack(
     }
 
 if __name__ == "__main__":
-    # uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
     
     # 私人開發環境使用 localhost
-    uvicorn.run("main:app", host="127.0.0.1", port=8000)
+    # uvicorn.run("main:app", host="127.0.0.1", port=8000)
