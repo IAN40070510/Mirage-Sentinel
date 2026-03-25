@@ -228,3 +228,12 @@ data/error_log/
 __pycache__/
 .env
 .venv/
+
+# Frontend dependencies
+frontend/node_modules/
+frontend/package.json
+frontend/package-lock.json
+
+# SQLite runtime temp files
+*.db-wal
+*.db-shm

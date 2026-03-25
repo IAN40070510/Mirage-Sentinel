@@ -1,10 +1,16 @@
 const express = require("express");
+const path = require("path");
 const app = express();
 
 const DASHBOARD_BASE_URL = process.env.BACKEND_API_BASE_URL || "http://localhost:8000/api/v1/dashboard";
 const DASHBOARD_API_KEY = process.env.API_KEY || "dev-local-api-key-change-me";
 
 app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
 async function fetchDashboardJson(path, options = {}) {
   const mergedOptions = {
