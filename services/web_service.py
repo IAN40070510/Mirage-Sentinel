@@ -24,8 +24,8 @@ def _parse_ts(ts: str) -> datetime:
     raise ValueError(f"Unsupported timestamp format: {ts}")
 
 
-def get_hacker_dwell_time(attacker_ip: str) -> dict:
-    """以攻擊流量紀錄估算同一 IP 的滯留時間與活躍狀態。"""
+def get_hacker_dwell_time(client_ip: str) -> dict:
+    """以攻擊流量紀錄估算同一 client_ip 的滯留時間與活躍狀態。"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -36,22 +36,22 @@ def get_hacker_dwell_time(attacker_ip: str) -> dict:
             WHERE c.ip = ? AND t.is_attack = 1
             ORDER BY t.request_at ASC
             ''',
-            (attacker_ip,)
+            (client_ip,)
         )
         rows = cursor.fetchall()
 
     if not rows:
-        return {"ip": attacker_ip, "dwell_seconds": 0, "is_active": False}
+        return {"client_ip": client_ip, "dwell_seconds": 0, "is_active": False}
 
     first_time = _parse_ts(rows[0][0])
     latest_time = _parse_ts(rows[-1][0])
     dwell_seconds = int(max((latest_time - first_time).total_seconds(), 0))
     is_active = (datetime.now() - latest_time).total_seconds() <= 600
 
-    return {"ip": attacker_ip, "dwell_seconds": dwell_seconds, "is_active": is_active}
+    return {"client_ip": client_ip, "dwell_seconds": dwell_seconds, "is_active": is_active}
 
-def analyze_interaction_depth(attacker_ip: str, query_id: str) -> dict:
-    """依 client_ip + query_id 回傳互動次數。"""
+def analyze_interaction_depth(client_ip: str, query_id: str) -> dict:
+    """依 client_ip + query_id 回傳互動深度（以攻擊事件次數表示）。"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -61,11 +61,18 @@ def analyze_interaction_depth(attacker_ip: str, query_id: str) -> dict:
             JOIN clients c ON c.id = t.client_id
             WHERE c.ip = ? AND t.query_id = ? AND t.is_attack = 1
             ''',
-            (attacker_ip, query_id)
+            (client_ip, query_id)
         )
         total_actions = int((cursor.fetchone() or [0])[0])
 
-    return {"ip": attacker_ip, "depth_level": total_actions, "total_actions": total_actions}
+    return {
+        "client_ip": client_ip,
+        "query_id": query_id,
+        "interaction_depth": total_actions,
+        # Backward compatibility for existing frontend/testing code.
+        "depth_level": total_actions,
+        "total_actions": total_actions,
+    }
 
 def get_attack_timeline(attacker_ip: str) -> dict:
     """視覺化呈現該 IP 的攻擊行為路徑。"""
