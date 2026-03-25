@@ -20,7 +20,7 @@ services:
 
   # 2. 前端代理與儀表板 (Express)
   - type: web
-    name: mirage-frontend
+    name: detective-frontend
     runtime: node
     plan: free
     region: singapore
