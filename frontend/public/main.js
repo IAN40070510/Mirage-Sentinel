@@ -46,7 +46,7 @@ function fetchJson(url, options = {}) {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      "X-API-Key": API_KEY,
+      "X-API-KEY": API_KEY,
       ...(options.headers || {})
     }
   };
@@ -390,7 +390,6 @@ function drawTrafficPlaceholder(normalCount, attackCount) {
 function loadIpList() {
   return apiFetchAllIps()
     .then((data) => {
-      // console.log("live_ips API回傳:", data);
       latestIpList = normalizeLiveIpsResponse(data);
       renderIpList(latestIpList);
 
