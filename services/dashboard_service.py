@@ -153,7 +153,7 @@ def log_misjudgment(attacker_ip: str, reason: str) -> None:
     data = {
         "attacker_ip": attacker_ip,
         "reason": reason,
-        "logged_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "logged_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     }
     
     with open(filepath, "w", encoding="utf-8") as f:

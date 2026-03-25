@@ -28,7 +28,7 @@ async def simulate_attack(req: AttackRequest):
 
         # 2. 記錄行為 (Record Behavior)
         sandbox_log = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
             "client_ip": client_ip,
             "query_id": query_id,
             "raw_payload": raw_payload,
