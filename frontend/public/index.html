@@ -76,7 +76,6 @@
       </div>
     </div>
 
-    <!-- 改這個視窗 -->
     <div class="window sub-window draggable w2">
       <div class="window-header drag-handle">
         <div class="window-title">traffic overview</div>
@@ -93,14 +92,12 @@
           </button>
         </div>
 
-        <!-- 分頁 1：流量總覽 -->
         <div class="overview-panel active" id="overview-panel-traffic">
           <div class="traffic-meta">
             <div>Normal: <span id="normalPercent">72%</span></div>
             <div>Attack: <span id="attackPercent">28%</span></div>
           </div>
 
-          <!-- 先保留圖表框架 -->
           <div class="chart-placeholder">
             <canvas id="trafficChart" width="180" height="180"></canvas>
             <div class="chart-placeholder-text">圖表預留區</div>
@@ -130,31 +127,11 @@
           </div>
         </div>
 
-        <!-- 分頁 2：攻擊分析 -->
+        <!-- 改成全部攻擊對象分析 -->
         <div class="overview-panel" id="overview-panel-attack">
-          <div class="section-title">攻擊分析摘要</div>
+          <div class="section-title">全部攻擊對象分析</div>
 
-          <div class="overview-card-grid">
-            <div class="info-card">
-              <div class="label">高風險目標</div>
-              <div class="value" id="attackHighRiskTarget">-</div>
-            </div>
-            <div class="info-card">
-              <div class="label">主要攻擊類型</div>
-              <div class="value" id="attackPrimaryType">-</div>
-            </div>
-            <div class="info-card">
-              <div class="label">攻擊來源數</div>
-              <div class="value" id="attackSourceCount">-</div>
-            </div>
-            <div class="info-card">
-              <div class="label">異常事件數</div>
-              <div class="value" id="attackEventCount">-</div>
-            </div>
-          </div>
-
-          <div class="section-title section-gap">攻擊內容</div>
-          <div class="attack-analysis-list" id="attackAnalysisList">
+          <div class="attack-target-analysis-list" id="attackAnalysisList">
             <div class="attack-analysis-item">
               <div class="ip-top">
                 <span class="strong">loading...</span>
@@ -164,6 +141,7 @@
             </div>
           </div>
 
+          <div class="section-title section-gap">整體摘要</div>
           <div class="log-block" id="attackOverviewSummary">
 等待 API 資料...
           </div>

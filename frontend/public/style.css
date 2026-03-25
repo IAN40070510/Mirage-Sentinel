@@ -234,7 +234,7 @@ body::after {
 .ip-list,
 .attack-list,
 .log-list,
-.attack-analysis-list {
+.attack-target-analysis-list {
   display: flex;
   flex-direction: column;
   gap: 8px;

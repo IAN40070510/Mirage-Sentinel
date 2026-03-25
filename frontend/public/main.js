@@ -26,10 +26,6 @@ const trafficAttackCount = document.getElementById("trafficAttackCount");
 const trafficNormalRatio = document.getElementById("trafficNormalRatio");
 const trafficAttackRatio = document.getElementById("trafficAttackRatio");
 
-const attackHighRiskTarget = document.getElementById("attackHighRiskTarget");
-const attackPrimaryType = document.getElementById("attackPrimaryType");
-const attackSourceCount = document.getElementById("attackSourceCount");
-const attackEventCount = document.getElementById("attackEventCount");
 const attackAnalysisList = document.getElementById("attackAnalysisList");
 const attackOverviewSummary = document.getElementById("attackOverviewSummary");
 
@@ -295,58 +291,67 @@ total traffic: ${total}`;
 
 function renderAttackOverview(data) {
   const attackTraffic = Array.isArray(data?.attack_traffic) ? data.attack_traffic : [];
-  const attackCount = Number(data?.attack_count || data?.attack || attackTraffic.length || 0);
+  const groupedTargets = new Map();
 
-  if (attackHighRiskTarget) {
-    attackHighRiskTarget.textContent = attackTraffic[0]?.target || attackTraffic[0]?.client_ip || "-";
-  }
+  attackTraffic.forEach((item) => {
+    const target =
+      item.target ||
+      item.destination ||
+      item.dst_ip ||
+      item.attack_target ||
+      "unknown-target";
 
-  if (attackPrimaryType) {
-    attackPrimaryType.textContent =
-      attackTraffic[0]?.attack_type ||
-      attackTraffic[0]?.behavior ||
-      attackTraffic[0]?.event ||
-      "-";
-  }
+    const sourceIp = item.client_ip || item.ip || "-";
+    const attackType = item.attack_type || item.behavior || item.event || "attack";
 
-  if (attackSourceCount) {
-    const sourceSet = new Set(
-      attackTraffic.map((item) => item.client_ip || item.ip).filter(Boolean)
-    );
-    attackSourceCount.textContent = sourceSet.size || 0;
-  }
+    if (!groupedTargets.has(target)) {
+      groupedTargets.set(target, {
+        target,
+        count: 0,
+        sources: new Set(),
+        types: {}
+      });
+    }
 
-  if (attackEventCount) {
-    attackEventCount.textContent = attackCount;
-  }
+    const entry = groupedTargets.get(target);
+    entry.count += 1;
+    entry.sources.add(sourceIp);
+    entry.types[attackType] = (entry.types[attackType] || 0) + 1;
+  });
+
+  const targetList = Array.from(groupedTargets.values()).map((item) => {
+    const primaryType = Object.entries(item.types).sort((a, b) => b[1] - a[1])[0]?.[0] || "-";
+    return {
+      target: item.target,
+      count: item.count,
+      sourceCount: item.sources.size,
+      primaryType
+    };
+  }).sort((a, b) => b.count - a.count);
 
   if (attackAnalysisList) {
     attackAnalysisList.innerHTML = "";
 
-    if (!attackTraffic.length) {
+    if (!targetList.length) {
       attackAnalysisList.innerHTML = `
         <div class="attack-analysis-item">
           <div class="ip-top">
-            <span class="strong">no attack data</span>
+            <span class="strong">no attack target</span>
             <span>-</span>
           </div>
           <div class="muted">尚未取得 API 資料</div>
         </div>
       `;
     } else {
-      attackTraffic.slice(0, 6).forEach((item) => {
-        const ip = item.client_ip || item.ip || "-";
-        const type = item.attack_type || item.behavior || item.event || "attack";
-        const target = item.target || item.destination || item.dst_ip || "-";
-
+      targetList.forEach((item) => {
         const div = document.createElement("div");
         div.className = "attack-analysis-item";
         div.innerHTML = `
           <div class="ip-top">
-            <span class="strong">${ip}</span>
-            <span>${type}</span>
+            <span class="strong">${item.target}</span>
+            <span>${item.count} hits</span>
           </div>
-          <div class="muted">target: ${target}</div>
+          <div class="muted">type: ${item.primaryType} / sources: ${item.sourceCount}</div>
         `;
         attackAnalysisList.appendChild(div);
       });
@@ -354,11 +359,15 @@ function renderAttackOverview(data) {
   }
 
   if (attackOverviewSummary) {
+    const totalTargets = targetList.length;
+    const totalEvents = targetList.reduce((sum, item) => sum + item.count, 0);
+    const topTarget = targetList[0]?.target || "-";
+
     attackOverviewSummary.textContent =
-`attack count: ${attackCount}
-source count: ${attackSourceCount ? attackSourceCount.textContent : 0}
-primary attack: ${attackPrimaryType ? attackPrimaryType.textContent : "-"}
-status: ${attackCount > 0 ? "attack activity detected" : "no attack activity"}`;
+`target count: ${totalTargets}
+attack event count: ${totalEvents}
+top target: ${topTarget}
+status: ${totalTargets > 0 ? "multiple attack targets detected" : "no attack target data"}`;
   }
 }
 
