@@ -7,6 +7,7 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 from fastapi.security import APIKeyHeader
 from dotenv import load_dotenv
+from typing import Optional
 
 # 配置日誌
 logger = logging.getLogger(__name__)
@@ -115,7 +116,7 @@ async def get_user_data(
         "request_at": request_at,
         "client_ip": client_ip,
         "location": "Cloud/Render",
-        "is_proxy": 0,
+        "is_proxy": detect_proxy(request),  # 動態檢測是否為代理
         "user_agent": user_agent,
         "tls_fingerprint": "N/A",
         "raw_payload": detection_target,
@@ -316,6 +317,31 @@ async def simulate_attack(
         "message": "未檢測到攻擊行為",
         "event_log": event_payload
     }
+
+def detect_proxy(request: Request) -> int:
+    """檢測請求是否通過代理伺服器"""
+    proxy_headers = [
+        "X-Forwarded-For", "Via", "Forwarded", "Client-IP", "True-Client-IP"
+    ]
+    for header in proxy_headers:
+        if header in request.headers:
+            return 1  # 判斷為代理
+
+    # 檢查 IP 地址（需要引入 IP 資料庫或自定義邏輯）
+    client_ip = request.client.host
+    if is_known_proxy_ip(client_ip):
+        return 1
+
+    # 檢查 User-Agent
+    user_agent = request.headers.get("user-agent", "").lower()
+    if "proxy" in user_agent or "crawler" in user_agent:
+        return 1
+
+    return 0  # 非代理
+
+def is_known_proxy_ip(ip: str) -> bool:
+    """檢查 IP 是否屬於已知代理伺服器（此處為占位邏輯）"""
+    return False
 
 if __name__ == "__main__":
     # uvicorn.run(app, host="0.0.0.0", port=8000)
