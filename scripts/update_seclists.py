@@ -5,10 +5,12 @@
 """
 
 import json
+import argparse
 import re
 import shutil
 import subprocess
 from pathlib import Path
+from datetime import datetime
 from urllib.request import urlopen
 from urllib.error import URLError
 
@@ -19,6 +21,23 @@ PAYLOADS_DIR = DATA_DIR / "payloads"
 
 SECLISTS_REPO = "https://github.com/danielmiessler/SecLists.git"
 SECLISTS_ZIP = "https://github.com/danielmiessler/SecLists/archive/refs/heads/master.zip"
+
+
+def _file_text(path: Path) -> str:
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def _make_backup(path: Path) -> Path | None:
+    if not path.exists():
+        return None
+    backup_dir = DATA_DIR / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = backup_dir / f"{path.stem}_{timestamp}{path.suffix}"
+    shutil.copy2(path, backup_path)
+    return backup_path
 
 def has_git() -> bool:
     """檢查系統是否安裝 git"""
@@ -250,6 +269,14 @@ def save_signatures_as_txt(signatures: dict, filepath: Path) -> None:
             f.write(", ".join(items[:100]) + "\n\n")  # 限制每個分類 100 個
 
 def main():
+    parser = argparse.ArgumentParser(description="SecLists 自動下載與簽名更新工具")
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="實際寫入 data/attack_signatures.(txt|json)。未提供時只預覽差異，不會覆寫檔案。",
+    )
+    args = parser.parse_args()
+
     print("=" * 70)
     print("SecLists 自動下載與簽名更新工具")
     print("=" * 70)
@@ -274,19 +301,44 @@ def main():
     print("\n[步驟 2] 構建完整簽名庫...")
     signatures = build_complete_signatures()
     
-    # 第三步：儲存
-    print(f"\n[步驟 3] 儲存簽名檔...")
-    
-    # JSON 格式
+    # 第三步：產生輸出內容（預設不覆寫）
+    print(f"\n[步驟 3] 產生簽名輸出...")
     output_json = DATA_DIR / "attack_signatures.json"
-    with open(output_json, "w", encoding="utf-8") as f:
-        json.dump(signatures, f, indent=2, ensure_ascii=False)
-    print(f"  ✓ JSON: {output_json}")
-    
-    # 文本格式
     output_txt = DATA_DIR / "attack_signatures.txt"
-    save_signatures_as_txt(signatures, output_txt)
-    print(f"  ✓ 文本: {output_txt}")
+
+    new_json = json.dumps(signatures, indent=2, ensure_ascii=False)
+    temp_txt = DATA_DIR / "._attack_signatures_preview.txt"
+    save_signatures_as_txt(signatures, temp_txt)
+    new_txt = _file_text(temp_txt)
+    if temp_txt.exists():
+        temp_txt.unlink()
+
+    old_json = _file_text(output_json)
+    old_txt = _file_text(output_txt)
+
+    json_changed = old_json != new_json
+    txt_changed = old_txt != new_txt
+
+    print(f"  - JSON 變更: {'是' if json_changed else '否'}")
+    print(f"  - TXT 變更: {'是' if txt_changed else '否'}")
+
+    if not args.apply:
+        print("\n[安全模式] 未提供 --apply，本次不會覆寫任何檔案。")
+        print("如需寫入請執行: python scripts/update_seclists.py --apply")
+    else:
+        print("\n[寫入模式] 開始備份並寫入...")
+        backup_json = _make_backup(output_json)
+        backup_txt = _make_backup(output_txt)
+
+        output_json.write_text(new_json, encoding="utf-8")
+        output_txt.write_text(new_txt, encoding="utf-8")
+
+        print(f"  ✓ JSON: {output_json}")
+        print(f"  ✓ 文本: {output_txt}")
+        if backup_json:
+            print(f"  ✓ JSON 備份: {backup_json}")
+        if backup_txt:
+            print(f"  ✓ TXT 備份: {backup_txt}")
     
     # 統計
     print(f"\n[統計]")
