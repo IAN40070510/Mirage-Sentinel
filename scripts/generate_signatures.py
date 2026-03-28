@@ -12,7 +12,7 @@ from pathlib import Path
 from urllib.request import urlopen
 from urllib.error import URLError
 
-PROJECT_ROOT = Path(__file__).parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 SECLISTS_DIR = DATA_DIR / "datasets" / "SecLists"
 PAYLOADS_DIR = DATA_DIR / "payloads"

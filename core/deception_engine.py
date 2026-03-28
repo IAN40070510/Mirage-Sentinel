@@ -57,11 +57,10 @@ def _load_attack_signatures() -> dict[str, Any]:
         return _SIGNATURES_CACHE
     
     repo_root = Path(__file__).parent.parent
+    # 單一可信來源：僅讀取 data/，避免 scripts/data 舊檔污染評分。
     candidate_files = [
         repo_root / "data" / "attack_signatures.txt",
         repo_root / "data" / "attack_signatures.json",
-        repo_root / "scripts" / "data" / "attack_signatures.txt",
-        repo_root / "scripts" / "data" / "attack_signatures.json",
     ]
 
     merged = {"deep_markers": {}, "tool_signatures": {}}
@@ -97,6 +96,7 @@ def _parse_signature_txt(filepath: Path) -> dict[str, Any]:
     signatures = {"deep_markers": {}, "tool_signatures": {}}
     current_category = None
     current_section = "deep_markers"
+    deep_categories = {"admin_endpoints", "auth_theft", "file_operations", "rce_general"}
     
     with open(filepath, "r", encoding="utf-8") as f:
         for line in f:
@@ -114,6 +114,17 @@ def _parse_signature_txt(filepath: Path) -> dict[str, Any]:
             # 檢測分類標籤 [category_name]
             if line.startswith("[") and line.endswith("]"):
                 current_category = line[1:-1]
+
+                # 支援明確前綴：
+                # [deep_markers.category] / [tool_signatures.category]
+                if "." in current_category:
+                    prefix, category = current_category.split(".", 1)
+                    if prefix in ("deep_markers", "tool_signatures"):
+                        current_section = prefix
+                        current_category = category
+                else:
+                    # 無前綴時，依已知 deep 類別自動判斷，避免依賴註解文字。
+                    current_section = "deep_markers" if current_category in deep_categories else "tool_signatures"
                 continue
             
             # 解析簽名

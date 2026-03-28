@@ -219,12 +219,16 @@ data/*.db
 *.db-wal
 *.db-shm
 
+# Mirage-Sentinel generated datasets / artifacts
+data/datasets/SecLists/
+data/backups/
+scripts/data/
+
 # AI 模型與特徵轉換檔
 models/*.pkl
 
-# 原始訓練資料集 (忽略大的數據集，但「不忽略」SecLists)
+# 原始訓練資料集（忽略大的數據集，包含 SecLists）
 data/datasets/*
-!data/datasets/SecLists/
 
 # 前端依賴項
 frontend/node_modules/

@@ -15,8 +15,8 @@ Mirage-Sentinel 是一個以 FastAPI 為核心的主動式防禦 API Gateway。
 1. 攻擊檢測與風險分數：由 `core/sentinel.py` 分析請求意圖
 2. 沙盒隔離：由 `core/sandbox.py` 將惡意請求轉送至 `sandbox_service.py`
 3. 假資料生成：由 `core/mirage.py` 產生誘餌資料
-4. 狀態記憶：`data/mirage_memory.db` 會保存同一攻擊者的欺敵狀態
-5. 攻防日誌：`data/traffic_logs.db` 記錄攻擊向量、風險、處置狀態
+4. 狀態記憶：`data/mirage_memory.db` 僅作為欺敵流程的內部狀態快取
+5. 攻防日誌：`data/traffic_logs.db` 記錄攻擊向量、風險、處置狀態，且為戰情室唯一查詢來源
 6. 監控 API：`api/dashboard.py` 提供唯讀查詢（需 API Key）
 
 ## 系統流程
@@ -24,10 +24,10 @@ Mirage-Sentinel 是一個以 FastAPI 為核心的主動式防禦 API Gateway。
 1. Client 呼叫 API 入口 `main.py`
 2. Sentinel 判斷是否為高風險攻擊
 3. 若為攻擊：
-   - 讀取 `mirage_memory.db` 是否已有記憶
+   - 讀取 `mirage_memory.db` 是否已有記憶（僅欺敵流程內部使用）
    - 有記憶時回傳同一份假資料
    - 無記憶時導向沙盒，產生新假資料並寫回記憶
-4. 同步寫入 `traffic_logs.db` 供後續分析
+4. 同步寫入 `traffic_logs.db`（戰情室所有分析資料均來自此庫）
 
 ## 專案結構
 
@@ -110,6 +110,8 @@ API_KEY=replace-with-a-strong-random-key
 2. `query_id`（對應 user_id）
 
 效果：同一攻擊者重複攻擊同一目標時，系統會回傳一致的假資料，並更新欺敵成效指標。
+
+> 註：`mirage_memory.db` 不提供戰情室查詢；戰情室（Dashboard）僅讀取 `traffic_logs.db`。
 
 ## 互動深度（Deception Interaction Depth）
 

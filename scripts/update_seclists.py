@@ -47,6 +47,43 @@ def has_git() -> bool:
     except Exception:
         return False
 
+
+def _is_valid_seclists_repo(repo_dir: Path) -> bool:
+    """檢查目錄是否為正確的 SecLists 倉庫。"""
+    if not repo_dir.exists():
+        return False
+
+    expected_dirs = [repo_dir / "Fuzzing", repo_dir / "Payloads", repo_dir / "Web-Shells"]
+    layout_ok = any(d.exists() for d in expected_dirs)
+    if not layout_ok:
+        return False
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_dir), "remote", "get-url", "origin"],
+            capture_output=True,
+            timeout=10,
+            text=True,
+        )
+        if result.returncode != 0:
+            return False
+        origin = (result.stdout or "").strip().lower()
+        return "danielmiessler/seclists" in origin
+    except Exception:
+        return False
+
+
+def _backup_invalid_repo(repo_dir: Path) -> Path | None:
+    """若目錄不是 SecLists，先備份再重建。"""
+    if not repo_dir.exists():
+        return None
+    backup_dir = DATA_DIR / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    target = backup_dir / f"seclists_invalid_{timestamp}"
+    shutil.move(str(repo_dir), str(target))
+    return target
+
 def download_seclists_with_git() -> bool:
     """使用 git clone 下載 SecLists（推薦，支援增量更新）"""
     try:
@@ -55,7 +92,12 @@ def download_seclists_with_git() -> bool:
         print(f"    到: {SECLISTS_DIR}")
         print(f"    (首次下載需要時間，大約 500MB+)")
         
-        # 如果已存在，則更新
+        # 如果已存在，先驗證是否為正確 SecLists 倉庫
+        if SECLISTS_DIR.exists() and not _is_valid_seclists_repo(SECLISTS_DIR):
+            backup_path = _backup_invalid_repo(SECLISTS_DIR)
+            print(f"    [!] 現有目錄不是 SecLists 倉庫，已備份至: {backup_path}")
+
+        # 如果已存在且驗證成功，則更新
         if SECLISTS_DIR.exists():
             print(f"    [!] 目錄已存在，執行 git pull 更新...")
             result = subprocess.run(
@@ -137,46 +179,35 @@ def extract_payloads_from_seclists() -> dict:
     total_files = 0
     total_payloads = 0
     
-    # 主要掃描目錄
-    scan_dirs = [
-        "Fuzzing",
-        "Web-Shells",
-        "Credentials",
-        "Discovery",
-        "Passwords",
-        "Usernames",
-        "Payloads",
-    ]
-    
-    for scan_dir_name in scan_dirs:
-        scan_dir = SECLISTS_DIR / scan_dir_name
-        if not scan_dir.exists():
+    excluded_parts = {".git", "node_modules", "vendor", "__pycache__"}
+
+    for txt_file in SECLISTS_DIR.rglob("*.txt"):
+        if any(part in excluded_parts for part in txt_file.parts):
             continue
-        
-        print(f"  - 掃描: {scan_dir_name}/")
-        
-        for txt_file in scan_dir.rglob("*.txt"):
-            total_files += 1
-            category = txt_file.stem.lower()
-            
-            try:
-                payloads = []
-                with open(txt_file, "r", encoding="utf-8", errors="replace") as f:
-                    for line in f:
-                        line = line.strip()
-                        # 排除空行、註解、太短的項目
-                        if line and not line.startswith("#") and len(line) > 2:
-                            payloads.append(line.lower())
-                
-                if payloads:
-                    # 去重並限制數量（避免檔案過大）
-                    payloads = list(set(payloads))[:200]
-                    if category not in signatures:
-                        signatures[category] = []
-                    signatures[category].extend(payloads)
-                    total_payloads += len(payloads)
-            except Exception as e:
-                print(f"      ! 讀取 {txt_file.name} 失敗: {e}")
+
+        total_files += 1
+        rel_parent = txt_file.parent.relative_to(SECLISTS_DIR).as_posix().replace("/", "_").lower()
+        stem = txt_file.stem.lower()
+        category = f"{rel_parent}_{stem}" if rel_parent != "." else stem
+
+        try:
+            payloads = []
+            with open(txt_file, "r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    line = line.strip()
+                    # 排除空行、註解、太短的項目
+                    if line and not line.startswith("#") and len(line) > 2:
+                        payloads.append(line.lower())
+
+            if payloads:
+                # 去重並限制數量（避免檔案過大）
+                payloads = list(dict.fromkeys(payloads))[:200]
+                if category not in signatures:
+                    signatures[category] = []
+                signatures[category].extend(payloads)
+                total_payloads += len(payloads)
+        except Exception as e:
+            print(f"      ! 讀取 {txt_file.name} 失敗: {e}")
     
     # 去重合併
     for category in signatures:
@@ -253,7 +284,7 @@ def save_signatures_as_txt(signatures: dict, filepath: Path) -> None:
     """儲存為文本格式"""
     with open(filepath, "w", encoding="utf-8") as f:
         f.write("# 深層攻擊標記庫 (包含 SecLists)\n")
-        f.write("# 最後更新: " + str(Path(filepath).stat().st_mtime) + "\n")
+        f.write("# 最後更新: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
         f.write("# 格式：[分類] 標記 1, 標記 2, ...\n\n")
         
         # 深層標記
