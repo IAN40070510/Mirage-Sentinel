@@ -11,42 +11,8 @@ from core.traffic_db import get_connection
 _SIGNATURES_CACHE: dict[str, Any] | None = None
 
 
-def _load_attack_signatures() -> dict[str, Any]:
-    """從 data/attack_signatures.txt 或 .json 載入攻擊特徵簽名
-    
-    優先順序：
-    1. attack_signatures.txt（文本格式，易於編輯）
-    2. attack_signatures.json（JSON 格式，向後相容）
-    
-    使用模組層級快取避免重複 I/O
-    """
-    global _SIGNATURES_CACHE
-    
-    if _SIGNATURES_CACHE is not None:
-        return _SIGNATURES_CACHE
-    
-    sig_file_txt = Path(__file__).parent.parent / "data" / "attack_signatures.txt"
-    sig_file_json = Path(__file__).parent.parent / "data" / "attack_signatures.json"
-    
-    # 優先嘗試文本檔
-    if sig_file_txt.exists():
-        try:
-            _SIGNATURES_CACHE = _parse_signature_txt(sig_file_txt)
-            return _SIGNATURES_CACHE
-        except Exception as e:
-            print(f"[!] 解析文本簽名檔失敗: {e}，嘗試 JSON")
-    
-    # 回退 JSON
-    if sig_file_json.exists():
-        try:
-            with open(sig_file_json, "r", encoding="utf-8") as f:
-                _SIGNATURES_CACHE = json.load(f)
-                return _SIGNATURES_CACHE
-        except Exception as e:
-            print(f"[!] 解析 JSON 簽名檔失敗: {e}，使用內建簽名")
-    
-    # 回退：內建簽名
-    _SIGNATURES_CACHE = {
+def _default_signatures() -> dict[str, Any]:
+    return {
         "deep_markers": {
             "admin_endpoints": ["/api/admin", "/api/salary", "/api/internal"],
             "auth_theft": ["bearer ", "token=", "session=", "cookie:"],
@@ -58,7 +24,64 @@ def _load_attack_signatures() -> dict[str, Any]:
             "scanner": ["nikto", "burp", "sqlmap", "nmap"],
         },
     }
+
+
+def _merge_signatures(base: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+    # 逐分類合併並去重，保留原始順序。
+    for section in ("deep_markers", "tool_signatures"):
+        base.setdefault(section, {})
+        incoming_section = incoming.get(section, {})
+        if not isinstance(incoming_section, dict):
+            continue
+
+        for category, items in incoming_section.items():
+            if not isinstance(items, list):
+                continue
+            existing = base[section].setdefault(category, [])
+            seen = set(existing)
+            for item in items:
+                if not isinstance(item, str):
+                    continue
+                normalized = item.strip().lower()
+                if normalized and normalized not in seen:
+                    existing.append(normalized)
+                    seen.add(normalized)
+    return base
+
+
+def _load_attack_signatures() -> dict[str, Any]:
+    """載入並合併多來源簽名，避免單一來源覆蓋造成資料遺失。"""
+    global _SIGNATURES_CACHE
     
+    if _SIGNATURES_CACHE is not None:
+        return _SIGNATURES_CACHE
+    
+    repo_root = Path(__file__).parent.parent
+    candidate_files = [
+        repo_root / "data" / "attack_signatures.txt",
+        repo_root / "data" / "attack_signatures.json",
+        repo_root / "scripts" / "data" / "attack_signatures.txt",
+        repo_root / "scripts" / "data" / "attack_signatures.json",
+    ]
+
+    merged = {"deep_markers": {}, "tool_signatures": {}}
+    loaded_any = False
+
+    for sig_file in candidate_files:
+        if not sig_file.exists():
+            continue
+        try:
+            if sig_file.suffix.lower() == ".txt":
+                parsed = _parse_signature_txt(sig_file)
+            else:
+                with open(sig_file, "r", encoding="utf-8") as f:
+                    parsed = json.load(f)
+            _merge_signatures(merged, parsed)
+            loaded_any = True
+        except Exception as e:
+            print(f"[!] 解析簽名檔失敗 {sig_file}: {e}")
+
+    _SIGNATURES_CACHE = merged if loaded_any else _default_signatures()
     return _SIGNATURES_CACHE
 
 
@@ -73,21 +96,24 @@ def _parse_signature_txt(filepath: Path) -> dict[str, Any]:
     """
     signatures = {"deep_markers": {}, "tool_signatures": {}}
     current_category = None
-    is_tool_section = False
+    current_section = "deep_markers"
     
     with open(filepath, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             
             # 略過空行和註解
-            if not line or line.startswith("#"):
+            if not line:
+                continue
+
+            if line.startswith("#"):
+                if "工具簽名庫" in line:
+                    current_section = "tool_signatures"
                 continue
             
             # 檢測分類標籤 [category_name]
             if line.startswith("[") and line.endswith("]"):
                 current_category = line[1:-1]
-                # 判斷是否為工具簽名（根據行號推測，實際應根據上下文）
-                is_tool_section = current_category not in ["admin_endpoints", "auth_theft", "file_operations", "rce_general"]
                 continue
             
             # 解析簽名
@@ -97,10 +123,7 @@ def _parse_signature_txt(filepath: Path) -> dict[str, Any]:
                 items = [item for item in items if item]  # 移除空白項
                 
                 if items:
-                    if is_tool_section:
-                        signatures["tool_signatures"][current_category] = items
-                    else:
-                        signatures["deep_markers"][current_category] = items
+                    signatures[current_section][current_category] = items
     
     return signatures
 

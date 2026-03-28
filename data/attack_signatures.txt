@@ -3,61 +3,40 @@
 # 使用逗號分隔，#開頭的行被視為註解
 
 [admin_endpoints]
-/api/admin, /api/salary, /api/internal, /admin, /administrator, /wp-admin, /user/admin, /account/admin, /admin.php, /admin.aspx, /admin.jsp, /superadmin, /sysadmin, /staff, /panel, /backend, /management, /console, /dashboard, /control, /manager, /settings, /config, /configuration, /secret, /private, /protected, /restricted, /secure, /sensitive
+/api/admin, /api/salary, /api/internal, /admin, /administrator, /wp-admin, /user/admin, /account/admin
 
 [auth_theft]
-bearer , token=, session=, cookie:, authorization:, x-api-key, x-token, x-auth-token, api-key=, auth:, jwt=, refresh_token=, access_token=, id_token=, password=, passwd=, pwd=, pass=, secret=, apikey=, authkey=
+bearer , token=, session=, cookie:, authorization:, x-api-key, x-token
 
 [file_operations]
-upload, delete, write, chmod, file_put_contents, fopen, fwrite, mkdir, rmdir, rename, copy, move, include, require, include_once, require_once, readfile, file_get_contents, file, readdir, scandir, opendir, unlink, touch
+upload, delete, write, chmod, file_put_contents, fopen, fwrite
 
 [rce_general]
-exec, eval, system, passthru, proc_open, shell_exec, pcntl_exec, command, invoke, run, execute, backtick, popen2, proc_close, system, shell, spawn, fork, win32_create_process, com.execute
+exec, eval, system, passthru, proc_open, shell_exec, pcntl_exec
 
 # 工具簽名庫
 
 [shell]
-shell, cmd, powershell, pwsh, bash, sh, zsh, ksh, csh, tcsh, mksh, ash, dash, command.com, cmd.exe, powershell.exe, pwsh.exe, conhost.exe, ysh, fish, nsh, es, rc, sash, sush
+shell, cmd, powershell, pwsh, bash, sh, zsh, ksh, csh, tcsh, mksh, ash, dash, command.com
 
 [script_interpreters]
-perl, python, ruby, php, node, java, python3, perl5, ruby2, lua, groovy, scala, jython, jruby, javascript, vbscript, powershell_ise, scriptengine
+perl, python, ruby, php, node, java, python3, perl5, ruby2
 
 [shell_paths]
-/bin/bash, /bin/sh, /bin/zsh, /bin/ksh, /usr/bin/python, /usr/bin/perl, /usr/bin/ruby, /bin/ash, /bin/dash, /bin/tcsh, /usr/local/bin/python3, /usr/bin/env, /usr/bin/php, /usr/bin/node, /usr/bin/java, /bin/echo, /bin/cat, /bin/grep, /bin/sed, /bin/awk
+/bin/bash, /bin/sh, /bin/zsh, /bin/ksh, /usr/bin/python, /usr/bin/perl, /usr/bin/ruby, /bin/ash, /bin/dash, /bin/tcsh, /usr/local/bin/python3, /usr/bin/env
 
 [script_tags]
-cscript, wscript, jscript, vbscript, powershell_ise, scripthost, mshta, rundll32, regsvcs, regasm, installutil, csi, razor
+cscript, wscript, jscript, vbscript
 
 [exec]
-exec, eval, system, passthru, proc_open, execute, shell_exec, popen, popen2, popen3, fork, spawn, spawnl, spawnv, spawnle, spawnve, spawnp, spawnlp, spawnvp, popen_fork, system_call, open2, open3, backtick
+exec, eval, system, passthru, proc_open, execute, shell_exec, popen
 
 [scanner]
-nikto, burp, sqlmap, nmap, masscan, zap, metasploit, hydra, acunetix, qualys, rapid7, tenable, openvas, nessus, nexpose, qualysguard, appspider, veracode, checkmarx, fortify, sonarqube
+nikto, burp, sqlmap, nmap, masscan, zap, metasploit, hydra, acunetix, qualys, rapid7, tenable
 
 [rce]
-nc , ncat , netcat, bash -i, /bin/bash, /bin/sh, socat, telnet, pty, spawn, /dev/tcp, /dev/udp, curl, wget, python, perl, ruby, powershell, jexec, cmd /c, powershell -c, bash -c
+nc , ncat , netcat, bash -i, /bin/bash, /bin/sh, socat, telnet
 
 [path_trick]
-..%2f, %2e%2e, ..%5c, %2e%2e%2f, ..\, ..%5c%5c, %2e%2e%2f%2e%2e, ..%252f, %252e%252e, ..%3a, ..;/, ..../, ....\, ......, ./, ..\, ../, ..//, .../, ...\\, ..%c0%af, ..%c1%9c, %e0%80%ae%e0%80%ae, /%2e%2e/
-
-[sql_injection]
-' or '1'='1, " or "1"="1, ' or 1=1--, " or 1=1--, '; drop table, union select, union all select, select from, insert into, delete from, update, exec, execute, script, javascript, onerror=, onload=
-
-[xss_vectors]
-<script>, javascript:, onerror=, onload=, onclick=, onfocus=, onmouseover=, alert(, eval(, expression(, vbscript:, livescript:, mocha:, svg onload, img src, iframe, embed, object, marquee, body onload
-
-[file_inclusion]
-/etc/passwd, /etc/shadow, /windows/win.ini, /windows/system32/config/sam, ../../../etc/passwd, ..\\..\\..\\windows\\win.ini, php://, file://, data://, gopher://, dict://, ldap://
-
-[directory_traversal]
-../, ..\\, ..../, ....\\, %2e%2e%2f, %2e%2e%5c, %5c%2e%2e, %5c..%5c, ..%252f, %252e%252e%2f, %c0%ae%c0%ae
-
-[web_shells]
-c99, c100, webshell, shell.php, shell.asp, shell.aspx, shell.jsp, cmd.php, upload.php, admin.php, index.php, default.asp, shell.jspx, shell.war, shell.ear
-
-[credential_extraction]
-username, password, passwd, pwd, pass, secret, token, apikey, key, credential, auth, authorization, x-api-key, x-auth-token, bearer, jwt, cookie, session, sid
-
-[payload_encoding]
-base64, hex, url, unicode, double_encoding, quoted, escaped, entities, rot13, caesar, morse
+..%2f, %2e%2e, ..%5c, %2e%2e%2f, ..\, ..%5c%5c, %2e%2e%2f%2e%2e
 
