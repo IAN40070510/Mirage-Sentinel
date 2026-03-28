@@ -1,0 +1,42 @@
+# 深層攻擊標記庫
+# 格式：[分類] 標記 1, 標記 2, 標記 3, ...
+# 使用逗號分隔，#開頭的行被視為註解
+
+[admin_endpoints]
+/api/admin, /api/salary, /api/internal, /admin, /administrator, /wp-admin, /user/admin, /account/admin
+
+[auth_theft]
+bearer , token=, session=, cookie:, authorization:, x-api-key, x-token
+
+[file_operations]
+upload, delete, write, chmod, file_put_contents, fopen, fwrite
+
+[rce_general]
+exec, eval, system, passthru, proc_open, shell_exec, pcntl_exec
+
+# 工具簽名庫
+
+[shell]
+shell, cmd, powershell, pwsh, bash, sh, zsh, ksh, csh, tcsh, mksh, ash, dash, command.com
+
+[script_interpreters]
+perl, python, ruby, php, node, java, python3, perl5, ruby2
+
+[shell_paths]
+/bin/bash, /bin/sh, /bin/zsh, /bin/ksh, /usr/bin/python, /usr/bin/perl, /usr/bin/ruby, /bin/ash, /bin/dash, /bin/tcsh, /usr/local/bin/python3, /usr/bin/env
+
+[script_tags]
+cscript, wscript, jscript, vbscript
+
+[exec]
+exec, eval, system, passthru, proc_open, execute, shell_exec, popen
+
+[scanner]
+nikto, burp, sqlmap, nmap, masscan, zap, metasploit, hydra, acunetix, qualys, rapid7, tenable
+
+[rce]
+nc , ncat , netcat, bash -i, /bin/bash, /bin/sh, socat, telnet
+
+[path_trick]
+..%2f, %2e%2e, ..%5c, %2e%2e%2f, ..\, ..%5c%5c, %2e%2e%2f%2e%2e
+
