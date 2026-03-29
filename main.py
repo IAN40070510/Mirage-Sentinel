@@ -11,17 +11,17 @@ Mirage-Sentinel 主入口（API Gateway）
 """
 
 from fastapi import FastAPI, Request, Query, BackgroundTasks, Security, HTTPException
+import sys
 import uvicorn
 import time
 import os
 import logging
+import pandas as pd
 from datetime import datetime
 from contextlib import asynccontextmanager
 from fastapi.security import APIKeyHeader
 from dotenv import load_dotenv
 from typing import Optional
-from core.api_mirage import get_raw_ai_fake_data
-
 # 配置日誌（實際輸出格式與 handler 由啟動環境決定）
 logger = logging.getLogger(__name__)
 
@@ -36,11 +36,13 @@ from core.deception_db import setup_deception_db, get_memory, save_deception_sta
 from core.deception_engine import compute_interaction_metrics
 from core.traffic_db import setup_traffic_db, log_traffic_event
 from core.sandbox import run_attack_in_sandbox
-
+from core.api_mirage import get_raw_ai_fake_data
+import core.ai_sentinel as core_ai
+sys.modules['__main__'].SentinelModuleV14 = core_ai.SentinelModuleV14
+sys.modules['__main__'].SecurityExtractor = core_ai.SecurityExtractor
 # ===== Dashboard API 路由與跨域設定 =====
 from api import dashboard
 from fastapi.middleware.cors import CORSMiddleware
-
 # 載入 .env（讓 API_KEY / SANDBOX_API_URL 等配置可由環境管理）
 load_dotenv()
 
@@ -49,7 +51,7 @@ load_dotenv()
 API_KEY = os.getenv("API_KEY", "").strip()
 DEFAULT_DEV_API_KEY = "dev-local-api-key-change-me"
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
-
+ai_sentinel = core_ai.load_sentinel_model()
 
 def verify_api_key(api_key: str = Security(api_key_header)):
     """統一使用 dashboard_service 中的 API key 驗證邏輯。"""
@@ -148,6 +150,66 @@ async def api_generate_ai_fakedata(
         "response_data": json.loads(fake_content_str)
     }
 
+@app.get("/api/v1/ai_sentinel", tags=["Sentinel Debug"])
+async def scan_payload_debug(
+    text: str = Query(..., description="要測試的 Payload 或字串"),
+    method: str = Query("GET", description="HTTP 方法")
+):
+    """
+    【AI 哨兵直連評估】
+    直接使用根目錄載入的 Sentinel V14 模型進行數據驅動判斷。
+    """
+    start_perf = time.perf_counter()
+
+    if not ai_sentinel:
+        return {"status": "error", "msg": "模型尚未載入，請檢查根目錄 pkl 檔案"}
+
+    # 1. 準備輸入數據 (轉小寫以確保特徵命中)
+    df_input = pd.DataFrame({
+        'combined_text': [text.lower().strip()], 
+        'method': [method.upper()]
+    })
+
+    try:
+        judgment = ai_sentinel.predict(df_input).iloc[0]
+
+        # 2. 獲取運算耗時
+        process_ms = round((time.perf_counter() - start_perf) * 1000, 2)
+        
+        # 3. 取得模型輸出數據
+        confidence_val = float(judgment['attack_score'])
+        top_prob = float(judgment['top_attack_prob'])
+        attack_vector = judgment['top_attack_type']
+        decision = judgment['decision']
+
+        return {
+            "status": "success",
+            "performance": {
+                "process_ms": process_ms,
+                "engine_version": "XGBoost-Sentinel-V14-Local"
+            },
+            "input": {
+                "text": text,
+                "method": method.upper()
+            },
+            "ai_analysis": {
+                "is_attack": confidence_val > 0.3,
+                "confidence": f"{confidence_val*100:.2f}%",
+                "attack_vector": attack_vector,
+                "top_category_prob": f"{top_prob*100:.2f}%",
+                "risk_score": int(confidence_val * 100)
+            },
+            "gateway_decision": {
+                "decision": decision,
+                "applied_thresholds": {
+                    "block_limit": 0.75,
+                    "review_limit": 0.3
+                }
+            },
+            "advice": "此接口直接呼叫本機模型權重，不經由外部模組轉手。"
+        }
+    except Exception as e:
+        return {"status": "error", "message": f"模型預測失敗: {str(e)}"}
 
 @app.get("/api/v1/user/{user_id}")
 async def get_user_data(
