@@ -15,6 +15,7 @@ class SentinelEngine:
     def __init__(self, seclists_root: str):
         self.seclists_root = seclists_root
         self.automaton = ahocorasick.Automaton()
+        self.automaton_ready = False
         self.bloom = Bloom(expected_items=100000, false_positive_rate=0.0001)
         
         # 權重分配：admin (paths) 分數極低，只有真正帶攻擊特徵的才會飆高
@@ -25,11 +26,26 @@ class SentinelEngine:
         }
         self._initialize_engine()
 
+    def _resolve_signature_path(self, filename: str) -> str | None:
+        direct_path = os.path.join(self.seclists_root, filename)
+        if os.path.exists(direct_path):
+            return direct_path
+
+        # 支援完整 SecLists 目錄結構：遞迴尋找目標檔名
+        for root, _, files in os.walk(self.seclists_root):
+            for current_name in files:
+                if current_name.lower() == filename.lower():
+                    return os.path.join(root, current_name)
+
+        return None
+
     def _initialize_engine(self):
         loaded_count = 0
         for category, config in self.configs.items():
-            full_path = os.path.join(self.seclists_root, config["path"])
-            if not os.path.exists(full_path): continue
+            full_path = self._resolve_signature_path(config["path"])
+            if not full_path:
+                logger.warning("Sentinel 找不到簽名字典: %s", config["path"])
+                continue
             with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
                 for line in f:
                     p = line.strip().lower()
@@ -50,8 +66,13 @@ class SentinelEngine:
                             self.automaton.add_word(p, (p, category))
                             loaded_count += 1
         
-        self.automaton.make_automaton()
-        logger.info(f"Sentinel 核心已武裝！載入筆數: {loaded_count}")
+        if loaded_count > 0:
+            self.automaton.make_automaton()
+            self.automaton_ready = True
+            logger.info(f"Sentinel 核心已武裝！載入筆數: {loaded_count}")
+        else:
+            self.automaton_ready = False
+            logger.warning("Sentinel 未載入到任何簽名字典，將以安全降級模式運行（所有請求視為非攻擊）。")
 
     def _recursive_url_decode(self, text: str, depth=0) -> str:
         if depth > 3 or not text: return text
@@ -60,6 +81,8 @@ class SentinelEngine:
 
     def analyze(self, raw_input: str):
         if not raw_input: return False, 0.0, "None"
+        if not self.automaton_ready:
+            return False, 0.0, "None"
         clean_text = self._recursive_url_decode(raw_input)
         
         matches = list(self.automaton.iter(clean_text))
