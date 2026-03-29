@@ -466,26 +466,274 @@ function loadTrafficOverview() {
 // =========================
 // 綁定事件
 // =========================
+// =========================
+// 指令系統
+// 格式：
+// /api api_name {param1, param2}
+// /cmd cmd_name {param1}
+// /extra terminal_cmd {text...}
+// =========================
+
+function showCommandResult(title, payload) {
+  const text =
+    typeof payload === "string"
+      ? payload
+      : JSON.stringify(payload, null, 2);
+
+  if (detailPayload) {
+    detailPayload.textContent = `[${title}]\n${text}`;
+  }
+
+  if (trafficSummary) {
+    trafficSummary.textContent = `[${title}]\n${text}`;
+  }
+
+  console.log(`[${title}]`, payload);
+}
+
+function showCommandError(message) {
+  if (detailPayload) {
+    detailPayload.textContent = `[COMMAND ERROR]\n${message}`;
+  }
+  console.error("[COMMAND ERROR]", message);
+}
+
+function parseCommandText(inputText) {
+  const text = String(inputText || "").trim();
+  if (!text) {
+    throw new Error("請輸入指令");
+  }
+
+  // 支援格式：
+  // /api live_ips {500}
+  // /api ip_bundle {192.168.1.1}
+  // /cmd select_ip {192.168.1.1}
+  // /extra terminal_cmd {whoami}
+  const match = text.match(/^\/(\w+)\s+([A-Za-z0-9_]+)\s*(?:\{([\s\S]*)\})?$/);
+
+  if (!match) {
+    throw new Error("指令格式錯誤，請使用 /api 名稱 {參數} 或 /cmd 名稱 {參數}");
+  }
+
+  const scope = match[1].toLowerCase();
+  const name = match[2];
+  const rawArgs = (match[3] || "").trim();
+
+  const args = rawArgs
+    ? rawArgs
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : [];
+
+  return { scope, name, args, raw: text };
+}
+
+// =========================
+// API 指令表
+// =========================
+const apiCommandMap = {
+  live_ips: async (args) => {
+    const limit = Number(args[0] || 500);
+    return fetchJson(`${API_BASE}/live_ips?limit=${encodeURIComponent(limit)}`);
+  },
+
+  ip_bundle: async (args) => {
+    const ip = args[0] || selectedIp;
+    if (!ip) throw new Error("ip_bundle 需要 IP 參數，且目前沒有 selectedIp");
+    return fetchJson(`${API_BASE}/ip_bundle/${encodeURIComponent(ip)}`);
+  },
+
+  ip_details: async (args) => {
+    const ip = args[0] || selectedIp;
+    if (!ip) throw new Error("ip_details 需要 IP 參數，且目前沒有 selectedIp");
+    return fetchJson(`${API_BASE}/ip_details/${encodeURIComponent(ip)}`);
+  },
+
+  command_heatmap: async () => {
+    return fetchJson(`${API_BASE}/command_heatmap`);
+  },
+
+  traffic_compare: async (args) => {
+    const limit = Number(args[0] || 1000);
+    return fetchJson(`${API_BASE}/traffic_compare?limit=${encodeURIComponent(limit)}`);
+  },
+
+  auto_updates: async () => {
+    return fetchJson(`${API_BASE}/auto_updates`);
+  },
+
+  recent_traffic: async (args) => {
+    const limit = Number(args[0] || 100);
+    const mode = args[1] || "all";
+    return fetchJson(
+      `${API_BASE}/recent_traffic?limit=${encodeURIComponent(limit)}&mode=${encodeURIComponent(mode)}`
+    );
+  },
+
+  dwell_time: async (args) => {
+    const ip = args[0] || selectedIp;
+    if (!ip) throw new Error("dwell_time 需要 IP 參數，且目前沒有 selectedIp");
+    return fetchJson(`${API_BASE}/dwell_time/${encodeURIComponent(ip)}`);
+  },
+
+  attack_timeline: async (args) => {
+    const ip = args[0] || selectedIp;
+    if (!ip) throw new Error("attack_timeline 需要 IP 參數，且目前沒有 selectedIp");
+    return fetchJson(`${API_BASE}/attack_timeline/${encodeURIComponent(ip)}`);
+  },
+
+  terminal_cmd: async (args) => {
+    const commandText = args.join(", ").trim();
+    if (!commandText) throw new Error("terminal_cmd 需要指令文字");
+    return fetchJson(`${API_BASE}/terminal_cmd`, {
+      method: "POST",
+      body: JSON.stringify({
+        command_text: commandText,
+        selected_ip: selectedIp,
+      }),
+    });
+  },
+};
+
+// =========================
+// CMD 指令表
+// =========================
+const cmdCommandMap = {
+  reload: async () => {
+    await refreshDashboard(true);
+    return {
+      status: "success",
+      message: "Dashboard 已重新載入",
+    };
+  },
+
+  close: async () => {
+    // 注意：window.close() 只有在 script 開啟的視窗通常才有效
+    try {
+      window.close();
+    } catch (err) {
+      console.warn("window.close failed:", err);
+    }
+
+    setTimeout(() => {
+      if (!window.closed) {
+        location.href = "about:blank";
+      }
+    }, 150);
+
+    return {
+      status: "success",
+      message: "已嘗試關閉頁面；若瀏覽器阻擋，會切到空白頁",
+    };
+  },
+
+  select_ip: async (args) => {
+    const ip = args[0];
+    if (!ip) throw new Error("select_ip 需要 IP 參數");
+
+    selectedIp = ip;
+    renderIpList(latestIpList);
+    await loadIpDetail();
+
+    return {
+      status: "success",
+      selected_ip: selectedIp,
+      message: `已切換選定 IP 為 ${selectedIp}`,
+    };
+  },
+
+  help: async () => {
+    return {
+      cmd: [
+        "/cmd reload {}",
+        "/cmd close {}",
+        "/cmd select_ip {192.168.1.1}",
+      ],
+      api: Object.keys(apiCommandMap).map((name) => `/api ${name} {...}`),
+    };
+  },
+};
+
+// =========================
+// 指令執行器
+// =========================
+async function executeParsedCommand(parsed) {
+  const { scope, name, args, raw } = parsed;
+
+  if (scope === "api") {
+    const handler = apiCommandMap[name];
+    if (!handler) {
+      throw new Error(`找不到 API 指令：${name}`);
+    }
+
+    const result = await handler(args);
+
+    // 依 API 類型順便更新畫面
+    if (name === "live_ips") {
+      latestIpList = normalizeLiveIpsResponse(result);
+      renderIpList(latestIpList);
+    } else if (name === "ip_bundle") {
+      renderDetail(result);
+    } else if (name === "command_heatmap") {
+      renderAttacks(result);
+    } else if (name === "traffic_compare") {
+      renderTrafficOverview(result);
+    }
+
+    showCommandResult(raw, result);
+    return result;
+  }
+
+  if (scope === "cmd") {
+    const handler = cmdCommandMap[name];
+    if (!handler) {
+      throw new Error(`找不到 CMD 指令：${name}`);
+    }
+
+    const result = await handler(args);
+    showCommandResult(raw, result);
+    return result;
+  }
+
+  if (scope === "extra") {
+    if (name !== "terminal_cmd") {
+      throw new Error(`找不到 EXTRA 指令：${name}`);
+    }
+
+    const result = await apiCommandMap.terminal_cmd(args);
+    showCommandResult(raw, result);
+    return result;
+  }
+
+  throw new Error(`不支援的指令類別：${scope}`);
+}
+
+// =========================
+// 綁定輸入框
+// =========================
 function bindCommandInput() {
   if (!commandInput || !commandSendBtn) return;
 
-  const submitCommand = () => {
+  const submitCommand = async () => {
     const commandText = commandInput.value.trim();
     if (!commandText) return;
 
-    apiExecuteCommand(commandText)
-      .then((result) => {
-        console.log("Command result:", result);
-        commandInput.value = "";
-      })
-      .catch((error) => {
-        console.error("Command execute error:", error);
-      });
+    try {
+      const parsed = parseCommandText(commandText);
+      await executeParsedCommand(parsed);
+      commandInput.value = "";
+    } catch (error) {
+      showCommandError(error.message || String(error));
+    }
   };
 
   commandSendBtn.addEventListener("click", submitCommand);
+
   commandInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") submitCommand();
+    if (event.key === "Enter") {
+      submitCommand();
+    }
   });
 }
 
