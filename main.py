@@ -20,6 +20,7 @@ from contextlib import asynccontextmanager
 from fastapi.security import APIKeyHeader
 from dotenv import load_dotenv
 from typing import Optional
+from core.api_mirage import get_raw_ai_fake_data
 
 # 配置日誌（實際輸出格式與 handler 由啟動環境決定）
 logger = logging.getLogger(__name__)
@@ -115,6 +116,37 @@ async def root():
 async def healthz():
     """容器/平台健康檢查端點。"""
     return {"status": "ok"}
+
+@app.get("/api/v1/ai_fakedata", summary="AI 強化欺敵回應測試項")
+async def api_generate_ai_fakedata(
+    user_id: str = Query(..., description="用戶 ID"),
+    payload: str = Query("", description="模擬的攻擊指令"),
+    client_ip: str = Query("192.168.0.1", description="攻擊者 IP（可選）"),
+    attack_vector: str = Query("General", description="預期攻擊類型"),
+):
+    """
+    輸入參數與 simulate_attack 保持一致。
+    邏輯：讀取記憶 -> (若無)AI生成 -> (若失敗)本地生成 -> 存入記憶。
+    """
+    # 呼叫整合過的 AI 引擎
+    fake_content_str = await get_raw_ai_fake_data(
+        attack_vector=attack_vector,
+        payload=payload,
+        client_ip=client_ip,
+        query_id=user_id
+    )
+    
+    # 解析回傳結果以便 FastAPI 渲染 JSON
+    import json
+    return {
+        "status": "success",
+        "simulated_context": {
+            "client_ip": client_ip,
+            "target_user": user_id,
+            "vector": attack_vector
+        },
+        "response_data": json.loads(fake_content_str)
+    }
 
 
 @app.get("/api/v1/user/{user_id}")
