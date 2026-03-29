@@ -84,15 +84,10 @@
         <div class="window-title">traffic overview</div>
         <div class="window-dots"><span></span><span></span><span></span></div>
       </div>
-
       <div class="window-body fixed-window-body traffic-overview-body">
         <div class="overview-tabs" id="overviewTabs">
-          <button class="overview-tab active" type="button" data-panel="overview-panel-traffic">
-            流量總覽
-          </button>
-          <button class="overview-tab" type="button" data-panel="overview-panel-placeholder">
-            其他內容
-          </button>
+          <button class="overview-tab active" type="button" data-panel="overview-panel-traffic">流量總覽</button>
+          <button class="overview-tab" type="button" data-panel="overview-panel-placeholder">其他內容</button>
         </div>
 
         <div class="overview-panel active" id="overview-panel-traffic">
@@ -103,7 +98,7 @@
 
           <div class="chart-placeholder">
             <canvas id="trafficChart" width="180" height="180"></canvas>
-            <div class="chart-placeholder-text">圖表預留區</div>
+            <div class="chart-placeholder-text">正常 / 攻擊流量</div>
           </div>
 
           <div class="overview-card-grid">
@@ -130,9 +125,7 @@
 
         <div class="overview-panel" id="overview-panel-placeholder">
           <div class="section-title">暫定無內容</div>
-          <div class="log-block">
-此分頁目前先保留框架，之後可再加入其他流量分析內容。
-          </div>
+          <div class="log-block">此分頁目前先保留框架，之後可再加入其他流量分析內容。</div>
         </div>
       </div>
     </div>
@@ -161,9 +154,9 @@
       </div>
       <div class="window-body fixed-window-body">
         <div class="log-list">
-          <div class="log-item"><span class="log-time">static</span>此區塊保留框架，不由 JavaScript 載入資料。</div>
-          <div class="log-item"><span class="log-time">static</span>如需接資料庫 log，請由你自行決定 API 後再串接。</div>
-          <div class="log-item"><span class="log-time">static</span>目前不透過前端 JS 呼叫資訊。</div>
+          <div class="log-item"><span class="log-time">proxy</span>server.js 代理後端 Dashboard API，避免前端直接暴露 API key。</div>
+          <div class="log-item"><span class="log-time">api</span>main.js 透過 /api/dashboard/* 同源路由取得資料。</div>
+          <div class="log-item"><span class="log-time">safe</span>指令框目前只會送到 terminal_cmd，service 不會直接執行系統命令。</div>
         </div>
       </div>
     </div>
@@ -176,7 +169,7 @@
           type="text"
           class="cmd-input"
           id="commandInput"
-          placeholder="保留框架，等你自行串 execute_terminal_cmd API"
+          placeholder="輸入內容會送往 /api/dashboard/terminal_cmd"
         />
         <button class="cmd-send" id="commandSendBtn" type="button">EXEC</button>
       </div>

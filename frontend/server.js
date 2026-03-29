@@ -1,28 +1,35 @@
 const express = require("express");
 const path = require("path");
-const app = express();
 
-const DASHBOARD_BASE_URL = process.env.BACKEND_API_BASE_URL || "http://localhost:8000/api/v1/dashboard";
-const DASHBOARD_API_KEY = process.env.API_KEY || "dev-local-api-key-change-me";
+const app = express();
+const PORT = Number(process.env.PORT || 3000);
+
+// 後端 FastAPI Dashboard API
+const DASHBOARD_BASE_URL =
+  process.env.BACKEND_API_BASE_URL || "http://localhost:8000/api/v1/dashboard";
+
+// API Key 只存在 server 端，不暴露給前端
+const DASHBOARD_API_KEY =
+  process.env.API_KEY || "dev-local-api-key-change-me";
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+// 首頁
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-/**
- * 前端配置端點（使用了會推崇、不可暴露）
- */
+// 提供前端少量設定
 app.get("/api/config", (req, res) => {
   res.json({
-    apiBase: process.env.BACKEND_API_BASE_URL || "http://localhost:8000/api/v1/dashboard",
-    // 沒有在 JSON 暴露該 key，前端需要適當由鍵代理來載入 X-API-Key header
+    proxyBase: "/api/dashboard",
+    backendBase: DASHBOARD_BASE_URL,
   });
 });
 
-async function fetchDashboardJson(path, options = {}) {
+// 統一代理呼叫後端
+async function fetchDashboardJson(apiPath, options = {}) {
   const mergedOptions = {
     ...options,
     headers: {
@@ -31,210 +38,118 @@ async function fetchDashboardJson(path, options = {}) {
     },
   };
 
-  const res = await fetch(`${DASHBOARD_BASE_URL}${path}`, {
-    ...mergedOptions,
-  });
+  const response = await fetch(`${DASHBOARD_BASE_URL}${apiPath}`, mergedOptions);
+  const contentType = response.headers.get("content-type") || "";
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Dashboard API ${res.status}: ${text}`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Dashboard API ${response.status}: ${errorText}`);
   }
 
-  return res.json();
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  return response.text();
 }
 
-/**
- * 取得 Dashboard 所有資料
- */
-app.get("/api/dashboard", (req, res) => {
-  const targetIp = req.query.ip || "185.24.68.91";
-
-  let result = {
-    ip: targetIp,
-    dwell: null,
-    timeline: null,
-    details: null,
-    commands: null
-  };
-
-  // 1. dwell time
-  fetchDashboardJson(`/dwell_time/${targetIp}`)
-    .then(data => {
-      result.dwell = data;
-
-      // 2. timeline
-      return fetchDashboardJson(`/attack_timeline/${targetIp}`);
-    })
-    .then(data => {
-      result.timeline = data;
-
-      // 3. ip details
-      return fetchDashboardJson(`/ip_details/${targetIp}`);
-    })
-    .then(data => {
-      result.details = data;
-
-      // 4. top commands
-      return fetchDashboardJson(`/command_heatmap`);
-    })
-    .then(data => {
-      result.commands = data;
-
-      // 回傳給前端
-      res.json({
-        status: "success",
-        data: result
-      });
-    })
-    .catch(err => {
-      console.error("Dashboard API Error:", err);
-      res.status(500).json({
-        status: "error",
-        message: err.message
-      });
-    });
-});
-
-
-/**
- * Live IP 列表（給左側清單）
- */
-app.get("/api/live-ips", async (req, res) => {
-  try {
-    const data = await fetchDashboardJson(`/recent_traffic?limit=500&mode=all`);
-    const rows = Array.isArray(data?.recent_traffic) ? data.recent_traffic : [];
-
-    const aggregate = new Map();
-    for (const row of rows) {
-      const ip = row.client_ip;
-      if (!ip) continue;
-
-      if (!aggregate.has(ip)) {
-        aggregate.set(ip, {
-          ip,
-          country: row.location || "-",
-          risk: "LOW",
-          traffic: 0,
-          maxRisk: 0,
+// 統一 async error handler
+function asyncRoute(handler) {
+  return async (req, res) => {
+    try {
+      const data = await handler(req, res);
+      if (!res.headersSent) {
+        res.json(data);
+      }
+    } catch (error) {
+      console.error("Dashboard proxy error:", error);
+      if (!res.headersSent) {
+        res.status(500).json({
+          status: "error",
+          message: error.message,
         });
       }
-
-      const item = aggregate.get(ip);
-      item.traffic += 1;
-
-      const risk = Number(row.risk_level || 0);
-      if (risk > item.maxRisk) item.maxRisk = risk;
-      if (item.maxRisk >= 80) item.risk = "HIGH";
-      else if (item.maxRisk >= 40) item.risk = "MEDIUM";
     }
+  };
+}
 
-    const list = Array.from(aggregate.values()).sort((a, b) => b.traffic - a.traffic);
-    res.json(list);
-  } catch (err) {
-    console.error("Live IP API Error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
+// Dashboard 總覽
+app.get("/api/dashboard", asyncRoute(async (req) => {
+  const targetIp = req.query.ip || "127.0.0.1";
 
+  const [dwell, timeline, details, commands] = await Promise.all([
+    fetchDashboardJson(`/dwell_time/${encodeURIComponent(targetIp)}`),
+    fetchDashboardJson(`/attack_timeline/${encodeURIComponent(targetIp)}`),
+    fetchDashboardJson(`/ip_details/${encodeURIComponent(targetIp)}`),
+    fetchDashboardJson("/command_heatmap"),
+  ]);
 
-/**
- * 單一 IP 詳細資料（給主視窗用）
- */
-app.get("/api/ip/:ip", (req, res) => {
-  const ip = req.params.ip;
+  return {
+    status: "success",
+    data: {
+      ip: targetIp,
+      dwell,
+      timeline,
+      details,
+      commands,
+    },
+  };
+}));
 
-  fetchDashboardJson(`/ip_details/${ip}`)
-    .then(data => {
-      res.json({
-        ip: data.client_ip || ip,
-        risk: data.risk_level || "-",
-        country: "-",
-        traffic: data.hits || 0,
-        protocol: data.attack_vector || "-",
-        behavior: data.mitigation_status || "-",
-        payload: data.raw_payload || "-",
-      });
-    })
-    .catch(err => {
-      res.status(500).json({ error: err.message });
-    });
-});
+// IP 清單
+app.get("/api/dashboard/live_ips", asyncRoute(async (req) => {
+  const limit = Number(req.query.limit || 500);
+  return fetchDashboardJson(`/live_ips?limit=${encodeURIComponent(limit)}`);
+}));
 
+// IP bundle
+app.get("/api/dashboard/ip_bundle/:ip", asyncRoute(async (req) => {
+  return fetchDashboardJson(`/ip_bundle/${encodeURIComponent(req.params.ip)}`);
+}));
 
-/**
- * 攻擊排行榜（前十）
- */
-app.get("/api/attacks", (req, res) => {
-  fetchDashboardJson(`/command_heatmap`)
-    .then(data => {
-      const top = Array.isArray(data?.top_commands) ? data.top_commands : [];
-      res.json(top.map(x => ({ name: x.cmd, count: x.count })));
-    })
-    .catch(err => {
-      res.status(500).json({ error: err.message });
-    });
-});
+// IP details
+app.get("/api/dashboard/ip_details/:ip", asyncRoute(async (req) => {
+  return fetchDashboardJson(`/ip_details/${encodeURIComponent(req.params.ip)}`);
+}));
 
+// 指令熱圖
+app.get("/api/dashboard/command_heatmap", asyncRoute(async () => {
+  return fetchDashboardJson("/command_heatmap");
+}));
 
-/**
- * 攻擊時間軸
- */
-app.get("/api/timeline/:ip", (req, res) => {
-  const ip = req.params.ip;
-
-  fetchDashboardJson(`/attack_timeline/${ip}`)
-    .then(data => {
-      res.json(data);
-    })
-    .catch(err => {
-      res.status(500).json({ error: err.message });
-    });
-});
-
-
-/**
- * 滯留時間
- */
-app.get("/api/dwell/:ip", (req, res) => {
-  const ip = req.params.ip;
-
-  fetchDashboardJson(`/dwell_time/${ip}`)
-    .then(data => {
-      res.json(data);
-    })
-    .catch(err => {
-      res.status(500).json({ error: err.message });
-    });
-});
-
-
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-
-
-/**
- * 流量比較（正常/攻擊）
- */
-app.get("/api/traffic-compare", (req, res) => {
+// 流量比較
+app.get("/api/dashboard/traffic_compare", asyncRoute(async (req) => {
   const limit = Number(req.query.limit || 1000);
-  fetchDashboardJson(`/traffic_compare?limit=${encodeURIComponent(limit)}`)
-    .then(data => {
-      res.json(data);
-    })
-    .catch(err => {
-      res.status(500).json({ error: err.message });
-    });
-});
+  return fetchDashboardJson(`/traffic_compare?limit=${encodeURIComponent(limit)}`);
+}));
 
+// 自動更新檢查
+app.get("/api/dashboard/auto_updates", asyncRoute(async () => {
+  return fetchDashboardJson("/auto_updates");
+}));
 
-/**
- * 前端指令框轉發
- */
-app.post("/api/terminal-cmd", (req, res) => {
-  fetchDashboardJson(`/terminal_cmd`, {
+// 最近流量
+app.get("/api/dashboard/recent_traffic", asyncRoute(async (req) => {
+  const limit = Number(req.query.limit || 100);
+  const mode = req.query.mode || "all";
+  return fetchDashboardJson(
+    `/recent_traffic?limit=${encodeURIComponent(limit)}&mode=${encodeURIComponent(mode)}`
+  );
+}));
+
+// dwell time
+app.get("/api/dashboard/dwell_time/:ip", asyncRoute(async (req) => {
+  return fetchDashboardJson(`/dwell_time/${encodeURIComponent(req.params.ip)}`);
+}));
+
+// attack timeline
+app.get("/api/dashboard/attack_timeline/:ip", asyncRoute(async (req) => {
+  return fetchDashboardJson(`/attack_timeline/${encodeURIComponent(req.params.ip)}`);
+}));
+
+// terminal command
+app.post("/api/dashboard/terminal_cmd", asyncRoute(async (req) => {
+  return fetchDashboardJson("/terminal_cmd", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -243,87 +158,9 @@ app.post("/api/terminal-cmd", (req, res) => {
       command_text: req.body?.command_text || "",
       selected_ip: req.body?.selected_ip || null,
     }),
-  })
-    .then(data => {
-      res.json(data);
-    })
-    .catch(err => {
-      res.status(500).json({ error: err.message });
-    });
-});
+  });
+}));
 
-/**
- * 與前端 main.js 相容的代理路由：
- * main.js 目前使用 /api/dashboard/*，這裡直接轉發到後端 dashboard。
- */
-app.get("/api/dashboard/live_ips", async (req, res) => {
-  const limit = Number(req.query.limit || 500);
-  try {
-    const data = await fetchDashboardJson(`/live_ips?limit=${encodeURIComponent(limit)}`);
-    res.json(data);
-  } catch (err) {
-    console.error("/api/dashboard/live_ips error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get("/api/dashboard/ip_bundle/:ip", async (req, res) => {
-  const ip = req.params.ip;
-  try {
-    const data = await fetchDashboardJson(`/ip_bundle/${encodeURIComponent(ip)}`);
-    res.json(data);
-  } catch (err) {
-    console.error("/api/dashboard/ip_bundle error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get("/api/dashboard/command_heatmap", async (req, res) => {
-  try {
-    const data = await fetchDashboardJson(`/command_heatmap`);
-    res.json(data);
-  } catch (err) {
-    console.error("/api/dashboard/command_heatmap error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get("/api/dashboard/traffic_compare", async (req, res) => {
-  const limit = Number(req.query.limit || 1000);
-  try {
-    const data = await fetchDashboardJson(`/traffic_compare?limit=${encodeURIComponent(limit)}`);
-    res.json(data);
-  } catch (err) {
-    console.error("/api/dashboard/traffic_compare error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get("/api/dashboard/auto_updates", async (req, res) => {
-  try {
-    const data = await fetchDashboardJson(`/auto_updates`);
-    res.json(data);
-  } catch (err) {
-    console.error("/api/dashboard/auto_updates error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post("/api/dashboard/terminal_cmd", async (req, res) => {
-  try {
-    const data = await fetchDashboardJson(`/terminal_cmd`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        command_text: req.body?.command_text || "",
-        selected_ip: req.body?.selected_ip || null,
-      }),
-    });
-    res.json(data);
-  } catch (err) {
-    console.error("/api/dashboard/terminal_cmd error:", err);
-    res.status(500).json({ error: err.message });
-  }
+app.listen(PORT, () => {
+  console.log(`Dashboard frontend proxy running at http://localhost:${PORT}`);
 });

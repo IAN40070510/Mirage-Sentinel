@@ -1,21 +1,19 @@
-// API 設定由 server.js 代理層注入 key（前端使用同源路由 /api/dashboard）
-let API_BASE = "/api/dashboard";  // 走代理，由 server.js 的 fetchDashboardJson 注入 X-API-Key header
-let API_KEY = "dev-local-api-key-change-me";  // 前端不使用，代理層自動注入
+let API_BASE = "/api/dashboard";
 const AUTO_REFRESH_MS = 5000;
-
-// 初始化時從 server 獲取配置
-async function initConfig() {
-  try {
-    const config = await fetch("/api/config").then(r => r.json());
-    console.log("[CONFIG] Server configuration loaded.");
-  } catch (err) {
-    console.warn("[CONFIG] Failed to load config, using defaults.", err);
-  }
-}
 
 let selectedIp = null;
 let latestIpList = [];
 let refreshTimer = null;
+
+// 拖曳狀態
+let activeWindow = null;
+let offsetX = 0;
+let offsetY = 0;
+let highestZ = 200;
+
+// 背景動畫狀態
+const rowConfigs = [];
+const totalRows = 22;
 
 // DOM
 const ipTrafficList = document.getElementById("ipTrafficList");
@@ -50,6 +48,20 @@ const overviewTabs = document.querySelectorAll(".overview-tab");
 const overviewPanels = document.querySelectorAll(".overview-panel");
 
 // =========================
+// 初始化設定
+// =========================
+async function initConfig() {
+  try {
+    const config = await fetch("/api/config").then((res) => res.json());
+    if (config?.proxyBase) {
+      API_BASE = config.proxyBase;
+    }
+  } catch (error) {
+    console.warn("[CONFIG] Failed to load config, using defaults.", error);
+  }
+}
+
+// =========================
 // 共用工具
 // =========================
 function fetchJson(url, options = {}) {
@@ -57,16 +69,14 @@ function fetchJson(url, options = {}) {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      "X-API-KEY": API_KEY,
-      ...(options.headers || {})
-    }
+      ...(options.headers || {}),
+    },
   };
 
-  return fetch(url, mergedOptions).then((res) => {
+  return fetch(url, mergedOptions).then(async (res) => {
     if (!res.ok) {
-      return res.text().then((text) => {
-        throw new Error(`HTTP ${res.status} ${text}`);
-      });
+      const text = await res.text();
+      throw new Error(`HTTP ${res.status} ${text}`);
     }
     return res.json();
   });
@@ -85,19 +95,10 @@ function safeNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
 function formatUpdateTime(date = new Date()) {
   const y = date.getFullYear();
-  const m = date.getMonth() + 1;
-  const d = date.getDate();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
   const hh = String(date.getHours()).padStart(2, "0");
   const mm = String(date.getMinutes()).padStart(2, "0");
   return `${y}/${m}/${d} ${hh}:${mm} 更新`;
@@ -107,6 +108,18 @@ function setStatusTime(date = new Date()) {
   if (statusText) {
     statusText.textContent = formatUpdateTime(date);
   }
+}
+
+function rand(min, max) {
+  return Math.random() * (max - min) + min;
+}
+
+function randInt(min, max) {
+  return Math.floor(rand(min, max + 1));
+}
+
+function pick(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
 }
 
 // =========================
@@ -137,36 +150,13 @@ function apiExecuteCommand(commandText) {
     method: "POST",
     body: JSON.stringify({
       command_text: commandText,
-      selected_ip: selectedIp
-    })
+      selected_ip: selectedIp,
+    }),
   });
 }
 
 // =========================
-// Tab 切換
-// =========================
-function bindOverviewTabs() {
-  if (!overviewTabs.length || !overviewPanels.length) return;
-
-  overviewTabs.forEach((tab) => {
-    tab.addEventListener("click", () => {
-      const targetId = tab.dataset.panel;
-
-      overviewTabs.forEach((btn) => btn.classList.remove("active"));
-      overviewPanels.forEach((panel) => panel.classList.remove("active"));
-
-      tab.classList.add("active");
-
-      const targetPanel = document.getElementById(targetId);
-      if (targetPanel) {
-        targetPanel.classList.add("active");
-      }
-    });
-  });
-}
-
-// =========================
-// 正規化 API 回傳
+// 回傳正規化
 // =========================
 function normalizeLiveIpsResponse(data) {
   if (Array.isArray(data)) return data;
@@ -182,26 +172,10 @@ function normalizeCommandHeatmapResponse(data) {
 
 function normalizeTrafficCompareResponse(data) {
   const obj = toObject(data);
-
-  const totalRequests = safeNumber(
-    obj.total_requests ?? obj.total ?? obj.total_count,
-    0
-  );
-
-  const normalRequests = safeNumber(
-    obj.normal_requests ?? obj.normal_count ?? obj.normal,
-    0
-  );
-
-  const attackRequests = safeNumber(
-    obj.attack_requests ?? obj.attack_count ?? obj.attack,
-    0
-  );
-
   return {
-    total_requests: totalRequests,
-    normal_requests: normalRequests,
-    attack_requests: attackRequests
+    total_requests: safeNumber(obj.total_requests ?? obj.total ?? obj.total_count, 0),
+    normal_requests: safeNumber(obj.normal_requests ?? obj.normal_count ?? obj.normal, 0),
+    attack_requests: safeNumber(obj.attack_requests ?? obj.attack_count ?? obj.attack, 0),
   };
 }
 
@@ -214,17 +188,19 @@ function normalizeIpBundleResponse(data) {
   else if (Array.isArray(obj.full_trajectory)) timeline = obj.full_trajectory;
   else if (Array.isArray(obj.full_trajectory?.timeline)) timeline = obj.full_trajectory.timeline;
 
+  const riskLevel = safeNumber(details.risk_level, 0);
+
   return {
-    client_ip: obj.client_ip ?? details.attacker_ip ?? details.client_ip ?? details.ip ?? selectedIp ?? "-",
+    client_ip: obj.client_ip ?? details.client_ip ?? details.ip ?? selectedIp ?? "-",
     country: obj.country ?? details.location ?? details.country ?? "-",
     traffic: safeNumber(obj.traffic ?? details.hits ?? 0, 0),
-    risk: obj.risk ?? (details.risk_level >= 70 ? "HIGH" : details.risk_level > 0 ? "MEDIUM" : "LOW"),
+    risk: obj.risk ?? (riskLevel >= 70 ? "HIGH" : riskLevel > 0 ? "MEDIUM" : "LOW"),
     protocol: obj.protocol ?? details.tls_fingerprint ?? "-",
     port: obj.port ?? details.query_id ?? "-",
-    behavior: obj.behavior ?? details.attack_vector ?? "-",
+    behavior: obj.behavior ?? details.attack_vector ?? details.mitigation_status ?? "-",
     payload: obj.payload ?? details.raw_payload ?? "等待 API 資料...",
     timeline,
-    details
+    details,
   };
 }
 
@@ -254,19 +230,14 @@ function renderIpList(list) {
     const country = item.country || item.location || "-";
     const risk = item.risk || (safeNumber(item.attack_requests, 0) > 0 ? "HIGH" : "LOW");
 
-    const safeIp = escapeHtml(ip);
-    const safeTraffic = escapeHtml(traffic);
-    const safeCountry = escapeHtml(country);
-    const safeRisk = escapeHtml(risk);
-
     const div = document.createElement("div");
-    div.className = "ip-item" + (selectedIp === ip ? " active" : "");
+    div.className = `ip-item${selectedIp === ip ? " active" : ""}`;
     div.innerHTML = `
       <div class="ip-top">
-        <span class="strong">${safeIp}</span>
-        <span>${safeTraffic}</span>
+        <span class="strong">${ip}</span>
+        <span>${traffic}</span>
       </div>
-      <div class="muted">${safeCountry} / ${safeRisk}</div>
+      <div class="muted">${country} / ${risk}</div>
     `;
 
     div.addEventListener("click", () => {
@@ -287,7 +258,12 @@ function renderDetail(data) {
   if (detailRisk) detailRisk.textContent = detail.risk || "-";
   if (detailGeo) detailGeo.textContent = detail.country || "-";
   if (detailTraffic) detailTraffic.textContent = `${safeNumber(detail.traffic, 0)}`;
-  if (detailProto) detailProto.textContent = detail.protocol && detail.port ? `${detail.protocol} / ${detail.port}` : (detail.protocol || detail.port || "-");
+  if (detailProto) {
+    detailProto.textContent =
+      detail.protocol && detail.port
+        ? `${detail.protocol} / ${detail.port}`
+        : (detail.protocol || detail.port || "-");
+  }
   if (detailBehavior) detailBehavior.textContent = detail.behavior || "-";
   if (detailPayload) detailPayload.textContent = detail.payload || "等待 API 資料...";
 
@@ -304,13 +280,11 @@ function renderDetail(data) {
   }
 
   timeline.slice(0, 5).forEach((log, index) => {
-    const safeTime = escapeHtml(log.time || log.timestamp || index + 1);
-    const safeAction = escapeHtml(log.action || log.event || log.description || "-");
     const div = document.createElement("div");
     div.className = "log-item";
     div.innerHTML = `
-      <span class="log-time">${safeTime}</span>
-      ${safeAction}
+      <span class="log-time">${log.time || log.timestamp || index + 1}</span>
+      ${log.action || log.event || log.description || "-"}
     `;
     detailRecentLogs.appendChild(div);
   });
@@ -321,7 +295,6 @@ function renderAttacks(data) {
   attackMethodList.innerHTML = "";
 
   const list = normalizeCommandHeatmapResponse(data);
-
   if (!list.length) {
     attackMethodList.innerHTML = `
       <div class="attack-row">
@@ -338,33 +311,72 @@ function renderAttacks(data) {
     if (typeof item === "string") return { name: item, count: 1 };
     return {
       name: item.name || item.cmd || item.command || item.raw_payload || "-",
-      count: safeNumber(item.count, 0)
+      count: safeNumber(item.count, 0),
     };
   });
 
   const maxValue = Math.max(...normalized.map((item) => item.count), 1);
 
   normalized.slice(0, 10).forEach((item, i) => {
-    const safeName = escapeHtml(item.name);
-    const safeCount = escapeHtml(item.count);
     const div = document.createElement("div");
     div.className = "attack-row";
     const width = Math.max(5, (item.count / maxValue) * 100);
 
     div.innerHTML = `
       <div class="rank">${i + 1}</div>
-      <div class="attack-name">${safeName}</div>
+      <div class="attack-name">${item.name}</div>
       <div class="bar-wrap"><div class="bar" style="width: ${width}%"></div></div>
-      <div>${safeCount}</div>
+      <div>${item.count}</div>
     `;
 
     attackMethodList.appendChild(div);
   });
 }
 
+function drawTrafficChart(normalCount, attackCount) {
+  if (!ctx || !chartCanvas) return;
+
+  const total = normalCount + attackCount;
+  const centerX = chartCanvas.width / 2;
+  const centerY = chartCanvas.height / 2;
+  const radius = 65;
+
+  ctx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
+
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(0,255,136,0.18)";
+  ctx.lineWidth = 16;
+  ctx.stroke();
+
+  if (total > 0) {
+    const normalAngle = (normalCount / total) * Math.PI * 2;
+
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, -Math.PI / 2, -Math.PI / 2 + normalAngle);
+    ctx.strokeStyle = "rgba(0,255,136,0.92)";
+    ctx.lineWidth = 16;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, -Math.PI / 2 + normalAngle, -Math.PI / 2 + Math.PI * 2);
+    ctx.strokeStyle = "rgba(0,255,136,0.28)";
+    ctx.lineWidth = 16;
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = "rgba(0,255,136,0.92)";
+  ctx.font = "bold 16px Consolas";
+  ctx.textAlign = "center";
+  ctx.fillText(`${total}`, centerX, centerY - 4);
+
+  ctx.fillStyle = "rgba(0,255,136,0.6)";
+  ctx.font = "12px Consolas";
+  ctx.fillText("requests", centerX, centerY + 16);
+}
+
 function renderTrafficOverview(data) {
   const result = normalizeTrafficCompareResponse(data);
-
   const normalCount = result.normal_requests;
   const attackCount = result.attack_requests;
   const total = result.total_requests || (normalCount + attackCount);
@@ -381,36 +393,10 @@ function renderTrafficOverview(data) {
 
   if (trafficSummary) {
     trafficSummary.textContent =
-`normal traffic: ${normalCount}
-attack traffic: ${attackCount}
-total traffic: ${total}`;
+      `normal traffic: ${normalCount}\nattack traffic: ${attackCount}\ntotal traffic: ${total}`;
   }
 
-  drawTrafficPlaceholder(normalCount, attackCount);
-}
-
-function drawTrafficPlaceholder(normalCount, attackCount) {
-  if (!ctx || !chartCanvas) return;
-
-  ctx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
-
-  const cx = chartCanvas.width / 2;
-  const cy = chartCanvas.height / 2;
-
-  ctx.strokeStyle = "rgba(0,255,136,0.22)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(cx, cy, 60, 0, Math.PI * 2);
-  ctx.stroke();
-
-  ctx.fillStyle = "rgba(0,255,136,0.92)";
-  ctx.font = "bold 16px Consolas";
-  ctx.textAlign = "center";
-  ctx.fillText("Chart", cx, cy - 8);
-
-  ctx.fillStyle = "rgba(0,255,136,0.6)";
-  ctx.font = "12px Consolas";
-  ctx.fillText(`${normalCount} / ${attackCount}`, cx, cy + 14);
+  drawTrafficChart(normalCount, attackCount);
 }
 
 // =========================
@@ -420,7 +406,6 @@ function loadIpList() {
   return apiFetchAllIps()
     .then((data) => {
       latestIpList = normalizeLiveIpsResponse(data);
-      renderIpList(latestIpList);
 
       if (!selectedIp && latestIpList.length > 0) {
         selectedIp = latestIpList[0].client_ip || latestIpList[0].ip;
@@ -430,9 +415,11 @@ function loadIpList() {
           selectedIp = latestIpList[0].client_ip || latestIpList[0].ip;
         }
       }
+
+      renderIpList(latestIpList);
     })
-    .catch((err) => {
-      console.error("IP list error:", err);
+    .catch((error) => {
+      console.error("IP list error:", error);
       latestIpList = [];
       renderIpList([]);
     });
@@ -448,8 +435,8 @@ function loadIpDetail() {
     .then((data) => {
       renderDetail(data);
     })
-    .catch((err) => {
-      console.error("IP detail error:", err);
+    .catch((error) => {
+      console.error("IP detail error:", error);
       renderDetail({});
     });
 }
@@ -459,8 +446,8 @@ function loadAttacks() {
     .then((data) => {
       renderAttacks(data);
     })
-    .catch((err) => {
-      console.error("Attack ranking error:", err);
+    .catch((error) => {
+      console.error("Attack ranking error:", error);
       renderAttacks([]);
     });
 }
@@ -470,14 +457,14 @@ function loadTrafficOverview() {
     .then((data) => {
       renderTrafficOverview(data);
     })
-    .catch((err) => {
-      console.error("Traffic overview error:", err);
+    .catch((error) => {
+      console.error("Traffic overview error:", error);
       renderTrafficOverview({});
     });
 }
 
 // =========================
-// 指令輸入
+// 綁定事件
 // =========================
 function bindCommandInput() {
   if (!commandInput || !commandSendBtn) return;
@@ -489,103 +476,88 @@ function bindCommandInput() {
     apiExecuteCommand(commandText)
       .then((result) => {
         console.log("Command result:", result);
+        commandInput.value = "";
       })
-      .catch((err) => {
-        console.error("Command execute error:", err);
+      .catch((error) => {
+        console.error("Command execute error:", error);
       });
   };
 
   commandSendBtn.addEventListener("click", submitCommand);
-  commandInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") submitCommand();
+  commandInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") submitCommand();
   });
 }
 
 function bindReloadButton() {
   if (!reloadBtn) return;
-  reloadBtn.addEventListener("click", () => {
-    refreshDashboard(true);
-  });
+  reloadBtn.addEventListener("click", () => refreshDashboard(true));
 }
 
-function refreshDashboard(manual = false) {
-  if (manual) {
-    setStatusTime(new Date());
-  }
+function bindOverviewTabs() {
+  if (!overviewTabs.length || !overviewPanels.length) return;
 
-  return apiAutoUpdateCheck()
-    .catch((err) => {
-      console.warn("auto_updates error:", err);
-      return null;
-    })
-    .then(() => Promise.all([
-      loadIpList(),
-      loadAttacks(),
-      loadTrafficOverview()
-    ]))
-    .then(() => loadIpDetail())
-    .then(() => {
-      setStatusTime(new Date());
+  overviewTabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const targetId = tab.dataset.panel;
+
+      overviewTabs.forEach((btn) => btn.classList.remove("active"));
+      overviewPanels.forEach((panel) => panel.classList.remove("active"));
+
+      tab.classList.add("active");
+
+      const targetPanel = document.getElementById(targetId);
+      if (targetPanel) targetPanel.classList.add("active");
     });
-}
-
-function startAutoRefresh() {
-  if (refreshTimer) clearInterval(refreshTimer);
-  refreshTimer = setInterval(() => {
-    refreshDashboard(false);
-  }, AUTO_REFRESH_MS);
-}
-
-// =========================
-// 拖曳
-// =========================
-let activeWindow = null;
-let offsetX = 0;
-let offsetY = 0;
-let highestZ = 200;
-
-document.querySelectorAll(".draggable").forEach((win) => {
-  const handle = win.querySelector(".drag-handle");
-  if (!handle) return;
-
-  handle.addEventListener("mousedown", (e) => {
-    activeWindow = win;
-    highestZ += 1;
-    win.style.zIndex = highestZ;
-
-    const rect = win.getBoundingClientRect();
-    const currentTransform = getComputedStyle(win).transform;
-
-    if (currentTransform !== "none") {
-      win.style.left = rect.left + "px";
-      win.style.top = rect.top + "px";
-      win.style.transform = "none";
-    }
-
-    offsetX = e.clientX - rect.left;
-    offsetY = e.clientY - rect.top;
   });
-});
+}
 
-document.addEventListener("mousemove", (e) => {
-  if (!activeWindow) return;
+function bindDragWindows() {
+  document.querySelectorAll(".draggable").forEach((win) => {
+    const handle = win.querySelector(".drag-handle");
+    if (!handle) return;
 
-  let x = e.clientX - offsetX;
-  let y = e.clientY - offsetY;
+    handle.addEventListener("mousedown", (event) => {
+      activeWindow = win;
+      highestZ += 1;
+      win.style.zIndex = highestZ;
 
-  const maxX = window.innerWidth - activeWindow.offsetWidth;
-  const maxY = window.innerHeight - activeWindow.offsetHeight;
+      const rect = win.getBoundingClientRect();
+      const currentTransform = getComputedStyle(win).transform;
 
-  x = Math.max(0, Math.min(x, maxX));
-  y = Math.max(0, Math.min(y, maxY));
+      if (currentTransform !== "none") {
+        win.style.left = `${rect.left}px`;
+        win.style.top = `${rect.top}px`;
+        win.style.transform = "none";
+      }
 
-  activeWindow.style.left = x + "px";
-  activeWindow.style.top = y + "px";
-});
+      offsetX = event.clientX - rect.left;
+      offsetY = event.clientY - rect.top;
+      document.body.style.userSelect = "none";
+    });
+  });
 
-document.addEventListener("mouseup", () => {
-  activeWindow = null;
-});
+  window.addEventListener("mousemove", (event) => {
+    if (!activeWindow) return;
+
+    let x = event.clientX - offsetX;
+    let y = event.clientY - offsetY;
+
+    const maxX = window.innerWidth - activeWindow.offsetWidth;
+    const maxY = window.innerHeight - activeWindow.offsetHeight;
+
+    x = Math.max(0, Math.min(x, maxX));
+    y = Math.max(0, Math.min(y, maxY));
+
+    activeWindow.style.left = `${x}px`;
+    activeWindow.style.top = `${y}px`;
+  });
+
+  window.addEventListener("mouseup", () => {
+    activeWindow = null;
+    document.body.style.userSelect = "";
+  });
+}
 
 // =========================
 // 背景動畫
@@ -598,28 +570,13 @@ const tokens = [
   "memory", "buffer", "thread", "root", "cmd"
 ];
 
-function rand(min, max) {
-  return Math.random() * (max - min) + min;
-}
-
-function randInt(min, max) {
-  return Math.floor(rand(min, max + 1));
-}
-
-function pick(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
 function makeLine(length = 120) {
   const out = [];
-  for (let i = 0; i < length; i++) {
+  for (let i = 0; i < length; i += 1) {
     out.push(Math.random() < 0.68 ? String(randInt(0, 9)) : pick(tokens));
   }
   return out.join("  ");
 }
-
-const rowConfigs = [];
-const totalRows = 22;
 
 function createRows() {
   if (!layer) return;
@@ -627,7 +584,7 @@ function createRows() {
   layer.innerHTML = "";
   rowConfigs.length = 0;
 
-  for (let i = 0; i < totalRows; i++) {
+  for (let i = 0; i < totalRows; i += 1) {
     const row = document.createElement("div");
     const roll = Math.random();
 
@@ -640,11 +597,12 @@ function createRows() {
     row.style.top = `${(window.innerHeight / totalRows) * i + rand(-8, 8)}px`;
 
     const startX = rand(-1000, 0);
-    const speed = sizeClass === "large"
-      ? rand(0.20, 0.48)
-      : sizeClass === "medium"
-        ? rand(0.38, 0.85)
-        : rand(0.52, 1.15);
+    const speed =
+      sizeClass === "large"
+        ? rand(0.20, 0.48)
+        : sizeClass === "medium"
+          ? rand(0.38, 0.85)
+          : rand(0.52, 1.15);
 
     const direction = Math.random() > 0.5 ? 1 : -1;
     const green = randInt(170, 255);
@@ -661,79 +619,93 @@ function createRows() {
       direction,
       resetPadding: randInt(150, 400),
       updateCounter: 0,
-      mutateEvery: randInt(40, 120)
+      mutateEvery: randInt(40, 120),
     });
   }
 }
 
-function animate() {
+function animateRows() {
   if (!layer) return;
 
   const ww = window.innerWidth;
 
-  for (const r of rowConfigs) {
-    r.x += r.speed * r.direction;
-    r.el.style.transform = `translateX(${r.x}px)`;
-    const width = r.el.offsetWidth;
+  for (const row of rowConfigs) {
+    row.x += row.speed * row.direction;
+    row.el.style.transform = `translateX(${row.x}px)`;
 
-    if (r.direction === 1 && r.x > ww + r.resetPadding) {
-      r.x = -width - randInt(60, 240);
-      if (Math.random() > 0.52) r.el.textContent = makeLine(randInt(85, 140));
+    const width = row.el.offsetWidth;
+
+    if (row.direction === 1 && row.x > ww + row.resetPadding) {
+      row.x = -width - randInt(60, 240);
+      if (Math.random() > 0.52) {
+        row.el.textContent = makeLine(randInt(85, 140));
+      }
     }
 
-    if (r.direction === -1 && r.x < -width - r.resetPadding) {
-      r.x = ww + randInt(60, 240);
-      if (Math.random() > 0.52) r.el.textContent = makeLine(randInt(85, 140));
+    if (row.direction === -1 && row.x < -width - row.resetPadding) {
+      row.x = ww + randInt(60, 240);
+      if (Math.random() > 0.52) {
+        row.el.textContent = makeLine(randInt(85, 140));
+      }
     }
 
-    r.updateCounter++;
-    if (r.updateCounter >= r.mutateEvery) {
-      r.updateCounter = 0;
-      if (Math.random() > 0.45) r.el.textContent = makeLine(randInt(85, 140));
+    row.updateCounter += 1;
+    if (row.updateCounter >= row.mutateEvery) {
+      row.updateCounter = 0;
+      if (Math.random() > 0.45) {
+        row.el.textContent = makeLine(randInt(85, 140));
+      }
     }
   }
 
-  requestAnimationFrame(animate);
+  requestAnimationFrame(animateRows);
 }
 
 // =========================
-// traffic overview tab
+// 自動刷新
 // =========================
-function bindOverviewTabs() {
-  if (!overviewTabs.length || !overviewPanels.length) return;
+function refreshDashboard(manual = false) {
+  if (manual) {
+    setStatusTime(new Date());
+  }
 
-  overviewTabs.forEach((tab) => {
-    tab.addEventListener("click", () => {
-      const targetId = tab.dataset.panel;
+  return apiAutoUpdateCheck()
+    .catch((error) => {
+      console.warn("auto_updates error:", error);
+      return null;
+    })
+    .then(() => Promise.all([
+      loadIpList(),
+      loadAttacks(),
+      loadTrafficOverview(),
+    ]))
+    .then(() => loadIpDetail())
+    .then(() => setStatusTime(new Date()));
+}
 
-      overviewTabs.forEach((btn) => btn.classList.remove("active"));
-      overviewPanels.forEach((panel) => panel.classList.remove("active"));
-
-      tab.classList.add("active");
-
-      const targetPanel = document.getElementById(targetId);
-      if (targetPanel) {
-        targetPanel.classList.add("active");
-      }
-    });
-  });
+function startAutoRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(() => {
+    refreshDashboard(false);
+  }, AUTO_REFRESH_MS);
 }
 
 // =========================
-// init
+// 初始化
 // =========================
 async function init() {
   await initConfig();
-  
+
   bindOverviewTabs();
   bindCommandInput();
   bindReloadButton();
+  bindDragWindows();
 
-  refreshDashboard(true);
+  await refreshDashboard(true);
   startAutoRefresh();
 
   createRows();
-  animate();
+  animateRows();
 }
 
 window.addEventListener("resize", createRows);
