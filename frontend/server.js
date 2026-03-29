@@ -251,3 +251,79 @@ app.post("/api/terminal-cmd", (req, res) => {
       res.status(500).json({ error: err.message });
     });
 });
+
+/**
+ * 與前端 main.js 相容的代理路由：
+ * main.js 目前使用 /api/dashboard/*，這裡直接轉發到後端 dashboard。
+ */
+app.get("/api/dashboard/live_ips", async (req, res) => {
+  const limit = Number(req.query.limit || 500);
+  try {
+    const data = await fetchDashboardJson(`/live_ips?limit=${encodeURIComponent(limit)}`);
+    res.json(data);
+  } catch (err) {
+    console.error("/api/dashboard/live_ips error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/dashboard/ip_bundle/:ip", async (req, res) => {
+  const ip = req.params.ip;
+  try {
+    const data = await fetchDashboardJson(`/ip_bundle/${encodeURIComponent(ip)}`);
+    res.json(data);
+  } catch (err) {
+    console.error("/api/dashboard/ip_bundle error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/dashboard/command_heatmap", async (req, res) => {
+  try {
+    const data = await fetchDashboardJson(`/command_heatmap`);
+    res.json(data);
+  } catch (err) {
+    console.error("/api/dashboard/command_heatmap error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/dashboard/traffic_compare", async (req, res) => {
+  const limit = Number(req.query.limit || 1000);
+  try {
+    const data = await fetchDashboardJson(`/traffic_compare?limit=${encodeURIComponent(limit)}`);
+    res.json(data);
+  } catch (err) {
+    console.error("/api/dashboard/traffic_compare error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/dashboard/auto_updates", async (req, res) => {
+  try {
+    const data = await fetchDashboardJson(`/auto_updates`);
+    res.json(data);
+  } catch (err) {
+    console.error("/api/dashboard/auto_updates error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/dashboard/terminal_cmd", async (req, res) => {
+  try {
+    const data = await fetchDashboardJson(`/terminal_cmd`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        command_text: req.body?.command_text || "",
+        selected_ip: req.body?.selected_ip || null,
+      }),
+    });
+    res.json(data);
+  } catch (err) {
+    console.error("/api/dashboard/terminal_cmd error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});

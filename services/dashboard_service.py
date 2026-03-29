@@ -211,6 +211,33 @@ def fetch_recent_traffic(limit: int = 100, mode: str = "all") -> dict:
         rows = [r for r in rows if int(r.get("is_attack") or 0) == 1]
     return {"recent_traffic": rows}
 
+
+def auto_updates() -> dict:
+    """提供前端輪詢用的輕量更新檢查資訊。"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            SELECT
+                COUNT(*) AS total_requests,
+                MAX(request_at) AS latest_request_at,
+                SUM(CASE WHEN is_attack = 1 THEN 1 ELSE 0 END) AS attack_requests
+            FROM traffic_logs
+            '''
+        )
+        row = cursor.fetchone()
+
+    total_requests = int((row["total_requests"] or 0) if row else 0)
+    attack_requests = int((row["attack_requests"] or 0) if row else 0)
+    latest_request_at = (row["latest_request_at"] if row else None) or None
+
+    return {
+        "status": "ok",
+        "total_requests": total_requests,
+        "attack_requests": attack_requests,
+        "latest_request_at": latest_request_at,
+    }
+
 if __name__ == "__main__":
     pass
 
