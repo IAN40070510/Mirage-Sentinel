@@ -47,6 +47,8 @@ const statusText = document.getElementById("statusText");
 const overviewTabs = document.querySelectorAll(".overview-tab");
 const overviewPanels = document.querySelectorAll(".overview-panel");
 
+const layoutModeSelect = document.getElementById("layoutModeSelect");
+
 // =========================
 // 初始化設定
 // =========================
@@ -938,12 +940,56 @@ function startAutoRefresh() {
   }, AUTO_REFRESH_MS);
 }
 
+const LAYOUT_STORAGE_KEY = "dashboard-layout-mode";
+const LAYOUT_MODES = ["layout-15", "layout-17", "layout-25"];
+
+function applyLayoutMode(mode, { persist = true, resetWindows = true } = {}) {
+  const finalMode = LAYOUT_MODES.includes(mode) ? mode : "layout-17";
+  document.body.setAttribute("data-layout-mode", finalMode);
+
+  if (layoutModeSelect) {
+    layoutModeSelect.value = finalMode;
+  }
+
+  if (persist) {
+    localStorage.setItem(LAYOUT_STORAGE_KEY, finalMode);
+  }
+
+  if (resetWindows) {
+    resetWindowPositionsForLayout();
+  }
+}
+
+function resetWindowPositionsForLayout() {
+  const windows = document.querySelectorAll(".window");
+  windows.forEach((win) => {
+    win.style.left = "";
+    win.style.right = "";
+    win.style.top = "";
+    win.style.bottom = "";
+    win.style.transform = "";
+  });
+}
+
+function bindLayoutModeSelector() {
+  if (!layoutModeSelect) return;
+
+  const savedMode = localStorage.getItem(LAYOUT_STORAGE_KEY);
+  const defaultMode = savedMode && LAYOUT_MODES.includes(savedMode) ? savedMode : "layout-17";
+  applyLayoutMode(defaultMode, { persist: false, resetWindows: true });
+
+  layoutModeSelect.addEventListener("change", (event) => {
+    applyLayoutMode(event.target.value, { persist: true, resetWindows: true });
+  });
+}
+
 // =========================
 // 初始化
 // =========================
 async function init() {
   await initConfig();
 
+  bindLayoutModeSelector();
   bindOverviewTabs();
   bindCommandInput();
   bindReloadButton();

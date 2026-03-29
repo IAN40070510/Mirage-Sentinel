@@ -7,13 +7,25 @@
   <link rel="stylesheet" href="./style.css" />
   <script src="./main.js" defer></script>
 </head>
-<body>
+<body data-layout-mode="layout-17">
   <div class="screen">
     <div class="glow"></div>
     <div class="stream-layer" id="streamLayer"></div>
 
     <div class="hud">
-      <div class="hud-box">threat stream / live monitoring</div>
+      <div class="hud-left">
+        <div class="hud-box" style="padding: 1rem;">threat stream / live monitoring</div>
+
+        <div class="hud-box layout-box">
+          <label for="layoutModeSelect" class="layout-label">Display Mode</label>
+          <select id="layoutModeSelect" class="layout-select">
+            <option value="layout-15">15 吋螢幕</option>
+            <option value="layout-17" selected>17 吋螢幕</option>
+            <option value="layout-25">25 吋螢幕</option>
+          </select>
+        </div>
+      </div>
+
       <div class="hud-box status-box">
         <span id="statusText">尚未更新</span>
         <button id="reloadBtn" type="button" class="reload-btn">Reload</button>
