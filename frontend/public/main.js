@@ -85,6 +85,15 @@ function safeNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 function formatUpdateTime(date = new Date()) {
   const y = date.getFullYear();
   const m = date.getMonth() + 1;
@@ -245,14 +254,19 @@ function renderIpList(list) {
     const country = item.country || item.location || "-";
     const risk = item.risk || (safeNumber(item.attack_requests, 0) > 0 ? "HIGH" : "LOW");
 
+    const safeIp = escapeHtml(ip);
+    const safeTraffic = escapeHtml(traffic);
+    const safeCountry = escapeHtml(country);
+    const safeRisk = escapeHtml(risk);
+
     const div = document.createElement("div");
     div.className = "ip-item" + (selectedIp === ip ? " active" : "");
     div.innerHTML = `
       <div class="ip-top">
-        <span class="strong">${ip}</span>
-        <span>${traffic}</span>
+        <span class="strong">${safeIp}</span>
+        <span>${safeTraffic}</span>
       </div>
-      <div class="muted">${country} / ${risk}</div>
+      <div class="muted">${safeCountry} / ${safeRisk}</div>
     `;
 
     div.addEventListener("click", () => {
@@ -290,11 +304,13 @@ function renderDetail(data) {
   }
 
   timeline.slice(0, 5).forEach((log, index) => {
+    const safeTime = escapeHtml(log.time || log.timestamp || index + 1);
+    const safeAction = escapeHtml(log.action || log.event || log.description || "-");
     const div = document.createElement("div");
     div.className = "log-item";
     div.innerHTML = `
-      <span class="log-time">${log.time || log.timestamp || index + 1}</span>
-      ${log.action || log.event || log.description || "-"}
+      <span class="log-time">${safeTime}</span>
+      ${safeAction}
     `;
     detailRecentLogs.appendChild(div);
   });
@@ -329,15 +345,17 @@ function renderAttacks(data) {
   const maxValue = Math.max(...normalized.map((item) => item.count), 1);
 
   normalized.slice(0, 10).forEach((item, i) => {
+    const safeName = escapeHtml(item.name);
+    const safeCount = escapeHtml(item.count);
     const div = document.createElement("div");
     div.className = "attack-row";
     const width = Math.max(5, (item.count / maxValue) * 100);
 
     div.innerHTML = `
       <div class="rank">${i + 1}</div>
-      <div class="attack-name">${item.name}</div>
+      <div class="attack-name">${safeName}</div>
       <div class="bar-wrap"><div class="bar" style="width: ${width}%"></div></div>
-      <div>${item.count}</div>
+      <div>${safeCount}</div>
     `;
 
     attackMethodList.appendChild(div);
