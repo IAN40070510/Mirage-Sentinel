@@ -401,6 +401,22 @@ function renderTrafficOverview(data) {
   drawTrafficChart(normalCount, attackCount);
 }
 
+
+// =======================
+// 
+
+//          /\_/\
+//         ( o.o )
+//          > ^ <
+//         /     \
+//        (  ) (  )
+//         \(___)/
+
+//           MEOW
+
+// ciallo 
+// =======================
+
 // =========================
 // 載入資料
 // =========================
@@ -708,6 +724,15 @@ async function executeParsedCommand(parsed) {
     return result;
   }
 
+  
+  if (scope === "muxiang") {
+    window.open("https://github.com/xiang0105");
+    return {
+      status: "success",
+      message: "已前往 muxiang GitHub 頁面",
+    };
+  }
+
   throw new Error(`不支援的指令類別：${scope}`);
 }
 
@@ -812,12 +837,13 @@ function bindDragWindows() {
 // =========================
 // 背景動畫
 // =========================
+
 const tokens = [
   "POST", "GET", "DROP", "payload", "inject", "overflow",
   "auth_bypass", "token", "session", "beacon", "scan",
   "shell", "exec", "worm", "C2", "bind", "443", "8080",
   "0xAF", "0x1D", "../", "/dev/null", "xor", "decode",
-  "memory", "buffer", "thread", "root", "cmd"
+  "memory", "buffer", "thread", "root", "cmd","i am muxiang","ciallo"
 ];
 
 function makeLine(length = 120) {
