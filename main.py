@@ -37,9 +37,9 @@ from core.deception_engine import compute_interaction_metrics
 from core.traffic_db import setup_traffic_db, log_traffic_event
 from core.sandbox import run_attack_in_sandbox
 from core.api_mirage import get_raw_ai_fake_data
-import core.ai_sentinel as core_ai
-sys.modules['__main__'].SentinelModuleV14 = core_ai.SentinelModuleV14
-sys.modules['__main__'].SecurityExtractor = core_ai.SecurityExtractor
+import model.ai_sentinel as model
+sys.modules['__main__'].SentinelModuleV14 = model.SentinelModuleV14
+sys.modules['__main__'].SecurityExtractor = model.SecurityExtractor
 # ===== Dashboard API 路由與跨域設定 =====
 from api import dashboard
 from fastapi.middleware.cors import CORSMiddleware
@@ -51,7 +51,7 @@ load_dotenv()
 API_KEY = os.getenv("API_KEY", "").strip()
 DEFAULT_DEV_API_KEY = "dev-local-api-key-change-me"
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
-ai_sentinel = core_ai.load_sentinel_model()
+ai_sentinel = model.load_sentinel_model()
 
 def verify_api_key(api_key: str = Security(api_key_header)):
     """統一使用 dashboard_service 中的 API key 驗證邏輯。"""
