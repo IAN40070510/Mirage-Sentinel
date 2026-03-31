@@ -172,8 +172,8 @@ def load_sentinel_model():
     try:
         # 使用剛才定義好的 MODEL_PATH
         instance = SentinelModuleV14.load(MODEL_PATH)
-        print(f"✅ [AI-Sentinel] 權重載入成功: {MODEL_PATH}")
+        print(f"[AI-Sentinel] 權重載入成功: {MODEL_PATH}")
         return instance
     except Exception as e:
-        print(f"❌ [AI-Sentinel] 載入失敗: {e}")
+        print(f"[AI-Sentinel] 載入失敗: {e}")
         return None
