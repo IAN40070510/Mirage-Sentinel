@@ -9,3 +9,11 @@ python-dotenv
 python-multipart
 ahocorasick-rs
 httpx
+pandas
+sys
+numpy
+re
+joblib
+scipy
+scikit-learn
+xgboost
