@@ -63,7 +63,9 @@ class SentinelEngine:
                 with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
                     candidate_patterns = [line.strip().lower() for line in f]
 
+            category_count = 0
             for p in candidate_patterns:
+                p = p.strip().lower()
                 if not p or p.startswith("#"):
                     continue
 
@@ -80,15 +82,18 @@ class SentinelEngine:
                     self.bloom.add(p)
                     if p not in self.automaton:
                         self.automaton.add_word(p, (p, category))
+                        category_count += 1
                         loaded_count += 1
+            
+            logger.debug(f"[Sentinel] {category}: 成功載入 {category_count} 個簽名")
         
         if loaded_count > 0:
             self.automaton.make_automaton()
             self.automaton_ready = True
-            logger.info(f"Sentinel 核心已武裝！載入筆數: {loaded_count}")
+            logger.info(f"✅ Sentinel 核心已武裝！總計載入 {loaded_count} 筆簽名")
         else:
             self.automaton_ready = False
-            logger.warning("Sentinel 未載入到任何簽名字典，將以安全降級模式運行（所有請求視為非攻擊）。")
+            logger.error("❌ Sentinel 未載入到任何簽名字典，將以安全降級模式運行（所有請求視為非攻擊）。")
 
     def _recursive_url_decode(self, text: str, depth=0) -> str:
         if depth > 3 or not text: return text
