@@ -11,6 +11,19 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(CURRENT_DIR)               
 SECLISTS_PATH = os.path.join(PROJECT_ROOT, "data", "datasets", "SecLists")
 
+# 雲端最小可用簽名字典：當 SecLists 未部署時，仍可維持基本檢測能力。
+DEFAULT_SIGNATURES = {
+    "lfi": [
+        "../../", "..\\..\\", "/etc/passwd", "/etc/shadow", "win.ini", "boot.ini", "php://filter",
+    ],
+    "paths": [
+        "/admin", "/administrator", "/wp-admin", "/api/admin", "/api/internal", "/api/salary",
+    ],
+    "sqli": [
+        "' or '1'='1", "\" or \"1\"=\"1", "union select", "drop table", "information_schema", "sleep(",
+    ],
+}
+
 class SentinelEngine:
     def __init__(self, seclists_root: str):
         self.seclists_root = seclists_root
@@ -44,27 +57,30 @@ class SentinelEngine:
         for category, config in self.configs.items():
             full_path = self._resolve_signature_path(config["path"])
             if not full_path:
-                logger.warning("Sentinel 找不到簽名字典: %s", config["path"])
-                continue
-            with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
-                for line in f:
-                    p = line.strip().lower()
-                    if not p or p.startswith("#"): continue
-                    
-                    # --- [關鍵修正邏輯] ---
-                    # 1. 如果是 paths (common.txt)，維持長度檢查，保護 1001 不被抓
-                    # 2. 如果是 sqli 或 lfi，長度 >= 1 就要載入，因為符號才是關鍵！
-                    should_load = False
-                    if category == "paths" and len(p) > 4:
-                        should_load = True
-                    elif category in ["sqli", "lfi"] and len(p) >= 1:
-                        should_load = True
-                    
-                    if should_load:
-                        self.bloom.add(p)
-                        if p not in self.automaton:
-                            self.automaton.add_word(p, (p, category))
-                            loaded_count += 1
+                logger.warning("Sentinel 找不到簽名字典: %s，改用內建 fallback 字典。", config["path"])
+                candidate_patterns = DEFAULT_SIGNATURES.get(category, [])
+            else:
+                with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                    candidate_patterns = [line.strip().lower() for line in f]
+
+            for p in candidate_patterns:
+                if not p or p.startswith("#"):
+                    continue
+
+                # --- [關鍵修正邏輯] ---
+                # 1. 如果是 paths (common.txt)，維持長度檢查，保護 1001 不被抓
+                # 2. 如果是 sqli 或 lfi，長度 >= 1 就要載入，因為符號才是關鍵！
+                should_load = False
+                if category == "paths" and len(p) > 4:
+                    should_load = True
+                elif category in ["sqli", "lfi"] and len(p) >= 1:
+                    should_load = True
+
+                if should_load:
+                    self.bloom.add(p)
+                    if p not in self.automaton:
+                        self.automaton.add_word(p, (p, category))
+                        loaded_count += 1
         
         if loaded_count > 0:
             self.automaton.make_automaton()
