@@ -260,3 +260,54 @@ async def get_ip_bundle(
     except Exception as exc:
         logger.error("取得 IP 整合資料失敗: %r", exc)
         raise HTTPException(status_code=500, detail=f"取得 IP 整合資料失敗: {exc}") from exc
+
+
+@router.get("/statistics/country", summary="按國家統計攻擊數與連線")
+async def get_country_stats(
+    limit: int = Query(20, ge=1, le=100, description="國家數上限"),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+):
+    verify_api_key(x_api_key)
+    try:
+        return ws.get_country_statistics(limit)
+    except Exception as exc:
+        logger.error("取得國家統計失敗: %r", exc)
+        raise HTTPException(status_code=500, detail=f"取得國家統計失敗: {exc}") from exc
+
+
+@router.get("/statistics/attack_vectors", summary="攻擊類型分布")
+async def get_attack_vectors(
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+):
+    verify_api_key(x_api_key)
+    try:
+        return ws.get_attack_vector_distribution()
+    except Exception as exc:
+        logger.error("取得攻擊類型分布失敗: %r", exc)
+        raise HTTPException(status_code=500, detail=f"取得攻擊類型分布失敗: {exc}") from exc
+
+
+@router.get("/statistics/top_source_ips", summary="源 IP 熱點分布")
+async def get_source_ips(
+    limit: int = Query(20, ge=1, le=100, description="IP 筆數上限"),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+):
+    verify_api_key(x_api_key)
+    try:
+        return ws.get_top_source_ips(limit)
+    except Exception as exc:
+        logger.error("取得源 IP 分布失敗: %r", exc)
+        raise HTTPException(status_code=500, detail=f"取得源 IP 分布失敗: {exc}") from exc
+
+
+@router.get("/statistics/time_series", summary="時間序列統計（小時粒度）")
+async def get_time_series(
+    hours: int = Query(24, ge=1, le=168, description="統計時間範圍（小時）"),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+):
+    verify_api_key(x_api_key)
+    try:
+        return ws.get_time_series_stats(hours)
+    except Exception as exc:
+        logger.error("取得時間序列統計失敗: %r", exc)
+        raise HTTPException(status_code=500, detail=f"取得時間序列統計失敗: {exc}") from exc

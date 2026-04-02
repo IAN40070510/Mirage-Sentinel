@@ -26,12 +26,11 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 # ===== 核心模組匯入 =====
-# sentinel：攻擊意圖偵測
+# sentinel：攻擊意圖偵測（目前改為本機 AI 模型主判斷）
 # deception_db：欺敵記憶讀寫（同 IP + query_id 的持續欺敵）
 # deception_engine：互動深度/漏斗層級評分
 # traffic_db：全量流量事件落地
 # sandbox：惡意流量導向沙盒/降級假資料
-from core.sentinel import analyze_intent
 from core.deception_db import setup_deception_db, get_memory, save_deception_state
 from core.deception_engine import compute_interaction_metrics
 from core.traffic_db import setup_traffic_db, log_traffic_event
@@ -58,6 +57,34 @@ def verify_api_key(api_key: str = Security(api_key_header)):
     from services import dashboard_service as ws
     if not api_key or not ws.validate_api_key(api_key):
         raise HTTPException(status_code=403, detail="Unauthorized access")
+
+
+def analyze_intent(text: str):
+    """
+    使用本機 AI Sentinel 作為主判斷引擎，回傳格式與舊介面相容。
+    回傳: (is_attack, confidence, attack_vector)
+    """
+    if not text or not str(text).strip():
+        return False, 0.0, "None"
+
+    if not ai_sentinel:
+        logger.warning("AI Sentinel 未載入，降級為非攻擊判定。")
+        return False, 0.0, "None"
+
+    try:
+        df_input = pd.DataFrame({
+            "payload": [str(text).lower().strip()]
+        })
+        judgment = ai_sentinel.predict(df_input).iloc[0]
+
+        confidence = float(judgment["attack_score"])
+        attack_vector = str(judgment["top_attack_type"])
+        is_attack = confidence > 0.3
+
+        return is_attack, confidence, attack_vector
+    except Exception as exc:
+        logger.error(f"AI Sentinel 判斷失敗: {exc}")
+        return False, 0.0, "None"
 
 
 @asynccontextmanager
@@ -166,8 +193,7 @@ async def scan_payload_debug(
 
     # 1. 準備輸入數據 (轉小寫以確保特徵命中)
     df_input = pd.DataFrame({
-        'combined_text': [text.lower().strip()], 
-        'method': [method.upper()]
+        'payload': [text.lower().strip()]
     })
 
     try:

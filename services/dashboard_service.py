@@ -497,5 +497,142 @@ def get_dashboard_ip_bundle(client_ip: str) -> dict:
     }
 
 
+def get_country_statistics(limit: int = 20) -> dict:
+    """按國家/地區統計攻擊數與連線數（用於趨勢呈現）"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                COALESCE(t.location, 'Unknown') AS country,
+                COUNT(t.id) AS total_requests,
+                SUM(CASE WHEN t.is_attack = 1 THEN 1 ELSE 0 END) AS attack_count,
+                COUNT(DISTINCT c.ip) AS unique_ips
+            FROM traffic_logs t
+            JOIN clients c ON c.id = t.client_id
+            GROUP BY t.location
+            ORDER BY attack_count DESC, total_requests DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        rows = cursor.fetchall()
+
+    stats = []
+    for row in rows:
+        country = _resolve_ip_region("0.0.0.1", row["country"]) if row["country"] != "Unknown" else "Unknown"
+        stats.append({
+            "country": country,
+            "total_requests": int(row["total_requests"] or 0),
+            "attack_count": int(row["attack_count"] or 0),
+            "unique_ips": int(row["unique_ips"] or 0),
+        })
+
+    return {"statistics": stats, "total_countries": len(stats)}
+
+
+def get_attack_vector_distribution() -> dict:
+    """按攻擊類型統計分布（SQLi、LFI、XSS、RCE 等）"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                COALESCE(d.attack_vector, 'Unknown') AS attack_type,
+                COUNT(*) AS count,
+                AVG(d.risk_level) AS avg_risk,
+                MAX(d.risk_level) AS max_risk
+            FROM attack_details d
+            GROUP BY d.attack_vector
+            ORDER BY count DESC
+            """
+        )
+        rows = cursor.fetchall()
+
+    distribution = []
+    for row in rows:
+        distribution.append({
+            "attack_type": row["attack_type"],
+            "count": int(row["count"] or 0),
+            "avg_risk": round(float(row["avg_risk"] or 0), 2),
+            "max_risk": int(row["max_risk"] or 0),
+        })
+
+    return {"distribution": distribution}
+
+
+def get_top_source_ips(limit: int = 20) -> dict:
+    """源 IP 熱點分布（連線數、攻擊數、風險等級）"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                c.ip,
+                COUNT(t.id) AS total_connections,
+                SUM(CASE WHEN t.is_attack = 1 THEN 1 ELSE 0 END) AS attack_count,
+                MAX(t.location) AS location,
+                MAX(d.risk_level) AS max_risk,
+                MAX(d.attack_vector) AS latest_attack_type
+            FROM clients c
+            LEFT JOIN traffic_logs t ON c.id = t.client_id
+            LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+            GROUP BY c.ip
+            ORDER BY attack_count DESC, total_connections DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        rows = cursor.fetchall()
+
+    ips = []
+    for row in rows:
+        ips.append({
+            "ip": row["ip"],
+            "country": _resolve_ip_region(row["ip"], row["location"]),
+            "total_connections": int(row["total_connections"] or 0),
+            "attack_count": int(row["attack_count"] or 0),
+            "max_risk": int(row["max_risk"] or 0),
+            "latest_attack_type": row["latest_attack_type"] or "-",
+        })
+
+    return {"top_ips": ips, "total_unique_ips": len(ips)}
+
+
+def get_time_series_stats(hours: int = 24) -> dict:
+    """按時間段統計（小時粒度，用於趨勢圖）"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                strftime('%H:00', t.request_at) AS hour,
+                COUNT(t.id) AS total_count,
+                SUM(CASE WHEN t.is_attack = 1 THEN 1 ELSE 0 END) AS attack_count,
+                SUM(CASE WHEN t.is_attack = 0 THEN 1 ELSE 0 END) AS normal_count,
+                AVG(d.risk_level) AS avg_risk
+            FROM traffic_logs t
+            LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+            WHERE datetime(t.request_at) >= datetime('now', '-' || ? || ' hours')
+            GROUP BY strftime('%H:00', t.request_at)
+            ORDER BY hour ASC
+            """,
+            (hours,),
+        )
+        rows = cursor.fetchall()
+
+    time_series = []
+    for row in rows:
+        time_series.append({
+            "hour": row["hour"],
+            "total_count": int(row["total_count"] or 0),
+            "attack_count": int(row["attack_count"] or 0),
+            "normal_count": int(row["normal_count"] or 0),
+            "avg_risk": round(float(row["avg_risk"] or 0), 2),
+        })
+
+    return {"time_series": time_series, "period_hours": hours}
+
+
 if __name__ == "__main__":
     pass
