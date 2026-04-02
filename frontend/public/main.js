@@ -97,6 +97,15 @@ function safeNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function formatUpdateTime(date = new Date()) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -236,10 +245,10 @@ function renderIpList(list) {
     div.className = `ip-item${selectedIp === ip ? " active" : ""}`;
     div.innerHTML = `
       <div class="ip-top">
-        <span class="strong">${ip}</span>
+        <span class="strong">${escapeHtml(ip)}</span>
         <span>${traffic}</span>
       </div>
-      <div class="muted">${country} / ${risk}</div>
+      <div class="muted">${escapeHtml(country)} / ${escapeHtml(risk)}</div>
     `;
 
     div.addEventListener("click", () => {
@@ -285,8 +294,8 @@ function renderDetail(data) {
     const div = document.createElement("div");
     div.className = "log-item";
     div.innerHTML = `
-      <span class="log-time">${log.time || log.timestamp || index + 1}</span>
-      ${log.action || log.event || log.description || "-"}
+      <span class="log-time">${escapeHtml(log.time || log.timestamp || index + 1)}</span>
+      ${escapeHtml(log.action || log.event || log.description || "-")}
     `;
     detailRecentLogs.appendChild(div);
   });
@@ -326,7 +335,7 @@ function renderAttacks(data) {
 
     div.innerHTML = `
       <div class="rank">${i + 1}</div>
-      <div class="attack-name">${item.name}</div>
+      <div class="attack-name">${escapeHtml(item.name)}</div>
       <div class="bar-wrap"><div class="bar" style="width: ${width}%"></div></div>
       <div>${item.count}</div>
     `;
