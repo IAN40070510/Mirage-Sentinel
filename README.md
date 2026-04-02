@@ -1,243 +1,321 @@
 # Mirage-Sentinel
 
 Mirage-Sentinel 是一個以 FastAPI 為核心的主動式防禦 API Gateway。
-系統會先做攻擊意圖判斷，對高風險請求導向沙盒並回傳假資料，同時寫入攻防日誌與欺敵記憶。
+系統先進行攻擊意圖判斷，對高風險請求隔離沙盒並回傳一致假資料，同時記錄完整攻防軌跡。
 
-## 專案目標
+**狀態**：v1.6.2 | 核心功能已成熟 | 支援本地與 Render 雲端部署
 
-1. 偵測惡意請求（SQLi、XSS、LFI、命令注入等）
-2. 將高風險流量隔離到沙盒服務
-3. 回傳一致的假資料（Deception）拖延攻擊者
-4. 記錄完整攻防軌跡供儀表板分析
+## 關鍵特性
 
-## 目前功能
+**Sentinel 攻擊偵測**
+- 特徵型快篩：19 個在地 fallback 簽名（SQLi、LFI、Path Traversal）
+- 支援完整 SecLists 目錄結構自動尋找（若有部署）
+- 安全降級模式：簽名缺失時仍可運作
 
-1. 攻擊檢測與風險分數：由 `core/sentinel.py` 分析請求意圖
-2. 沙盒隔離：由 `core/sandbox.py` 將惡意請求轉送至 `sandbox_service.py`
-3. 假資料生成：由 `core/mirage.py` 產生誘餌資料
-4. 狀態記憶：`data/mirage_memory.db` 僅作為欺敵流程的內部狀態快取
-5. 攻防日誌：`data/traffic_logs.db` 記錄攻擊向量、風險、處置狀態，且為戰情室唯一查詢來源
-6. 監控 API：`api/dashboard.py` 提供唯讀查詢（需 API Key）
+**Mirage 欺敵生成**  
+- 假資料一致性保證：同 IP + 目標的重複攻擊回傳相同資料
+- 記憶機制：`mirage_memory.db` 快取欺敵狀態
+- Faker 庫支持多語言場景（繁體中文、英文等）
 
-## 系統流程
+**雙資料庫分離**
+- `traffic_logs.db`：戰情室唯一查詢來源（所有攻防事件、風險分數、處置狀態）
+- `mirage_memory.db`：欺敵流程內部狀態，不對外暴露
 
-1. Client 呼叫 API 入口 `main.py`
-2. Sentinel 判斷是否為高風險攻擊
-3. 若為攻擊：
-   - 讀取 `mirage_memory.db` 是否已有記憶（僅欺敵流程內部使用）
-   - 有記憶時回傳同一份假資料
-   - 無記憶時導向沙盒，產生新假資料並寫回記憶
-4. 同步寫入 `traffic_logs.db`（戰情室所有分析資料均來自此庫）
+**儀表板與監控**
+- 前端自動版面判斷（15/17/25 吋螢幕適配）
+- 實時流量總覽、IP 追蹤、攻擊類型熱圖
+- Dashboard API 提供唯讀查詢（需 API Key）
 
-## 專案結構
+**安全架構**
+- API Key 隱式驗證（Header `X-API-Key`）
+- HTML XSS 風險緩解已修補
+- 環境變數管理敏感配置
 
-```text
-Mirage-Sentinel/
-├── main.py
-├── sandbox_service.py
-├── api/
-│   └── dashboard.py
-├── core/
-│   ├── sentinel.py
-│   ├── mirage.py
-│   ├── sandbox.py
-│   ├── deception_db.py
-│   ├── traffic_db.py
-│   └── analytics_engine.py
-├── data/
-│   ├── datasets/
-│   ├── mirage_memory.db
-│   └── traffic_logs.db
-├── frontend/
-├── Dockerfile
-├── docker-compose.yml
-└── requirements.txt
+## 系統架構
+
+```
+客戶端請求
+    ↓
+[API Gateway] main.py
+    ↓
+[Sentinel 檢測] core/sentinel.py
+├─ TF-IDF + 安全統計特徵 (AI Sentinel)
+├─ 特徵型快篩（19 簽名或完整 SecLists）
+└─ 風險評分
+    ↓
+    ├─ 低風險 → 正常回應
+    ├─ 中風險 → 二階審查（預留 BERT）
+    └─ 高風險 ↓
+        [沙盒隔離] core/sandbox.py
+            ↓
+        [Mirage 生成] core/mirage.py
+            ├─ 記憶檢查
+            └─ 假資料回傳
+    ↓
+[流量日誌] traffic_logs.db
+    ↓
+[儀表板] frontend + api/dashboard.py
 ```
 
-## 環境需求
+## 快速開始
 
-1. Python 3.10+
-2. Docker + Docker Compose（選用）
-
-## 本機啟動
+### 本地開發
 
 ```bash
+# 1. 環境準備
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+# 或
+.\.venv\Scripts\activate   # Windows
+
+# 2. 安裝依賴
 pip install -r requirements.txt
+
+# 3. 啟動後端
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+# 4. 在另一個終端啟動前端
+npm --prefix frontend start
+
+# 5. 開啟儀表板
+# 後端 API：http://127.0.0.1:8000/docs
+# 前端儀表板：http://127.0.0.1:3000
 ```
 
-Swagger 文件：`http://127.0.0.1:8000/docs`
-
-## Docker 啟動
+### Docker 部署（本地）
 
 ```bash
 docker compose up --build
 ```
 
-服務預設：
+服務清單：
+- API Gateway：http://127.0.0.1:8000
+- Frontend Dashboard：http://127.0.0.1:3000
+- Sandbox Service：http://127.0.0.1:8001
 
-1. API Gateway：`http://127.0.0.1:8000`
-2. Sandbox Service：`http://127.0.0.1:8001`
+### Render 雲端部署
 
-## 主要 API
+部署設定已內置於 `render.yaml`，包含：
 
-1. `GET /api/v1/user/{user_id}`
-   - 正式入口
-   - `payload` 可用於測試攻擊字串
+1. **mirage-sentinel** (FastAPI)
+   - Runtime: Python
+   - Port: 環境變數 `$PORT`（預設 10000）
+   - Health Check: `/healthz`
+   
+2. **detective-frontend** (Express)
+   - Runtime: Node.js
+   - 代理後端 API（注入 API Key）
+   
+3. **sentinel-cache** (Redis, 選用)
 
-2. `POST /api/v1/simulate_attack`
-   - 測試入口
-   - 參數：`user_id`、`payload`（選填）、`client_ip`（可切換攻擊者）
-   - 用於驗證同攻擊者是否拿到同一份假資料
-
-3. `GET /api/v1/dashboard/*`
-   - 監控查詢 API
-   - 需在 Header 帶 `X-API-Key`
-
-## API Key（目前狀態）
-
-目前程式從 `.env` 讀取：
-
-```env
-API_KEY=replace-with-a-strong-random-key
+推送到遠端後自動部署：
+```bash
+git push
+# Render 將自動觸發 build & deploy
 ```
 
-## 記憶機制說明
+## API 使用指南
 
-欺敵記憶鍵值目前為：
-
-1. `client_ip`
-2. `query_id`（對應 user_id）
-
-效果：同一攻擊者重複攻擊同一目標時，系統會回傳一致的假資料，並更新欺敵成效指標。
-
-> 註：`mirage_memory.db` 不提供戰情室查詢；戰情室（Dashboard）僅讀取 `traffic_logs.db`。
-
-## 互動深度（Deception Interaction Depth）
-
-互動深度不再是單純請求次數，而是「騙術成功度」的綜合評分（`depth_score`，0~100）。
-
-四個評分維度如下：
-
-1. 攻擊鏈轉換率（`funnel_level`）
-   - L1：淺層探測
-   - L2：持續互動（命中記憶）
-   - L3：深層探勘（跨端點、憑證/內部資源探測跡象）
-2. 戰場停留時間（`dwell_seconds`）
-3. 端點探索廣度（`endpoint_coverage`）
-4. 惡意負載演化（`payload_evolution_score`）
-
-實作位置：`core/deception_engine.py`
-
-## 深度分析 API
-
-1. `GET /api/v1/dashboard/interaction_depth/{client_ip}?query_id=...`
-   - 回傳 `depth_score` 與四維度分項分數
-2. `POST /api/v1/simulate_attack`
-   - 回傳 `deception_memory`，含 `funnel_level`、`endpoint_coverage`、`payload_evolution_score`
-
-## 範例回應 JSON
-
-`POST /api/v1/simulate_attack`
-
-```json
-{
-   "status": "attack_detected",
-   "fake_data": {
-      "user_id": "1001",
-      "name": "王小明",
-      "email": "demo@example.com",
-      "balance": 982341,
-      "status": "active"
-   },
-   "event_log": {
-      "request_at": "2026-03-24 21:10:45",
-      "response_at": "2026-03-24 21:10:45",
-      "process_ms": 27,
-      "client_ip": "10.10.10.1",
-      "raw_payload": "1001 ../../../../etc/passwd",
-      "query_id": "1001",
-      "attack_vector": "LFI",
-      "risk_level": 92,
-      "is_attack": 1,
-      "mitigation_status": "Sandboxed",
-      "interaction_depth": 74,
-      "dwell_time": 181.0,
-      "hits": 3
-   },
-   "deception_memory": {
-      "dwell_time": 181.0,
-      "interaction_depth": 74,
-      "hits": 3,
-      "funnel_level": 3,
-      "endpoint_coverage": 4,
-      "payload_evolution_score": 68
-   }
-}
-```
-
-`GET /api/v1/dashboard/interaction_depth/{client_ip}?query_id=1001`
-
-```json
-{
-   "client_ip": "10.10.10.1",
-   "query_id": "1001",
-   "depth_score": 74,
-   "funnel_level": 3,
-   "dwell_seconds": 181,
-   "endpoint_coverage": 4,
-   "payload_evolution_score": 68,
-   "dimension_scores": {
-      "funnel": 100,
-      "dwell_time": 20,
-      "endpoint_coverage": 80,
-      "payload_evolution": 68
-   }
-}
-```
-
-## 測試範例
+### 攻擊檢測與模擬
 
 ```bash
-# 正常請求
+# 1. 正常請求
 curl "http://127.0.0.1:8000/api/v1/user/1001"
 
-# 攻擊測試
-curl "http://127.0.0.1:8000/api/v1/user/1001?payload=DROP%20TABLE%20users"
+# 2. 攻擊測試（LFI）
+curl "http://127.0.0.1:8000/api/v1/user/1001?payload=../../../../etc/passwd"
 
-# 切換攻擊者測試記憶
-curl -X POST "http://127.0.0.1:8000/api/v1/simulate_attack?user_id=1001&payload=../../../../etc/passwd&client_ip=10.10.10.1"
+# 3. 模擬攻擊（切換攻擊者 IP）
+curl -X POST "http://127.0.0.1:8000/api/v1/simulate_attack?user_id=1001&payload=' OR '1'='1&client_ip=10.10.10.1"
+
+# 4. AI Sentinel 直連測試
+curl "http://127.0.0.1:8000/api/v1/ai_sentinel?text=DROP%20TABLE%20users&method=POST"
 ```
 
-## 已知限制
+### 儀表板 API（需 API Key）
 
-1. 正常流量分支目前回傳示意資料，尚未串接真實業務後端
-2. API Key 仍為硬編碼，尚未完成環境變數化
-3. AI 模型層仍在規劃中
+```bash
+# 設定 API Key
+export API_KEY="dev-local-api-key-change-me"
 
-## 開發路線圖
+# 1. Live IPs
+curl -H "X-API-Key: $API_KEY" \
+  "http://127.0.0.1:8000/api/v1/dashboard/live_ips?limit=50"
 
-1. 必做：導入 XGBoost 快篩層（特徵工程 + 訓練 + 推論整合）
-2. 必做：導入幻象生成模型 Llama3.1 8B（Mirage Agent）
-3. 選做：Regex 前置規則層
-4. 選做：向量相似度比對層
-5. 選做：DistilBERT 語意複判層
+# 2. IP 詳細資訊
+curl -H "X-API-Key: $API_KEY" \
+  "http://127.0.0.1:8000/api/v1/dashboard/ip_details/10.10.10.1"
 
-## 幻象模型必做規格（Llama3.1 8B）
+# 3. 流量比較
+curl -H "X-API-Key: $API_KEY" \
+  "http://127.0.0.1:8000/api/v1/dashboard/traffic_compare"
 
-1. 模型用途：惡意請求命中後，生成高一致性的欺敵回應
-2. 一致性要求：同駭客攻擊須維持相同角色與資料敘事
-3. 安全要求：不得回傳真實後端資料，不得暴露系統內部路徑與金鑰
-4. 失敗保護：Llama 逾時或失敗時，需回退至既有 Faker/模板回應
-5. 記錄要求：每次生成需寫入 traffic_logs 與 mirage_memory 供稽核
+# 4. 自動更新檢查
+curl -H "X-API-Key: $API_KEY" \
+  "http://127.0.0.1:8000/api/v1/dashboard/auto_updates"
+```
 
-## 必做驗收清單
+## 環境變數
 
-1. XGBoost 可完成訓練、載入與線上推論
-2. Mirage Agent 已串接 Llama3.1 8B 並能回傳欺敵資料
-3. 同 client_ip 的重複攻擊可維持邏輯與過往回覆相同的假資料與可追蹤深度分數
-4. Llama3.1 8B 異常時可自動回退，不影響 API 可用性
-5. Dashboard 可查到攻擊事件、風險分數與處置狀態
+```env
+# .env 或 Render 環境變數
+
+# API 認證（必填：正式環境）
+API_KEY=replace-with-strong-random-key
+
+# OpenAI（選用：功能尚在規劃）
+OPENAI_API_KEY=sk-...
+
+# Sandbox 服務（Docker Compose 時可用）
+SANDBOX_API_URL=http://sandbox:8001/simulate_attack
+
+# Redis（Render 自動注入）
+REDIS_URL=redis://localhost:6379
+
+# Port（Render 自動提供）
+PORT=10000
+```
+
+## Sentinel 簽名機制
+
+### 簽名來源優先級
+
+1. **第一優先：完整 SecLists（若已部署）**
+   - 支援遞迴尋找（位置任意）
+   - 包含數千個已知攻擊模式
+
+2. **第二優先：內建 Fallback 簽名（雲端預設）**
+   - SQLi：6 個簽名（`' or '1'='1`, `union select` 等）
+   - LFI：7 個簽名（`../../`, `/etc/passwd` 等）
+   - Paths：6 個簽名（`/admin`, `/api/admin` 等）
+   - **總計 19 個簽名**
+
+### 部署時的簽名日誌
+
+```
+✅ Sentinel 核心已武裝！總計載入 19 筆簽名          # 雲端環境（fallback）
+✅ Sentinel 核心已武裝！總計載入 2483 筆簽名       # 本地環境（完整 SecLists）
+```
+
+訊息「改用內建 fallback 字典」**不是錯誤**，而是雲端環境的預期行為。
+
+## 資料庫結構
+
+### traffic_logs.db（戰情室查詢來源）
+
+```sql
+-- 核心欄位
+request_at              TEXT      -- 請求時間
+response_at             TEXT      -- 回應時間
+process_ms              INTEGER   -- 處理時間
+client_ip               TEXT      -- 攻擊者 IP
+raw_payload             TEXT      -- 原始請求內容
+attack_vector           TEXT      -- 攻擊類型（SQLi、LFI 等）
+risk_level              INTEGER   -- 風險分數 (0-100)
+is_attack               INTEGER   -- 是否為攻擊 (0/1)
+mitigation_status       TEXT      -- 處置狀態（Sandboxed/normal）
+interaction_depth       INTEGER   -- 互動深度
+dwell_time              REAL      -- 駭客停留時間
+hits                    INTEGER   -- 命中次數
+```
+
+### mirage_memory.db（欺敵快取，不對外）
+
+```sql
+-- 快取 key: client_ip + query_id
+payload                 JSON      -- 回傳的假資料
+last_seen               TEXT      -- 最後使用時間
+depth                   INTEGER   -- 互動深度
+hits                    INTEGER   -- 累計命中次數
+```
+
+## 已知限制與修複狀態
+
+| 項目 | 狀態 | 說明 |
+|------|------|------|
+| Sentinel 基礎檢測 | 完成 | 19 個簽名 + SecLists 支援 |
+| 雙資料庫分離 | 完成 | traffic_logs + mirage_memory |
+| 前端儀表板 | 完成 | 自動版面、XSS 防護已修補 |
+| Render 部署 | 完成 | PORT 綁定、Health Check 已設置 |
+| AI Sentinel (XGBoost) | 進行中 | 類名修正完成，模型載入測試待驗 |
+| Mirage Agent (LLM) | 規劃中 | 需集成 Llama 3.1 8B 或 OpenAI API |
+| 二階 BERT 審查 | 規劃中 | 中風險請求的進階判定 |
+
+## 開發與貢獻
+
+### 本機檢測流程
+
+```bash
+# 1. Sentinel 簽名測試
+python3 -c "from core.sentinel import analyze_intent; print(analyze_intent('DROP TABLE'))"
+
+# 2. 前端語法檢查
+node --check frontend/public/main.js
+
+# 3. Backend 單元測試（待實作）
+pytest tests/
+
+# 4. Docker 構建驗證
+docker build -t mirage-sentinel:test .
+```
+
+### 部署檢查清單
+
+- [ ] 所有修改已 `git add` 並 `git commit`
+- [ ] 遠端分支已推送：`git push`
+- [ ] `.env` 已配置正式 `API_KEY`（非預設值）
+- [ ] Render 後台已設置環境變數
+- [ ] Health Check 回傳 `{"status": "ok"}`
+- [ ] Dashboard API 可正常查詢（帶有效 API Key）
+- [ ] 前端儀表板可訪問並顯示數據
+
+## 故障排查
+
+### 啟動失敗：Port binding error
+
+**原因**：Render 未能偵測到開啟的連接埠
+**解決**：
+- 確認 `render.yaml` 中 `startCommand` 包含 `--port ${PORT:-10000}`
+- 確認 Dockerfile `CMD` 正確使用 `sh -c` 包裝
+- 檢查本地 PORT 環境變數是否正確設置
+
+### Sentinel 未載入簽名
+
+**原因**：雲端 SecLists 未部署（預期行為）
+**預期日誌**：
+```
+Sentinel 找不到簽名字典: LFI-Jhaddix.txt，改用內建 fallback 字典。
+Sentinel 找不到簽名字典: common.txt，改用內建 fallback 字典。
+Sentinel 找不到簽名字典: login_bypass.txt，改用內建 fallback 字典。
+✅ Sentinel 核心已武裝！總計載入 19 筆簽名
+```
+**此為正常狀態，不會影響檢測**
+
+### 前端儀表板無數據
+
+**檢查項目**：
+1. 後端 `/healthz` 是否回傳 `{"status": "ok"}`
+2. API Key 是否正確（Header `X-API-Key`）
+3. `traffic_logs.db` 是否存在且有記錄
+4. 前端代理日誌是否有錯誤（`npm logs`）
+
+### AttributeError: module 'model.ai_sentinel' has no attribute 'SentinelModuleV14'
+
+**原因**：類名引用不一致
+**解決**：已修正，確認 `main.py` 第 41 行為 `model.SentinelModule`
+
+## 測試數據示例
+
+```bash
+# 製造攻擊事件（本地）
+for i in {1..10}; do
+  curl "http://127.0.0.1:8000/api/v1/user/$((1000+i))?payload=../../../../etc/passwd"
+done
+
+# 查詢儀表板
+curl -H "X-API-Key: dev-local-api-key-change-me" \
+  "http://127.0.0.1:8000/api/v1/dashboard/traffic_compare"
+```
 
 ## 授權
 
@@ -245,37 +323,10 @@ curl -X POST "http://127.0.0.1:8000/api/v1/simulate_attack?user_id=1001&payload=
 
 ---
 
-## 最近更新（v1.6.1）
-
-### 新增功能與改進
-
-1. **結構化日誌系統**
-   - 所有儀表板 API 端點現已使用 `logging` 模塊取代 `print()` 語句
-   - 改進錯誤追蹤與監控能力
-
-2. **Sandbox 重試機制**
-   - 實現指數退避重試策略（最多 3 次重試）
-   - 重試等待時間：1 秒、2 秒、4 秒
-   - 失敗時自動降級為本機假資料生成
-
-3. **Request 驗證層**
-   - 新增 Pydantic 驗證模型：`TrafficQueryParams`、`RecentTrafficParams`、`LiveIpsParams`
-   - 使用 `Field` 和 `validator` 對查詢參數進行嚴格驗證
-   - 無效請求返回 400 Bad Request 而不是 500 ERROR
-
-4. **前端配置系統**
-   - `/api/config` 端點提供安全的配置分發（無 API_KEY 暴露）
-   - 前端動態初始化配置而非硬編碼
-
-5. **驗證邏輯統一**
-   - 所有 API Key 驗證統一使用 `dashboard_service.validate_api_key()`
-   - 消除重複驗證邏輯
-
-6. **資料庫優化**
-   - SQLite WAL（Write-Ahead Logging）模式
-   - 連接超時設置（10 秒）
-   - 64MB 快取池以改進查詢性能
-
-7. **API 標頭一致性**
-   - 所有儀表板端點明確定義 `alias="X-API-Key"` 
-   - 提高 API 文檔清晰度
+**最後更新**：2026-04-02 | v1.6.2
+- Sentinel Fallback 簽名系統
+- 雙資料庫分離（traffic_logs + mirage_memory）
+- Frontend 自動版面 + XSS 防護
+- Render 部署完整支援
+- API 健康檢查 (healthz)
+- SentinelModule 類名統一
