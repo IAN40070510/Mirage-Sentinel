@@ -25,6 +25,7 @@ const detailTraffic = document.getElementById("detailTraffic");
 const detailProto = document.getElementById("detailProto");
 const detailBehavior = document.getElementById("detailBehavior");
 const detailPayload = document.getElementById("detailPayload");
+const detailCurl = document.getElementById("detailCurl");
 const detailRecentLogs = document.getElementById("detailRecentLogs");
 
 const normalPercent = document.getElementById("normalPercent");
@@ -104,6 +105,18 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function generateCurlCommand(clientIp, payload, userId = "1001") {
+  const baseUrl = "http://127.0.0.1:8000/api/v1/simulate_attack";
+  const params = new URLSearchParams({
+    user_id: userId,
+    payload: payload || "test",
+    client_ip: clientIp || "10.10.10.1",
+  });
+  
+  const curl = `curl -X POST "${baseUrl}?${params.toString()}"`;
+  return curl;
 }
 
 function formatUpdateTime(date = new Date()) {
@@ -277,6 +290,26 @@ function renderDetail(data) {
   }
   if (detailBehavior) detailBehavior.textContent = detail.behavior || "-";
   if (detailPayload) detailPayload.textContent = detail.payload || "等待 API 資料...";
+  
+  if (detailCurl) {
+    const curlCmd = generateCurlCommand(
+      detail.client_ip || "10.10.10.1",
+      detail.payload || "../../../../etc/passwd",
+      "1001"
+    );
+    detailCurl.textContent = curlCmd;
+    detailCurl.onclick = () => {
+      navigator.clipboard.writeText(curlCmd).then(() => {
+        const originalText = detailCurl.textContent;
+        detailCurl.textContent = "已複製到剪貼簿！";
+        setTimeout(() => {
+          detailCurl.textContent = originalText;
+        }, 2000);
+      }).catch(() => {
+        alert("複製失敗，請手動選取");
+      });
+    };
+  }
 
   if (!detailRecentLogs) return;
   detailRecentLogs.innerHTML = "";
