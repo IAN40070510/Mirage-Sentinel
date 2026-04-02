@@ -38,7 +38,7 @@ from core.traffic_db import setup_traffic_db, log_traffic_event
 from core.sandbox import run_attack_in_sandbox
 from core.api_mirage import get_raw_ai_fake_data
 import model.ai_sentinel as model
-sys.modules['__main__'].SentinelModuleV14 = model.SentinelModuleV14
+sys.modules['__main__'].SentinelModule = model.SentinelModule
 sys.modules['__main__'].SecurityExtractor = model.SecurityExtractor
 # ===== Dashboard API 路由與跨域設定 =====
 from api import dashboard
