@@ -2,6 +2,9 @@ import json
 import logging
 import os
 import sqlite3
+import time
+import ipaddress
+from urllib import request, parse
 from datetime import datetime
 
 from core.traffic_db import get_recent_traffic as core_get_recent_traffic
@@ -13,6 +16,61 @@ PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
 DB_PATH = os.path.join(PROJECT_ROOT, "data", "traffic_logs.db")
 ERROR_LOG_DIR = os.path.join(PROJECT_ROOT, "data", "error_log")
 DEFAULT_DEV_API_KEY = "dev-local-api-key-change-me"
+IP_GEO_CACHE_TTL = int(os.getenv("IP_GEO_CACHE_TTL", "3600"))
+_ip_geo_cache: dict[str, tuple[str, float]] = {}
+
+
+def _is_public_ip(ip: str) -> bool:
+    try:
+        ip_obj = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+
+    return not (
+        ip_obj.is_private
+        or ip_obj.is_loopback
+        or ip_obj.is_link_local
+        or ip_obj.is_reserved
+        or ip_obj.is_multicast
+    )
+
+
+def _resolve_ip_region(ip: str, fallback_location: str | None = None) -> str:
+    """將 IP 轉成地區字串，失敗時回退既有 location 或 Unknown。"""
+    normalized_fallback = (fallback_location or "").strip()
+    # 某些舊資料把 endpoint path 寫入 location，例如 /api/v1/user，需忽略後重算。
+    fallback_looks_like_endpoint = normalized_fallback.startswith("/")
+    if normalized_fallback and normalized_fallback != "-" and not fallback_looks_like_endpoint:
+        return normalized_fallback
+
+    if not _is_public_ip(ip):
+        return "Private/Local"
+
+    now = time.time()
+    cached = _ip_geo_cache.get(ip)
+    if cached and now - cached[1] <= IP_GEO_CACHE_TTL:
+        return cached[0]
+
+    geo_url = (
+        "http://ip-api.com/json/"
+        f"{parse.quote(ip)}"
+        "?fields=status,country,regionName,city,message"
+    )
+    try:
+        with request.urlopen(geo_url, timeout=1.8) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+
+        if payload.get("status") == "success":
+            parts = [payload.get("country"), payload.get("regionName"), payload.get("city")]
+            region = "/".join([part for part in parts if part]) or "Unknown"
+        else:
+            region = "Unknown"
+    except Exception as exc:
+        logger.debug("IP 地理解析失敗 ip=%s error=%r", ip, exc)
+        region = normalized_fallback or "Unknown"
+
+    _ip_geo_cache[ip] = (region, now)
+    return region
 
 
 def get_db_connection():
@@ -189,7 +247,6 @@ def get_ip_details(ip: str) -> dict:
                 MAX(t.location) AS location,
                 COUNT(t.id) AS hits,
                 MAX(t.query_id) AS query_id,
-                MAX(t.tls_fingerprint) AS tls_fingerprint,
                 MAX(d.attack_vector) AS attack_vector,
                 MAX(d.raw_payload) AS raw_payload,
                 MAX(d.mitigation_status) AS mitigation_status,
@@ -209,8 +266,10 @@ def get_ip_details(ip: str) -> dict:
         return {}
 
     result = dict(row)
+    result.setdefault("tls_fingerprint", None)
     result["risk_level"] = int(result.get("risk_level") or 0)
     result["polluted_status"] = int(result.get("polluted_status") or 0)
+    result["location"] = _resolve_ip_region(ip, result.get("location"))
     return result
 
 
@@ -263,7 +322,7 @@ def fetch_all_client_ips(limit: int = 500) -> dict:
                 "traffic": total_requests,
                 "attack_requests": attack_requests,
                 "normal_requests": max(total_requests - attack_requests, 0),
-                "country": row["location"] or "-",
+                "country": _resolve_ip_region(row["ip"], row["location"]),
                 "risk": risk,
                 "polluted_status": polluted_status,
                 "latest_request_at": row["latest_request_at"],
