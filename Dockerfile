@@ -1,6 +1,6 @@
 # Mirage-Sentinel 主容器 (FastAPI API Gateway + AI Agent)
 FROM python:3.11-slim
-
+RUN apt-get update && apt-get install -y gcc
 # 避免 Python 緩衝輸出，可即時看到 log
 ENV PYTHONUNBUFFERED=1
 
