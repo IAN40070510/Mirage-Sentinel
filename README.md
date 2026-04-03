@@ -196,6 +196,25 @@ curl -H "X-API-Key: <API_KEY>" "http://<VM-IP>:8002/api/v1/dashboard/auto_update
 
 ## API 使用指南
 
+### Banking API 欄位格式規格
+
+| 欄位 | 格式說明 | 範例 |
+|------|----------|------|
+| `X-User-Id` / `user_id` | CIF 客戶代號，建議 12 碼（`CIF` + 9 碼數字） | `CIF000001001` |
+| `user_id`（遮罩顯示） | 隱碼格式：保留前後段 | `CIF********001` |
+| `account_id` | 帳號識別碼，英數字 12-20 碼 | `ACCOD48PUCAEHKH` |
+| `account_id`（遮罩顯示） | 隱碼格式：僅顯示局部 | `ACC**********KH` |
+| `tx_id` | 交易編號，前綴 `TX-` 或 `TXN` | `TX-0E3D0F9119E0` |
+| `bank_code` | 銀行代碼，3-10 碼數字或字元 | `812` |
+| `currency` | 幣別，ISO 4217 三碼 | `USD` |
+| `amount` / `balance` / `fee` | 金額，正浮點數，建議最多小數 2 位 | `182700.46` |
+| `created_at`（交易） | 時間戳，建議 ISO 8601 | `2026-04-03T19:59:28` |
+| `open_date` / `created_at`（日期） | 日期字串（`YYYY-MM-DD`） | `2021-03-27` |
+
+備註：
+- 文件與展示畫面可用遮罩格式（例如 `CIF********001`、`ACC**********KH`）。
+- 真實 API 回傳可為完整值或遮罩值，取決於環境與安全策略。
+
 ### 攻擊檢測與模擬
 
 ```bash

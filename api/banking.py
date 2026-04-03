@@ -121,6 +121,14 @@ BANKING_API_NOTE = """銀行 API（支援雙模式）。
 回應辨識：
 - notice = (真實資料庫查詢)
 - notice = (Demo 資料)
+
+欄位格式：
+- user_id / X-User-Id：`CIF` + 9 碼數字（例：`CIF000001001`）
+- user_id 遮罩範例：`CIF********001`
+- account_id：英數字 12-20 碼（例：`ACCOD48PUCAEHKH`）
+- account_id 遮罩範例：`ACC**********KH`
+- tx_id：交易編號，前綴 `TX-` 或 `TXN`
+- currency：ISO 4217 三碼（例：`USD`）
 """
 
 router.description = BANKING_API_NOTE
