@@ -10,18 +10,17 @@ Mirage-Sentinel 主入口（API Gateway）
 4. 協調哨兵偵測、欺敵策略、沙盒回應與日誌落地。
 """
 
-from fastapi import FastAPI, Request, Query, BackgroundTasks, Security, HTTPException
+from fastapi import FastAPI, Request, Query, BackgroundTasks, HTTPException, Depends, Header
 import sys
 import uvicorn
 import time
 import os
 import logging
+import ipaddress
 import pandas as pd
 from datetime import datetime
 from contextlib import asynccontextmanager
-from fastapi.security import APIKeyHeader
 from dotenv import load_dotenv
-from typing import Optional
 # 配置日誌（實際輸出格式與 handler 由啟動環境決定）
 logger = logging.getLogger(__name__)
 
@@ -35,12 +34,10 @@ from core.deception_db import setup_deception_db, get_memory, save_deception_sta
 from core.deception_engine import compute_interaction_metrics
 from core.traffic_db import setup_traffic_db, log_traffic_event
 from core.sandbox import run_attack_in_sandbox
-from core.api_mirage import get_raw_ai_fake_data
+from api import dashboard
 import model.ai_sentinel as model
 sys.modules['__main__'].SentinelModule = model.SentinelModule
 sys.modules['__main__'].SecurityExtractor = model.SecurityExtractor
-# ===== Dashboard API 路由與跨域設定 =====
-from api import dashboard
 from fastapi.middleware.cors import CORSMiddleware
 # 載入 .env（讓 API_KEY / SANDBOX_API_URL 等配置可由環境管理）
 load_dotenv()
@@ -49,14 +46,44 @@ load_dotenv()
 # 若未設定 API_KEY，lifespan 會切到開發預設值並記錄 warning。
 API_KEY = os.getenv("API_KEY", "").strip()
 DEFAULT_DEV_API_KEY = "dev-local-api-key-change-me"
-api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 ai_sentinel = model.load_sentinel_model()
 
-def verify_api_key(api_key: str = Security(api_key_header)):
-    """統一使用 dashboard_service 中的 API key 驗證邏輯。"""
-    from services import dashboard_service as ws
-    if not api_key or not ws.validate_api_key(api_key):
-        raise HTTPException(status_code=403, detail="Unauthorized access")
+
+def _env_flag(name: str, default: str = "true") -> bool:
+    return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
+
+
+ENABLE_DASHBOARD = _env_flag("ENABLE_DASHBOARD", "true")
+DASHBOARD_INTERNAL_ONLY = _env_flag("DASHBOARD_INTERNAL_ONLY", "true")
+DASHBOARD_ADMIN_KEY = os.getenv("DASHBOARD_ADMIN_KEY", "").strip()
+
+
+def _is_private_or_loopback_ip(ip_text: str) -> bool:
+    try:
+        ip_obj = ipaddress.ip_address(ip_text)
+        return ip_obj.is_private or ip_obj.is_loopback
+    except Exception:
+        return False
+
+
+async def verify_dashboard_access(
+    request: Request,
+    x_dashboard_key: str | None = Header(default=None, alias="X-Dashboard-Key"),
+):
+    """
+    金融常見做法：戰情室僅限內網；若需外部維運，可用管理金鑰放行。
+    """
+    if not DASHBOARD_INTERNAL_ONLY:
+        return
+
+    client_ip = request.client.host if request.client else ""
+    if _is_private_or_loopback_ip(client_ip):
+        return
+
+    if DASHBOARD_ADMIN_KEY and x_dashboard_key == DASHBOARD_ADMIN_KEY:
+        return
+
+    raise HTTPException(status_code=403, detail="Dashboard is restricted to internal network")
 
 
 def analyze_intent(text: str):
@@ -113,12 +140,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# 掛載前端專用 API（由 router 內部處理 API Key 驗證）
-app.include_router(
-    dashboard.router,
-    prefix="/api/v1",
-    tags=["Dashboard"]
-)
+if ENABLE_DASHBOARD:
+    app.include_router(
+        dashboard.router,
+        prefix="/api/v1",
+        tags=["Dashboard"],
+        dependencies=[Depends(verify_dashboard_access)],
+    )
 
 # CORS：目前開發期全面放行，正式環境可改為白名單。
 app.add_middleware(
@@ -137,7 +165,10 @@ async def root():
         "service": "Mirage-Sentinel API Gateway",
         "docs": "/docs",
         "openapi": "/openapi.json",
-        "dashboard_base": "/api/v1/dashboard",
+        "main_entry": "/api/v1/user/{user_id}",
+        "simulate_entry": "/api/v1/simulate_attack",
+        "dashboard_enabled": ENABLE_DASHBOARD,
+        "dashboard_internal_only": DASHBOARD_INTERNAL_ONLY,
     }
 
 
@@ -145,97 +176,6 @@ async def root():
 async def healthz():
     """容器/平台健康檢查端點。"""
     return {"status": "ok"}
-
-@app.get("/api/v1/ai_fakedata", summary="AI 強化欺敵回應測試項")
-async def api_generate_ai_fakedata(
-    user_id: str = Query(..., description="用戶 ID"),
-    payload: str = Query("", description="模擬的攻擊指令"),
-    client_ip: str = Query("192.168.0.1", description="攻擊者 IP（可選）"),
-    attack_vector: str = Query("General", description="預期攻擊類型"),
-):
-    """
-    輸入參數與 simulate_attack 保持一致。
-    邏輯：讀取記憶 -> (若無)AI生成 -> (若失敗)本地生成 -> 存入記憶。
-    """
-    # 呼叫整合過的 AI 引擎
-    fake_content_str = await get_raw_ai_fake_data(
-        attack_vector=attack_vector,
-        payload=payload,
-        client_ip=client_ip,
-        query_id=user_id
-    )
-    
-    # 解析回傳結果以便 FastAPI 渲染 JSON
-    import json
-    return {
-        "status": "success",
-        "simulated_context": {
-            "client_ip": client_ip,
-            "target_user": user_id,
-            "vector": attack_vector
-        },
-        "response_data": json.loads(fake_content_str)
-    }
-
-@app.get("/api/v1/ai_sentinel", tags=["Sentinel Debug"])
-async def scan_payload_debug(
-    text: str = Query(..., description="要測試的 Payload 或字串"),
-    method: str = Query("GET", description="HTTP 方法")
-):
-    """
-    【AI 哨兵直連評估】
-    直接使用根目錄載入的 Sentinel V14 模型進行數據驅動判斷。
-    """
-    start_perf = time.perf_counter()
-
-    if not ai_sentinel:
-        return {"status": "error", "msg": "模型尚未載入，請檢查根目錄 pkl 檔案"}
-
-    # 1. 準備輸入數據 (轉小寫以確保特徵命中)
-    df_input = pd.DataFrame({
-        'payload': [text.lower().strip()]
-    })
-
-    try:
-        judgment = ai_sentinel.predict(df_input).iloc[0]
-
-        # 2. 獲取運算耗時
-        process_ms = round((time.perf_counter() - start_perf) * 1000, 2)
-        
-        # 3. 取得模型輸出數據
-        confidence_val = float(judgment['attack_score'])
-        top_prob = float(judgment['top_attack_prob'])
-        attack_vector = judgment['top_attack_type']
-        decision = judgment['decision']
-
-        return {
-            "status": "success",
-            "performance": {
-                "process_ms": process_ms,
-                "engine_version": "XGBoost-Sentinel-V14-Local"
-            },
-            "input": {
-                "text": text,
-                "method": method.upper()
-            },
-            "ai_analysis": {
-                "is_attack": confidence_val > 0.3,
-                "confidence": f"{confidence_val*100:.2f}%",
-                "attack_vector": attack_vector,
-                "top_category_prob": f"{top_prob*100:.2f}%",
-                "risk_score": int(confidence_val * 100)
-            },
-            "gateway_decision": {
-                "decision": decision,
-                "applied_thresholds": {
-                    "block_limit": 0.75,
-                    "review_limit": 0.3
-                }
-            },
-            "advice": "此接口直接呼叫本機模型權重，不經由外部模組轉手。"
-        }
-    except Exception as e:
-        return {"status": "error", "message": f"模型預測失敗: {str(e)}"}
 
 @app.get("/api/v1/user/{user_id}")
 async def get_user_data(

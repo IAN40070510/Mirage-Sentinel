@@ -137,6 +137,51 @@ curl -H "X-API-Key: $API_KEY" http://127.0.0.1:8000/api/v1/dashboard/auto_update
 
 > 若你希望只開一個對外入口，可以再加 Nginx / Oracle Load Balancer 做反向代理。
 
+### Oracle Cloud 雙視角 Demo（Public + SOC）
+
+若你要同時展示「一般使用者/駭客視角」與「戰情室視角」，可使用雙後端組態：
+
+1. Public API：`backend_public`（對外，關閉 dashboard）
+2. SOC API：`backend_soc`（內網限制，可看 dashboard）
+3. SOC Frontend：`frontend_soc`（代理到 SOC API）
+
+#### 1. 建立環境檔
+
+```bash
+cp .env.oracle.public.example .env.oracle.public
+cp .env.oracle.soc.example .env.oracle.soc
+```
+
+編輯兩個檔案，至少設定：
+
+- `API_KEY`
+- `DASHBOARD_ADMIN_KEY`（SOC 檔案）
+
+#### 2. 啟動雙視角 Demo
+
+```bash
+docker compose -f docker-compose.oracle.dual-demo.yml up -d --build
+```
+
+#### 3. Demo 入口
+
+- Public API（一般/駭客行為展示）：`http://<VM-IP>:8000`
+- SOC API（戰情室後端）：`http://<VM-IP>:8002`
+- SOC Frontend（戰情室前端）：`http://<VM-IP>:3000`
+
+#### 4. Demo 指令
+
+```bash
+# A. 正常使用者
+curl "http://<VM-IP>:8000/api/v1/user/1001?payload=hello"
+
+# B. 模擬駭客
+curl "http://<VM-IP>:8000/api/v1/user/1001?payload=union%20select%20*%20from%20users"
+
+# C. 戰情室（SOC）
+curl -H "X-API-Key: <API_KEY>" "http://<VM-IP>:8002/api/v1/dashboard/auto_updates"
+```
+
 ## API 使用指南
 
 ### 攻擊檢測與模擬
