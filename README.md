@@ -103,7 +103,7 @@ docker compose up --build
 
 #### 1. 建立 VM
 - 建議規格：`2 OCPU / 8 GB RAM` 起跳
-- 作業系統：Oracle Linux 8/9 或 Ubuntu 22.04
+- 作業系統：Oracle Linux 8/9 或 Ubuntu 24.04
 - 安全清單開放埠：`3000`, `8000`, `8001`
 
 #### 2. 安裝 Docker / Compose
