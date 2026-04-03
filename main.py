@@ -33,8 +33,10 @@ logger = logging.getLogger(__name__)
 from core.deception_db import setup_deception_db, get_memory, save_deception_state
 from core.deception_engine import compute_interaction_metrics
 from core.traffic_db import setup_traffic_db, log_traffic_event
+from core.banking_db import setup_banking_db
 from core.sandbox import run_attack_in_sandbox
 from api import dashboard
+from api import banking
 import model.ai_sentinel as model
 sys.modules['__main__'].SentinelModule = model.SentinelModule
 sys.modules['__main__'].SecurityExtractor = model.SecurityExtractor
@@ -54,6 +56,7 @@ def _env_flag(name: str, default: str = "true") -> bool:
 
 
 ENABLE_DASHBOARD = _env_flag("ENABLE_DASHBOARD", "true")
+ENABLE_BANKING_API = _env_flag("ENABLE_BANKING_API", "true")
 DASHBOARD_INTERNAL_ONLY = _env_flag("DASHBOARD_INTERNAL_ONLY", "true")
 DASHBOARD_ADMIN_KEY = os.getenv("DASHBOARD_ADMIN_KEY", "").strip()
 
@@ -129,6 +132,8 @@ async def lifespan(app: FastAPI):
 
     setup_deception_db()
     setup_traffic_db()
+    if ENABLE_BANKING_API:
+        setup_banking_db()
     logger.info("Mirage-Sentinel 全時哨兵監控模式已啟動。")
     yield
 
@@ -146,6 +151,13 @@ if ENABLE_DASHBOARD:
         prefix="/api/v1",
         tags=["Dashboard"],
         dependencies=[Depends(verify_dashboard_access)],
+    )
+
+if ENABLE_BANKING_API:
+    app.include_router(
+        banking.router,
+        prefix="/api/v1",
+        tags=["Banking"],
     )
 
 # CORS：目前開發期全面放行，正式環境可改為白名單。
@@ -169,6 +181,7 @@ async def root():
         "simulate_entry": "/api/v1/simulate_attack",
         "dashboard_enabled": ENABLE_DASHBOARD,
         "dashboard_internal_only": DASHBOARD_INTERNAL_ONLY,
+        "banking_enabled": ENABLE_BANKING_API,
     }
 
 
