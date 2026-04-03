@@ -3,7 +3,7 @@
 Mirage-Sentinel 是一個以 FastAPI 為核心的主動式防禦 API Gateway。
 系統先進行攻擊意圖判斷，對高風險請求隔離沙盒並回傳一致假資料，同時記錄完整攻防軌跡。
 
-**狀態**：v1.6.2 | 核心功能已成熟 | 支援本地與 Render 雲端部署
+**狀態**：v1.6.2 | 核心功能已成熟 | 支援本地與 Oracle Cloud 部署
 
 ## 關鍵特性
 
@@ -93,26 +93,49 @@ docker compose up --build
 - Frontend Dashboard：http://127.0.0.1:3000
 - Sandbox Service：http://127.0.0.1:8001
 
-### Render 雲端部署
+### Oracle Cloud 部署（建議）
 
-部署設定已內置於 `render.yaml`，包含：
+建議使用 **Oracle Cloud Compute VM + Docker Compose**。本專案已提供 `docker-compose.oracle.yml`，會同時啟動：
 
-1. **mirage-sentinel** (FastAPI)
-   - Runtime: Python
-   - Port: 環境變數 `$PORT`（預設 10000）
-   - Health Check: `/healthz`
-   
-2. **detective-frontend** (Express)
-   - Runtime: Node.js
-   - 代理後端 API（注入 API Key）
-   
-3. **sentinel-cache** (Redis, 選用)
+1. `backend`：FastAPI Gateway
+2. `sandbox`：隔離沙盒回應服務
+3. `frontend`：Express 儀表板代理
 
-推送到遠端後自動部署：
+#### 1. 建立 VM
+- 建議規格：`2 OCPU / 8 GB RAM` 起跳
+- 作業系統：Oracle Linux 8/9 或 Ubuntu 22.04
+- 安全清單開放埠：`3000`, `8000`, `8001`
+
+#### 2. 安裝 Docker / Compose
 ```bash
-git push
-# Render 將自動觸發 build & deploy
+sudo yum install -y docker   # Oracle Linux
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER
+
+# 若系統未內建 compose plugin，再安裝 docker compose
 ```
+
+#### 3. 部署專案
+```bash
+git clone <your-repo-url>
+cd Mirage-Sentinel
+
+export API_KEY='replace-with-strong-random-key'
+docker compose -f docker-compose.oracle.yml up -d --build
+```
+
+#### 4. 驗證
+```bash
+curl http://127.0.0.1:8000/healthz
+curl -H "X-API-Key: $API_KEY" http://127.0.0.1:8000/api/v1/dashboard/auto_updates
+```
+
+#### 5. 對外存取
+- 前端：`http://<VM 公網 IP>:3000`
+- 後端 API：`http://<VM 公網 IP>:8000`
+- 沙盒服務：`http://<VM 公網 IP>:8001`（通常只供內網服務呼叫）
+
+> 若你希望只開一個對外入口，可以再加 Nginx / Oracle Load Balancer 做反向代理。
 
 ## API 使用指南
 
@@ -158,7 +181,7 @@ curl -H "X-API-Key: $API_KEY" \
 ## 環境變數
 
 ```env
-# .env 或 Render 環境變數
+# .env 或 Oracle Cloud 環境變數
 
 # API 認證（必填：正式環境）
 API_KEY=replace-with-strong-random-key
@@ -166,14 +189,14 @@ API_KEY=replace-with-strong-random-key
 # OpenAI（選用：功能尚在規劃）
 OPENAI_API_KEY=sk-...
 
-# Sandbox 服務（Docker Compose 時可用）
+# Sandbox 服務（Docker Compose / OCI VM 可用）
 SANDBOX_API_URL=http://sandbox:8001/simulate_attack
 
-# Redis（Render 自動注入）
+# Redis（若你另外部署）
 REDIS_URL=redis://localhost:6379
 
-# Port（Render 自動提供）
-PORT=10000
+# Port（Oracle Cloud VM / Compose 建議固定）
+PORT=8000
 ```
 
 ## Sentinel 簽名機制
@@ -236,7 +259,7 @@ hits                    INTEGER   -- 累計命中次數
 | Sentinel 基礎檢測 | 完成 | 19 個簽名 + SecLists 支援 |
 | 雙資料庫分離 | 完成 | traffic_logs + mirage_memory |
 | 前端儀表板 | 完成 | 自動版面、XSS 防護已修補 |
-| Render 部署 | 完成 | PORT 綁定、Health Check 已設置 |
+| Oracle Cloud 部署 | 完成 | Docker Compose、Health Check、三服務架構已可用 |
 | AI Sentinel (XGBoost) | 進行中 | 類名修正完成，模型載入測試待驗 |
 | Mirage Agent (LLM) | 規劃中 | 需集成 Llama 3.1 8B 或 OpenAI API |
 | 二階 BERT 審查 | 規劃中 | 中風險請求的進階判定 |
@@ -264,7 +287,8 @@ docker build -t mirage-sentinel:test .
 - [ ] 所有修改已 `git add` 並 `git commit`
 - [ ] 遠端分支已推送：`git push`
 - [ ] `.env` 已配置正式 `API_KEY`（非預設值）
-- [ ] Render 後台已設置環境變數
+- [ ] Oracle Cloud VM 已開啟安全清單埠：3000 / 8000 / 8001
+- [ ] `.env` 或 shell 環境變數已設置 `API_KEY`
 - [ ] Health Check 回傳 `{"status": "ok"}`
 - [ ] Dashboard API 可正常查詢（帶有效 API Key）
 - [ ] 前端儀表板可訪問並顯示數據
@@ -273,11 +297,11 @@ docker build -t mirage-sentinel:test .
 
 ### 啟動失敗：Port binding error
 
-**原因**：Render 未能偵測到開啟的連接埠
+**原因**：容器內服務未正確綁定設定的連接埠，或 Oracle Cloud 安全清單未放行
 **解決**：
-- 確認 `render.yaml` 中 `startCommand` 包含 `--port ${PORT:-10000}`
 - 確認 Dockerfile `CMD` 正確使用 `sh -c` 包裝
-- 檢查本地 PORT 環境變數是否正確設置
+- 確認 `docker-compose.oracle.yml` 中的 `PORT` 與 `ports` 對應一致
+- 檢查 Oracle Cloud 安全清單是否已開放對應埠
 
 ### Sentinel 未載入簽名
 
@@ -327,6 +351,6 @@ curl -H "X-API-Key: dev-local-api-key-change-me" \
 - Sentinel Fallback 簽名系統
 - 雙資料庫分離（traffic_logs + mirage_memory）
 - Frontend 自動版面 + XSS 防護
-- Render 部署完整支援
+- Oracle Cloud Docker Compose 部署
 - API 健康檢查 (healthz)
 - SentinelModule 類名統一

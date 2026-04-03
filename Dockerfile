@@ -19,5 +19,5 @@ COPY . .
 
 EXPOSE 8000
 
-# 直接啟動 FastAPI（雲端平台優先使用 PORT，未提供時回退 10000）
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000} --log-level info"]
+# 直接啟動 FastAPI（雲端平台優先使用 PORT，未提供時回退 8000）
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --log-level info"]

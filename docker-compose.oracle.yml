@@ -1,0 +1,48 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mirage_sentinel_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=8000
+      - API_KEY=${API_KEY:-dev-local-api-key-change-me}
+      - SANDBOX_API_URL=http://sandbox:8001/simulate_attack
+    volumes:
+      - ./data:/app/data
+
+  sandbox:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mirage_sentinel_sandbox
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    command: ["python", "sandbox_service.py"]
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=8001
+    volumes:
+      - ./data:/app/data
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mirage_sentinel_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - API_KEY=${API_KEY:-dev-local-api-key-change-me}
+      - BACKEND_API_BASE_URL=http://backend:8000/api/v1/dashboard
+    depends_on:
+      - backend
