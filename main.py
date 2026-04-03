@@ -33,10 +33,10 @@ logger = logging.getLogger(__name__)
 from core.deception_db import setup_deception_db, get_memory, save_deception_state
 from core.deception_engine import compute_interaction_metrics
 from core.traffic_db import setup_traffic_db, log_traffic_event
-from core.banking_db import setup_banking_db
 from core.sandbox import run_attack_in_sandbox
 from api import dashboard
 from api import banking
+from api.db.session import init_db, create_tables
 import model.ai_sentinel as model
 sys.modules['__main__'].SentinelModule = model.SentinelModule
 sys.modules['__main__'].SecurityExtractor = model.SecurityExtractor
@@ -132,8 +132,14 @@ async def lifespan(app: FastAPI):
 
     setup_deception_db()
     setup_traffic_db()
-    if ENABLE_BANKING_API:
-        setup_banking_db()
+
+    # Initialize PostgreSQL database if DATABASE_URL is set
+    if init_db():
+        create_tables()
+        logger.info("[DB] PostgreSQL database initialized successfully.")
+    else:
+        logger.warning("[DB] PostgreSQL not connected - using mock data mode.")
+
     logger.info("Mirage-Sentinel 全時哨兵監控模式已啟動。")
     yield
 

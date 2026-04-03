@@ -88,10 +88,20 @@ npm --prefix frontend start
 docker compose up --build
 ```
 
+若要啟用「真實 PostgreSQL（可選）」：
+
+```bash
+cp .env.db.example .env
+docker compose --profile db up --build
+```
+
+啟用後，Banking API 回應中的 `notice` 會顯示 `(真實資料庫查詢)`。
+
 服務清單：
 - API Gateway：http://127.0.0.1:8000
 - Frontend Dashboard：http://127.0.0.1:3000
 - Sandbox Service：http://127.0.0.1:8001
+- PostgreSQL（可選）：`localhost:5432`
 
 ### Oracle Cloud 部署（建議）
 
@@ -162,6 +172,8 @@ cp .env.oracle.soc.example .env.oracle.soc
 ```bash
 docker compose -f docker-compose.oracle.dual-demo.yml up -d --build
 ```
+
+> Oracle Cloud 建議將 `SANDBOX_ISOLATION_LEVEL` 設為 `2`；本機開發維持 `1`。
 
 #### 3. Demo 入口
 
@@ -236,6 +248,11 @@ OPENAI_API_KEY=sk-...
 
 # Sandbox 服務（Docker Compose / OCI VM 可用）
 SANDBOX_API_URL=http://sandbox:8001/simulate_attack
+
+# 沙盒隔離等級
+# 1 = 開發模式（sandbox 失敗可 fallback 本機欺敵）
+# 2 = 嚴格模式（建議 Oracle Cloud，sandbox 失敗不 fallback）
+SANDBOX_ISOLATION_LEVEL=1
 
 # Redis（若你另外部署）
 REDIS_URL=redis://localhost:6379

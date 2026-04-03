@@ -11,9 +11,29 @@ services:
       - ./data:/app/data
     environment:
       - PYTHONUNBUFFERED=1
+      - DATABASE_URL=${DATABASE_URL:-}
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
     depends_on:
       - sandbox
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: mirage_sentinel_postgres
+    profiles: ["db"]
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=mirage_sentinel
+      - POSTGRES_USER=mirage_user
+      - POSTGRES_PASSWORD=mirage_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mirage_user -d mirage_sentinel"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   sandbox:
     build: .
@@ -26,4 +46,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
     command: ["python", "sandbox_service.py"]
+
+volumes:
+  postgres_data:
 
