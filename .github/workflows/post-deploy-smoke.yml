@@ -45,3 +45,6 @@ jobs:
               --compose-cmd "$COMPOSE_CMD" \
               --compose-file docker-compose.oracle.dual-demo.yml \
               --log-services "backend_public backend_soc sandbox postgres"
+
+            # Authorization regression checks on live deployment.
+            bash scripts/ci/authz-smoke.sh http://127.0.0.1:8000

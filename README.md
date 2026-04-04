@@ -85,11 +85,13 @@ AI 掃描器對抗： 利用動態變異的 API 結構與錯誤回應，破壞 A
 - 目標：真實使用者走 real path，可疑請求走 deception path。
 - 落點：`main.py`、`api/banking.py`。
 - 完成條件：同一 API 可根據風險分數回傳不同路徑，且有事件紀錄。
+- 目前進度（2026-04）：`/banking/accounts`、`/banking/accounts/{account_id}/balance`、`/banking/accounts/{account_id}/transactions`、`/banking/transfers` 已完成分流骨架與事件紀錄欄位（`route/risk_score/deception_reason`）。
 
 2. 權限模型與最小授權（P0）
 - 目標：補齊 object-level authorization 與角色控制。
 - 落點：`api/banking.py`、`api/db/operations.py`。
 - 完成條件：越權查詢必定被攔截並記錄（不可直接讀取他人資源）。
+- 目前進度（2026-04）：新增 `X-Actor-Role`（customer/admin/soc）角色閘門；`/banking/beneficiaries` 與 `/banking/transfers` 已補齊 object-level authorization（目的帳戶需為本人帳戶或已授權受款人），且越權回應 403。
 
 3. 交易風險規則第一版（P0）
 - 目標：建立重放、短時間高頻、異常金額序列的規則偵測。
@@ -151,7 +153,7 @@ AI 掃描器對抗： 利用動態變異的 API 結構與錯誤回應，破壞 A
 * **程式語言：** Python
 * **哨兵閘道 (Sentinel Gateway)：** FastAPI + NGINX (負責流量代理與無縫導向)
 * **意圖分析 (Sentinel)：** XGBoost (負責極速特徵辨識與意圖判定)
-* **假資料生成 (Mirage)：** Llama 3.1 8B (測試階段使用 API 串接，負責動態生成高逼真度回應)
+* **假資料生成 (Mirage)：** Llama 3.1 8B
 * **資料庫：** PostgreSQL (測試與開發階段使用 SQLite 以加速迭代)
 * **沙盒環境：** Docker (負責環境隔離與誘餌部署)
 * **底層作業系統：** Canonical Ubuntu 24.04
@@ -349,5 +351,5 @@ curl -i -H "X-User-Id: 000000001" http://127.0.0.1:8000/banking/accounts
 
 CI 自動化：
 
-1. 合併前由 [`PR Compose Smoke Test`](.github/workflows/pr-smoke.yml) 執行本地 compose 驗收。
-2. 部署成功後由 [`Post-Deploy Smoke Test`](.github/workflows/post-deploy-smoke.yml) 進行線上同等驗收。
+1. 合併前由 [`PR Compose Smoke Test`](.github/workflows/pr-smoke.yml) 執行本地 compose 驗收（含權限回歸檢查：role gate / object-level authorization）。
+2. 部署成功後由 [`Post-Deploy Smoke Test`](.github/workflows/post-deploy-smoke.yml) 進行線上同等驗收（含權限回歸檢查）。

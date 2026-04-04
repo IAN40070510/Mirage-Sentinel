@@ -233,6 +233,65 @@ class DBOperations:
             db.close()
 
     @staticmethod
+    def account_belongs_to_user(account_id: str, user_id: str) -> bool:
+        """Check whether an account is owned by the specified user."""
+        if not is_real_db_enabled():
+            return False
+
+        db = get_db()
+        if not db:
+            return False
+
+        try:
+            account = (
+                db.query(Account)
+                .filter(Account.account_id == account_id, Account.user_id == user_id)
+                .first()
+            )
+            return account is not None
+        finally:
+            db.close()
+
+    @staticmethod
+    def account_exists(account_id: str) -> bool:
+        """Check whether an account exists."""
+        if not is_real_db_enabled():
+            return False
+
+        db = get_db()
+        if not db:
+            return False
+
+        try:
+            account = db.query(Account).filter(Account.account_id == account_id).first()
+            return account is not None
+        finally:
+            db.close()
+
+    @staticmethod
+    def is_authorized_beneficiary(user_id: str, account_id: str) -> bool:
+        """Check whether destination account is in user's beneficiary list."""
+        if not is_real_db_enabled():
+            return False
+
+        db = get_db()
+        if not db:
+            return False
+
+        try:
+            ben = (
+                db.query(Beneficiary)
+                .filter(
+                    Beneficiary.user_id == user_id,
+                    Beneficiary.account_id == account_id,
+                )
+                .first()
+            )
+            return ben is not None
+        finally:
+            db.close()
+
+    @staticmethod
     def create_beneficiary(
         user_id: str,
         nickname: str,

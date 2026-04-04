@@ -2,11 +2,22 @@ import uuid
 import re
 from datetime import datetime
 
-from fastapi import APIRouter, Header, HTTPException, Path, Query
+from fastapi import (
+    APIRouter,
+    Header,
+    HTTPException,
+    Path,
+    Query,
+    Request,
+    BackgroundTasks,
+)
 from pydantic import BaseModel, Field
 
 from .db.session import is_real_db_enabled
 from .db.operations import DBOperations
+from core.traffic_db import log_traffic_event
+from core.sentinel import analyze_intent
+from model.llama import generate_fake_data_llama
 
 
 USER_ID_HEADER_DESCRIPTION = (
@@ -23,6 +34,7 @@ NICKNAME_DESCRIPTION = "受款人暱稱，1-80 字元。"
 BANK_CODE_DESCRIPTION = "銀行代碼，3-10 字元。"
 AMOUNT_DESCRIPTION = "轉帳金額，必須大於 0。"
 NOTE_DESCRIPTION = "備註，最多 200 字元，可不填。"
+ACTOR_ROLE_DESCRIPTION = "呼叫者角色；可用值：customer、admin、soc。"
 
 
 # Response Models
@@ -220,6 +232,218 @@ DEMO_BENEFICIARIES = [
 DEMO_IDEMPOTENCY: dict[tuple[str, str], dict] = {}
 
 
+def _now_ms_iso() -> str:
+    return datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+
+
+def _mask_user_id(user_id: str | None) -> str:
+    if not user_id:
+        return "CIF*********"
+    if not user_id.startswith("CIF"):
+        return "CIF*********"
+    return "CIF*********"
+
+
+def _mask_account_id(account_id: str | None) -> str:
+    if not account_id:
+        return "ACC**********KH"
+    if len(account_id) < 5:
+        return "ACC**********KH"
+    return f"{account_id[:3]}**********{account_id[-2:]}"
+
+
+def _compute_risk_score(
+    x_user_id: str | None, request: Request
+) -> tuple[int, str, str]:
+    """簡易風險評分：先做可運行分流骨架，後續可替換為更完整規則引擎。"""
+    score = 0
+    reasons: list[str] = []
+    user_id = (x_user_id or "").strip()
+
+    if not user_id:
+        score += 55
+        reasons.append("missing_user_id")
+    elif not re.fullmatch(r"CIF\d{8,9}", user_id):
+        score += 35
+        reasons.append("invalid_user_id_format")
+
+    user_agent = (request.headers.get("user-agent") or "").lower()
+    suspicious_agents = ("sqlmap", "nmap", "curl", "wget", "python-requests")
+    if any(token in user_agent for token in suspicious_agents):
+        score += 30
+        reasons.append("suspicious_user_agent")
+
+    detection_target = " ".join(
+        [
+            user_id,
+            request.url.path,
+            request.url.query,
+            request.headers.get("referer", ""),
+            request.headers.get("x-forwarded-for", ""),
+            user_agent,
+        ]
+    ).strip()
+    is_attack, confidence, attack_vector = analyze_intent(detection_target)
+    if is_attack:
+        score += int(confidence * 100)
+        reasons.append(f"sentinel:{attack_vector}")
+
+    score = min(score, 100)
+    reason_text = ",".join(reasons) if reasons else "none"
+    route = "deception" if score >= 60 else "real"
+    return score, reason_text, route
+
+
+def _log_banking_route_event(
+    request: Request,
+    user_id: str | None,
+    endpoint: str,
+    route: str,
+    risk_score: int,
+    deception_reason: str,
+) -> None:
+    client_ip = request.client.host if request.client else "unknown"
+    now = _now_ms_iso()
+    log_traffic_event(
+        {
+            "request_at": now,
+            "response_at": now,
+            "process_ms": 0,
+            "client_ip": client_ip,
+            "location": f"banking:{endpoint}",
+            "is_proxy": bool(request.headers.get("x-forwarded-for")),
+            "user_agent": request.headers.get("user-agent", "Unknown"),
+            "tls_fingerprint": request.headers.get("x-tls-fingerprint", "N/A"),
+            "query_id": user_id or "anonymous",
+            "is_attack": route == "deception",
+            "raw_payload": f"path={request.url.path};query={request.url.query}",
+            "response_payload": {
+                "route": route,
+                "risk_score": risk_score,
+                "deception_reason": deception_reason,
+                "endpoint": endpoint,
+            },
+            "attack_vector": "banking_route_decision",
+            "risk_level": risk_score,
+            "hits": 1,
+            "interaction_depth": 1,
+            "dwell_time": 0.0,
+            "mitigation_status": route,
+        }
+    )
+
+
+def _deception_accounts_response(user_id: str | None, reason: str) -> dict:
+    seed = _llama_deception_seed(user_id, reason)
+    fake_account_id = f"ACC{uuid.uuid4().hex[:13].upper()}"
+    return {
+        "user_id": _mask_user_id(user_id),
+        "accounts": [
+            {
+                "account_id": fake_account_id,
+                "customer_name": seed.get("name", "系統維護用戶"),
+                "account_display": f"{fake_account_id}(校驗中)",
+                "currency": "TWD",
+                "balance": int(seed.get("balance", 999000)),
+                "status": "PENDING_REVIEW",
+                "created_at": _now_ms_iso(),
+            }
+        ],
+        "notice": f"(欺敵回應: {reason})",
+    }
+
+
+def _deception_balance_response(account_id: str, reason: str) -> dict:
+    seed = _llama_deception_seed(account_id, reason)
+    return {
+        "account_id": _mask_account_id(account_id),
+        "customer_name": seed.get("name", "系統校驗中"),
+        "account_display": f"{_mask_account_id(account_id)}(校驗中)",
+        "currency": "TWD",
+        "balance": int(seed.get("balance", 778000)),
+        "status": "PENDING_REVIEW",
+        "notice": f"(欺敵回應: {reason})",
+    }
+
+
+def _deception_transactions_response(account_id: str, reason: str) -> dict:
+    seed = _llama_deception_seed(account_id, reason)
+    fake_tx_id = f"TX-{uuid.uuid4().hex[:12].upper()}"
+    now = _now_ms_iso()
+    masked_account = _mask_account_id(account_id)
+    fake_to = f"ACC{uuid.uuid4().hex[:13].upper()}"
+    customer_name = seed.get("name", "系統校驗中")
+    return {
+        "account_id": masked_account,
+        "customer_name": customer_name,
+        "account_display": f"{masked_account}(校驗中)",
+        "transactions": [
+            {
+                "tx_id": fake_tx_id,
+                "from_account": masked_account,
+                "from_account_display": f"{masked_account}(校驗中)",
+                "from_customer_name": customer_name,
+                "to_account": fake_to,
+                "to_account_display": f"{fake_to}(待確認)",
+                "to_customer_name": "外部清算節點",
+                "amount": 1200,
+                "currency": "TWD",
+                "fee": 5,
+                "status": "PENDING_REVIEW",
+                "created_at": now,
+                "note": "Pending AML review",
+            }
+        ],
+        "notice": f"(欺敵回應: {reason})",
+    }
+
+
+def _deception_transfer_response(req: "TransferRequest", reason: str) -> dict:
+    seed = _llama_deception_seed(req.from_account, reason)
+    fake_tx_id = f"TX-{uuid.uuid4().hex[:12].upper()}"
+    from_masked = _mask_account_id(req.from_account)
+    to_masked = _mask_account_id(req.to_account)
+    fee = 15 if req.amount >= 10000 else 5
+    customer_name = seed.get("name", "系統校驗中")
+    projected_balance = int(seed.get("balance", 780000))
+    return {
+        "status": "queued_review",
+        "transaction": {
+            "tx_id": fake_tx_id,
+            "from_account": from_masked,
+            "from_account_display": f"{from_masked}(校驗中)",
+            "from_customer_name": customer_name,
+            "to_account": to_masked,
+            "to_account_display": f"{to_masked}(待確認)",
+            "to_customer_name": "外部清算節點",
+            "amount": req.amount,
+            "fee": fee,
+            "currency": "TWD",
+            "created_at": _now_ms_iso(),
+            "note": req.note,
+        },
+        "source_account_after_balance": max(0, projected_balance - req.amount - fee),
+        "source_account_display": f"{from_masked}(校驗中)",
+        "source_customer_name": customer_name,
+        "destination_customer_name": "外部清算節點",
+        "notice": f"(欺敵回應: {reason})",
+    }
+
+
+def _llama_deception_seed(query_id: str | None, reason: str) -> dict:
+    """惡意分流一律呼叫 Llama；若例外則降級回固定模板。"""
+    seed_id = (query_id or "CIF000000000").strip() or "CIF000000000"
+    try:
+        return generate_fake_data_llama(query_id=seed_id, attack_vector=reason)
+    except Exception:
+        return {
+            "user_id": seed_id,
+            "name": "系統維護用戶",
+            "balance": 999000,
+            "status": "Normal",
+        }
+
+
 def _real_account_label(account_id: str) -> str:
     return f"{account_id}(真實帳戶)"
 
@@ -339,6 +563,35 @@ def _require_user(x_user_id: str | None) -> str:
     return user_id
 
 
+def _normalize_actor_role(x_actor_role: str | None) -> str:
+    role = (x_actor_role or "customer").strip().lower()
+    if role not in {"customer", "admin", "soc"}:
+        raise HTTPException(
+            status_code=422,
+            detail="X-Actor-Role format invalid. Expected one of: customer, admin, soc.",
+        )
+    return role
+
+
+def _require_actor_role(x_actor_role: str | None, allowed_roles: set[str]) -> str:
+    role = _normalize_actor_role(x_actor_role)
+    if role not in allowed_roles:
+        raise HTTPException(status_code=403, detail="Forbidden by role policy")
+    return role
+
+
+def _ensure_transfer_destination_authorized(user_id: str, to_account: str) -> None:
+    """Object-level authorization for destination account in real DB mode."""
+    if DBOperations.account_belongs_to_user(to_account, user_id):
+        return
+    if DBOperations.is_authorized_beneficiary(user_id, to_account):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail="Forbidden by object-level authorization: destination account is not authorized",
+    )
+
+
 def _ensure_account_owner(account_id: str, user_id: str) -> dict:
     if is_real_db_enabled():
         row = DBOperations.get_account_balance(account_id, user_id)
@@ -378,12 +631,28 @@ def _ensure_account_owner(account_id: str, user_id: str) -> dict:
     },
 )
 async def list_accounts(
+    request: Request,
+    background_tasks: BackgroundTasks,
     x_user_id: str | None = Header(
         default=None,
         alias="X-User-Id",
         description=USER_ID_HEADER_DESCRIPTION,
     ),
 ):
+    risk_score, deception_reason, route = _compute_risk_score(x_user_id, request)
+    background_tasks.add_task(
+        _log_banking_route_event,
+        request,
+        x_user_id,
+        "accounts",
+        route,
+        risk_score,
+        deception_reason,
+    )
+
+    if route == "deception":
+        return _deception_accounts_response(x_user_id, deception_reason)
+
     user_id = _require_user(x_user_id)
 
     # Try real database first
@@ -431,6 +700,8 @@ async def list_accounts(
     response_model=BalanceResponse,
 )
 async def get_balance(
+    request: Request,
+    background_tasks: BackgroundTasks,
     account_id: str = Path(..., description=ACCOUNT_ID_DESCRIPTION),
     x_user_id: str | None = Header(
         default=None,
@@ -438,6 +709,19 @@ async def get_balance(
         description=USER_ID_HEADER_DESCRIPTION,
     ),
 ):
+    risk_score, deception_reason, route = _compute_risk_score(x_user_id, request)
+    background_tasks.add_task(
+        _log_banking_route_event,
+        request,
+        x_user_id,
+        f"accounts/{account_id}/balance",
+        route,
+        risk_score,
+        deception_reason,
+    )
+    if route == "deception":
+        return _deception_balance_response(account_id, deception_reason)
+
     user_id = _require_user(x_user_id)
     row = _ensure_account_owner(account_id, user_id)
     return {
@@ -458,6 +742,8 @@ async def get_balance(
     response_model=ListTransactionsResponse,
 )
 async def get_transactions(
+    request: Request,
+    background_tasks: BackgroundTasks,
     account_id: str = Path(..., description=ACCOUNT_ID_DESCRIPTION),
     limit: int = Query(20, ge=1, le=100, description=LIMIT_DESCRIPTION),
     x_user_id: str | None = Header(
@@ -466,6 +752,19 @@ async def get_transactions(
         description=USER_ID_HEADER_DESCRIPTION,
     ),
 ):
+    risk_score, deception_reason, route = _compute_risk_score(x_user_id, request)
+    background_tasks.add_task(
+        _log_banking_route_event,
+        request,
+        x_user_id,
+        f"accounts/{account_id}/transactions",
+        route,
+        risk_score,
+        deception_reason,
+    )
+    if route == "deception":
+        return _deception_transactions_response(account_id, deception_reason)
+
     user_id = _require_user(x_user_id)
 
     if is_real_db_enabled():
@@ -507,13 +806,38 @@ async def get_transactions(
     response_model=ListBeneficiariesResponse,
 )
 async def list_beneficiaries(
+    request: Request,
+    background_tasks: BackgroundTasks,
     x_user_id: str | None = Header(
         default=None,
         alias="X-User-Id",
         description=USER_ID_HEADER_DESCRIPTION,
     ),
+    x_actor_role: str | None = Header(
+        default=None,
+        alias="X-Actor-Role",
+        description=ACTOR_ROLE_DESCRIPTION,
+    ),
 ):
+    risk_score, deception_reason, route = _compute_risk_score(x_user_id, request)
+    background_tasks.add_task(
+        _log_banking_route_event,
+        request,
+        x_user_id,
+        "beneficiaries",
+        route,
+        risk_score,
+        deception_reason,
+    )
+    if route == "deception":
+        return {
+            "user_id": _mask_user_id(x_user_id),
+            "beneficiaries": [],
+            "notice": f"(欺敵回應: {deception_reason})",
+        }
+
     user_id = _require_user(x_user_id)
+    _require_actor_role(x_actor_role, {"customer", "admin"})
 
     if is_real_db_enabled():
         db_items = DBOperations.get_user_beneficiaries(user_id)
@@ -545,20 +869,52 @@ async def list_beneficiaries(
     response_model=CreateBeneficiaryResponse,
 )
 async def create_beneficiary(
+    request: Request,
+    background_tasks: BackgroundTasks,
     req: BeneficiaryCreateRequest,
     x_user_id: str | None = Header(
         default=None,
         alias="X-User-Id",
         description=USER_ID_HEADER_DESCRIPTION,
     ),
+    x_actor_role: str | None = Header(
+        default=None,
+        alias="X-Actor-Role",
+        description=ACTOR_ROLE_DESCRIPTION,
+    ),
 ):
+    risk_score, deception_reason, route = _compute_risk_score(x_user_id, request)
+    background_tasks.add_task(
+        _log_banking_route_event,
+        request,
+        x_user_id,
+        "beneficiaries:create",
+        route,
+        risk_score,
+        deception_reason,
+    )
+    if route == "deception":
+        return {
+            "status": "queued_review",
+            "beneficiary_id": 0,
+            "account_id": _mask_account_id(req.account_id),
+            "beneficiary_name": _llama_deception_seed(
+                req.account_id, deception_reason
+            ).get("name", "系統校驗中"),
+            "account_display": f"{_mask_account_id(req.account_id)}(校驗中)",
+            "notice": f"(欺敵回應: {deception_reason})",
+        }
+
     user_id = _require_user(x_user_id)
+    _require_actor_role(x_actor_role, {"customer", "admin"})
 
     if is_real_db_enabled():
-        if req.account_id == DEMO_ACCOUNT_ID:
+        if DBOperations.account_belongs_to_user(req.account_id, user_id):
             raise HTTPException(
                 status_code=400, detail="Cannot add your own account as beneficiary"
             )
+        if not DBOperations.account_exists(req.account_id):
+            raise HTTPException(status_code=404, detail="Destination account not found")
         created = DBOperations.create_beneficiary(
             user_id=user_id,
             nickname=req.nickname,
@@ -629,11 +985,18 @@ async def create_beneficiary(
     response_model=TransferResponse,
 )
 async def transfer_money(
+    request: Request,
+    background_tasks: BackgroundTasks,
     req: TransferRequest,
     x_user_id: str | None = Header(
         default=None,
         alias="X-User-Id",
         description=USER_ID_HEADER_DESCRIPTION,
+    ),
+    x_actor_role: str | None = Header(
+        default=None,
+        alias="X-Actor-Role",
+        description=ACTOR_ROLE_DESCRIPTION,
     ),
     idempotency_key: str | None = Header(
         default=None,
@@ -641,7 +1004,21 @@ async def transfer_money(
         description=IDEMPOTENCY_KEY_DESCRIPTION,
     ),
 ):
+    risk_score, deception_reason, route = _compute_risk_score(x_user_id, request)
+    background_tasks.add_task(
+        _log_banking_route_event,
+        request,
+        x_user_id,
+        "transfers",
+        route,
+        risk_score,
+        deception_reason,
+    )
+    if route == "deception":
+        return _deception_transfer_response(req, deception_reason)
+
     user_id = _require_user(x_user_id)
+    _require_actor_role(x_actor_role, {"customer", "admin"})
     if not idempotency_key or not idempotency_key.strip():
         raise HTTPException(status_code=400, detail="Missing Idempotency-Key header")
     key = (user_id, idempotency_key.strip())
@@ -677,6 +1054,7 @@ async def transfer_money(
             )
 
         from_owner = _ensure_account_owner(req.from_account, user_id)
+        _ensure_transfer_destination_authorized(user_id, req.to_account)
         fee = 15 if req.amount >= 10000 else 5
         total_debit = req.amount + fee
         if int(from_owner["balance"]) < total_debit:
