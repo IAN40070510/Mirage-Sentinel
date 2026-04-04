@@ -156,8 +156,16 @@ async def lifespan(app: FastAPI):
 
 
 # ===== FastAPI App 建立 =====
+# 根據 ENABLE_DASHBOARD 決定是否公開 OpenAPI 文檔
 app = FastAPI(
-    title="Mirage-Sentinel API Gateway", version="1.6-FullSentinel", lifespan=lifespan
+    title="Mirage-Sentinel API Gateway",
+    version="1.6-FullSentinel",
+    lifespan=lifespan,
+    docs_url="/docs" if ENABLE_DASHBOARD else None,  # 禁用 /docs 如果 dashboard 已關閉
+    redoc_url=(
+        "/redoc" if ENABLE_DASHBOARD else None
+    ),  # 禁用 /redoc 如果 dashboard 已關閉
+    openapi_url="/openapi.json" if ENABLE_DASHBOARD else None,  # 禁用 OpenAPI schema
 )
 
 if ENABLE_DASHBOARD:
