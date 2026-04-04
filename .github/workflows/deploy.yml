@@ -1,0 +1,24 @@
+name: Deploy to Oracle Cloud
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to OCI
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          port: ${{ secrets.OCI_PORT }}
+          script: |
+            cd ~/Mirage-Sentinel
+            git pull origin main
+            sudo docker-compose -f docker-compose.oracle.dual-demo.yml down
+            sudo docker-compose -f docker-compose.oracle.dual-demo.yml up -d --build
+            sudo docker image prune -f
