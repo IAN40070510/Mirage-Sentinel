@@ -1,11 +1,27 @@
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 
 from .db.session import is_real_db_enabled
 from .db.operations import DBOperations
+
+
+USER_ID_HEADER_DESCRIPTION = (
+    "使用者識別碼 Header，格式為 `X-User-Id: CIF*********`；實際值為 `CIF` + 9 碼數字。"
+)
+ACCOUNT_ID_DESCRIPTION = (
+    "帳戶識別碼，格式為英數字 12-20 碼；常見範例：`ACCOD48PUCAEHKH`。"
+)
+LIMIT_DESCRIPTION = "查詢筆數上限，整數 1-100。"
+IDEMPOTENCY_KEY_DESCRIPTION = (
+    "冪等鍵 Header，用於避免重複轉帳；建議使用唯一字串，格式不限。"
+)
+NICKNAME_DESCRIPTION = "受款人暱稱，1-80 字元。"
+BANK_CODE_DESCRIPTION = "銀行代碼，3-10 字元。"
+AMOUNT_DESCRIPTION = "轉帳金額，必須大於 0。"
+NOTE_DESCRIPTION = "備註，最多 200 字元，可不填。"
 
 
 # Response Models
@@ -123,8 +139,8 @@ BANKING_API_NOTE = """銀行 API（支援雙模式）。
 - notice = (Demo 資料)
 
 欄位格式：
-- user_id / X-User-Id：`CIF` + 9 碼數字（例：`CIF000001001`）
-- user_id 遮罩範例：`CIF********001`
+- user_id / X-User-Id：`CIF` + 9 碼數字；Header 範例：`X-User-Id: CIF*********`
+- user_id 遮罩範例：`CIF*********`
 - account_id：英數字 12-20 碼（例：`ACCOD48PUCAEHKH`）
 - account_id 遮罩範例：`ACC**********KH`
 - tx_id：交易編號，前綴 `TX-` 或 `TXN`
@@ -260,16 +276,32 @@ def _resolve_real_user_id(_user_id: str | None) -> str:
 
 
 class BeneficiaryCreateRequest(BaseModel):
-    nickname: str = Field(..., min_length=1, max_length=80)
-    bank_code: str = Field(..., min_length=3, max_length=10)
-    account_id: str = Field(..., min_length=6, max_length=40)
+    nickname: str = Field(
+        ..., min_length=1, max_length=80, description=NICKNAME_DESCRIPTION
+    )
+    bank_code: str = Field(
+        ..., min_length=3, max_length=10, description=BANK_CODE_DESCRIPTION
+    )
+    account_id: str = Field(
+        ..., min_length=6, max_length=40, description=ACCOUNT_ID_DESCRIPTION
+    )
 
 
 class TransferRequest(BaseModel):
-    from_account: str = Field(..., min_length=6, max_length=40)
-    to_account: str = Field(..., min_length=6, max_length=40)
-    amount: float = Field(..., gt=0)
-    note: str | None = Field(default=None, max_length=200)
+    from_account: str = Field(
+        ...,
+        min_length=6,
+        max_length=40,
+        description="扣款帳戶識別碼，格式同 `ACC**********KH`。",
+    )
+    to_account: str = Field(
+        ...,
+        min_length=6,
+        max_length=40,
+        description="收款帳戶識別碼，格式同 `ACC**********KH`。",
+    )
+    amount: float = Field(..., gt=0, description=AMOUNT_DESCRIPTION)
+    note: str | None = Field(default=None, max_length=200, description=NOTE_DESCRIPTION)
 
 
 def _require_user(x_user_id: str | None) -> str:
@@ -303,7 +335,11 @@ def _ensure_account_owner(account_id: str, user_id: str) -> dict:
     response_model=ListAccountsResponse,
 )
 async def list_accounts(
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_user_id: str | None = Header(
+        default=None,
+        alias="X-User-Id",
+        description=USER_ID_HEADER_DESCRIPTION,
+    ),
 ):
     user_id = _require_user(x_user_id)
 
@@ -345,12 +381,16 @@ async def list_accounts(
 @router.get(
     "/accounts/{account_id}/balance",
     summary="查詢帳戶餘額",
-    description="查詢單一帳戶餘額；路徑上的 `account_id` 會導向 Demo 真實帳號。",
+    description="查詢單一帳戶餘額；請提供 `X-User-Id: CIF*********`，且路徑上的 `account_id` 格式為 `ACC**********KH`。",
     response_model=BalanceResponse,
 )
 async def get_balance(
-    account_id: str,
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    account_id: str = Path(..., description=ACCOUNT_ID_DESCRIPTION),
+    x_user_id: str | None = Header(
+        default=None,
+        alias="X-User-Id",
+        description=USER_ID_HEADER_DESCRIPTION,
+    ),
 ):
     user_id = _require_user(x_user_id)
     row = _ensure_account_owner(account_id, user_id)
@@ -368,13 +408,17 @@ async def get_balance(
 @router.get(
     "/accounts/{account_id}/transactions",
     summary="查詢帳戶交易明細",
-    description="查詢該帳戶最近交易；可用 `limit` 控制筆數。",
+    description="查詢該帳戶最近交易；請提供 `X-User-Id: CIF*********`，`account_id` 格式為 `ACC**********KH`，`limit` 為 1-100 的整數。",
     response_model=ListTransactionsResponse,
 )
 async def get_transactions(
-    account_id: str,
-    limit: int = Query(20, ge=1, le=100),
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    account_id: str = Path(..., description=ACCOUNT_ID_DESCRIPTION),
+    limit: int = Query(20, ge=1, le=100, description=LIMIT_DESCRIPTION),
+    x_user_id: str | None = Header(
+        default=None,
+        alias="X-User-Id",
+        description=USER_ID_HEADER_DESCRIPTION,
+    ),
 ):
     user_id = _require_user(x_user_id)
 
@@ -417,7 +461,11 @@ async def get_transactions(
     response_model=ListBeneficiariesResponse,
 )
 async def list_beneficiaries(
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_user_id: str | None = Header(
+        default=None,
+        alias="X-User-Id",
+        description=USER_ID_HEADER_DESCRIPTION,
+    ),
 ):
     user_id = _require_user(x_user_id)
 
@@ -447,12 +495,16 @@ async def list_beneficiaries(
 @router.post(
     "/beneficiaries",
     summary="新增受款人",
-    description="建立新的受款人資料；請在 Request Body 填入 `nickname`、`bank_code`、`account_id`。",
+    description="建立新的受款人資料；請在 Header 帶入 `X-User-Id: CIF*********`，並在 Body 填入 `nickname`、`bank_code`、`account_id(ACC**********KH)`。",
     response_model=CreateBeneficiaryResponse,
 )
 async def create_beneficiary(
     req: BeneficiaryCreateRequest,
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_user_id: str | None = Header(
+        default=None,
+        alias="X-User-Id",
+        description=USER_ID_HEADER_DESCRIPTION,
+    ),
 ):
     user_id = _require_user(x_user_id)
 
@@ -527,13 +579,21 @@ async def create_beneficiary(
 @router.post(
     "/transfers",
     summary="執行轉帳",
-    description="執行轉帳；請帶 `X-User-Id` 與 `Idempotency-Key`，並在 Body 提供 `from_account`、`to_account`、`amount`。",
+    description="執行轉帳；請帶 `X-User-Id: CIF*********` 與 `Idempotency-Key`，並在 Body 提供 `from_account(ACC**********KH)`、`to_account(ACC**********KH)`、`amount(>0)` 與可選 `note`。",
     response_model=TransferResponse,
 )
 async def transfer_money(
     req: TransferRequest,
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    x_user_id: str | None = Header(
+        default=None,
+        alias="X-User-Id",
+        description=USER_ID_HEADER_DESCRIPTION,
+    ),
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        description=IDEMPOTENCY_KEY_DESCRIPTION,
+    ),
 ):
     user_id = _require_user(x_user_id)
     if not idempotency_key or not idempotency_key.strip():
