@@ -66,7 +66,7 @@ def _env_flag(name: str, default: str = "true") -> bool:
     return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
 
 
-ENABLE_DASHBOARD = _env_flag("ENABLE_DASHBOARD", "true")
+ENABLE_DASHBOARD = _env_flag("ENABLE_DASHBOARD", "false")
 ENABLE_BANKING_API = _env_flag("ENABLE_BANKING_API", "true")
 DASHBOARD_INTERNAL_ONLY = _env_flag("DASHBOARD_INTERNAL_ONLY", "true")
 DASHBOARD_ADMIN_KEY = os.getenv("DASHBOARD_ADMIN_KEY", "").strip()
