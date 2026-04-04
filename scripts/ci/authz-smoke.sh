@@ -2,6 +2,10 @@
 set -euo pipefail
 
 BASE_URL="${1:-http://127.0.0.1:8000}"
+API_BASE="${BASE_URL%/}"
+if [[ "$API_BASE" != */api/v1 ]]; then
+  API_BASE="$API_BASE/api/v1"
+fi
 USER_ID="CIF000000001"
 FROM_ACCOUNT="ACC000000000001"
 UNAUTHORIZED_TO_ACCOUNT="ACC999999999999"
@@ -26,39 +30,39 @@ assert_status() {
 status_ok=$(curl -sS -A "Mozilla/5.0" -o /tmp/authz_beneficiaries_ok.json -w "%{http_code}" \
   -H "X-User-Id: ${USER_ID}" \
   -H "X-Actor-Role: customer" \
-  "${BASE_URL}/banking/beneficiaries")
+  "${API_BASE}/banking/beneficiaries")
 assert_status "200" "$status_ok" "beneficiaries customer role" "/tmp/authz_beneficiaries_ok.json"
 
 # Admin role should also pass role gate.
 status_admin_ok=$(curl -sS -A "Mozilla/5.0" -o /tmp/authz_beneficiaries_admin_ok.json -w "%{http_code}" \
   -H "X-User-Id: ${USER_ID}" \
   -H "X-Actor-Role: admin" \
-  "${BASE_URL}/banking/beneficiaries")
+  "${API_BASE}/banking/beneficiaries")
 assert_status "200" "$status_admin_ok" "beneficiaries admin role" "/tmp/authz_beneficiaries_admin_ok.json"
 
 # Missing role should fall back to default customer role.
 status_default_role=$(curl -sS -A "Mozilla/5.0" -o /tmp/authz_beneficiaries_default_role.json -w "%{http_code}" \
   -H "X-User-Id: ${USER_ID}" \
-  "${BASE_URL}/banking/beneficiaries")
+  "${API_BASE}/banking/beneficiaries")
 assert_status "200" "$status_default_role" "beneficiaries default role" "/tmp/authz_beneficiaries_default_role.json"
 
 # Role gate must reject SOC role for customer banking operations.
 status_forbidden=$(curl -sS -A "Mozilla/5.0" -o /tmp/authz_beneficiaries_forbidden.json -w "%{http_code}" \
   -H "X-User-Id: ${USER_ID}" \
   -H "X-Actor-Role: soc" \
-  "${BASE_URL}/banking/beneficiaries")
+  "${API_BASE}/banking/beneficiaries")
 assert_status "403" "$status_forbidden" "beneficiaries role gate" "/tmp/authz_beneficiaries_forbidden.json"
 
 # Role format should be strictly validated.
 status_invalid_role=$(curl -sS -A "Mozilla/5.0" -o /tmp/authz_invalid_role.json -w "%{http_code}" \
   -H "X-User-Id: ${USER_ID}" \
   -H "X-Actor-Role: hacker" \
-  "${BASE_URL}/banking/beneficiaries")
+  "${API_BASE}/banking/beneficiaries")
 assert_status "422" "$status_invalid_role" "beneficiaries invalid role" "/tmp/authz_invalid_role.json"
 
 # Transfer destination must be authorized (owned account or beneficiary).
 status_transfer_forbidden=$(curl -sS -A "Mozilla/5.0" -o /tmp/authz_transfer_forbidden.json -w "%{http_code}" \
-  -X POST "${BASE_URL}/banking/transfers" \
+  -X POST "${API_BASE}/banking/transfers" \
   -H "Content-Type: application/json" \
   -H "X-User-Id: ${USER_ID}" \
   -H "X-Actor-Role: customer" \

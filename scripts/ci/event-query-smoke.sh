@@ -5,6 +5,10 @@
 set -e
 
 BASE_URL="${1:-http://127.0.0.1:8000}"
+API_BASE="${BASE_URL%/}"
+if [[ "$API_BASE" != */api/v1 ]]; then
+  API_BASE="$API_BASE/api/v1"
+fi
 API_KEY="dev-local-api-key-change-me"
 
 echo "🔍 Event Query & Replay Smoke Test"
@@ -17,7 +21,7 @@ TEST_FAILED=0
 # ================== Test 1: Query Events by Route (Real) ==================
 echo "[Test 1] Query Events by Route (real 路由)"
 
-RESPONSE=$(curl -s -X GET "$BASE_URL/dashboard/events/by_route/real?limit=10" \
+RESPONSE=$(curl -s -X GET "$API_BASE/dashboard/events/by_route/real?limit=10" \
   -H "X-API-Key: $API_KEY" \
   -w "\n%{http_code}" 2>/dev/null)
 
@@ -42,7 +46,7 @@ echo ""
 # ================== Test 2: Query Events by Route (Deception) ==================
 echo "[Test 2] Query Events by Route (deception 路由)"
 
-RESPONSE=$(curl -s -X GET "$BASE_URL/dashboard/events/by_route/deception?limit=10" \
+RESPONSE=$(curl -s -X GET "$API_BASE/dashboard/events/by_route/deception?limit=10" \
   -H "X-API-Key: $API_KEY" \
   -w "\n%{http_code}" 2>/dev/null)
 
@@ -66,7 +70,7 @@ echo ""
 # ================== Test 3: Query Events by Risk Score Range ==================
 echo "[Test 3] Query Events by Risk Score (60-100 分數範圍)"
 
-RESPONSE=$(curl -s -X GET "$BASE_URL/dashboard/events/by_risk_score?min_score=60&max_score=100&limit=10" \
+RESPONSE=$(curl -s -X GET "$API_BASE/dashboard/events/by_risk_score?min_score=60&max_score=100&limit=10" \
   -H "X-API-Key: $API_KEY" \
   -w "\n%{http_code}" 2>/dev/null)
 
@@ -90,7 +94,7 @@ echo ""
 # ================== Test 4: Replay Attack Chain (Demo User) ==================
 echo "[Test 4] Replay Attack Chain (查詢 CIF000001001 的攻擊鏈)"
 
-RESPONSE=$(curl -s -X GET "$BASE_URL/dashboard/replay/CIF000001001" \
+RESPONSE=$(curl -s -X GET "$API_BASE/dashboard/replay/CIF000001001" \
   -H "X-API-Key: $API_KEY" \
   -w "\n%{http_code}" 2>/dev/null)
 
@@ -115,7 +119,7 @@ echo ""
 # ================== Test 5: Invalid Route Parameter ==================
 echo "[Test 5] Invalid Route Parameter (驗證輸入驗證)"
 
-RESPONSE=$(curl -s -X GET "$BASE_URL/dashboard/events/by_route/invalid_route?limit=10" \
+RESPONSE=$(curl -s -X GET "$API_BASE/dashboard/events/by_route/invalid_route?limit=10" \
   -H "X-API-Key: $API_KEY" \
   -w "\n%{http_code}" 2>/dev/null)
 
@@ -140,7 +144,7 @@ echo ""
 # ================== Test 6: API Key Validation ==================
 echo "[Test 6] API Key Validation (沒有 API Key 應被拒絕)"
 
-RESPONSE=$(curl -s -X GET "$BASE_URL/dashboard/events/by_route/real?limit=10" \
+RESPONSE=$(curl -s -X GET "$API_BASE/dashboard/events/by_route/real?limit=10" \
   -w "\n%{http_code}" 2>/dev/null)
 
 HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)

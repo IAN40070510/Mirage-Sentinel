@@ -5,6 +5,10 @@
 set -e
 
 BASE_URL="${1:-http://127.0.0.1:8000}"
+API_BASE="${BASE_URL%/}"
+if [[ "$API_BASE" != */api/v1 ]]; then
+  API_BASE="$API_BASE/api/v1"
+fi
 USER_ID="CIF000001001"
 FROM_ACCOUNT="ACCOD48PUCAEHKH"
 TO_ACCOUNT="MERNGTU3WAVTQJF"
@@ -22,7 +26,7 @@ echo "[Test 1] Replication Detection (同一 payload 30 秒內重複)"
 IDEMPOTENCY_KEY="test-replication-$(date +%s%N)"
 
 # 第一次轉帳請求
-RESPONSE1=$(curl -s -X POST "$BASE_URL/banking/transfers" \
+RESPONSE1=$(curl -s -X POST "$API_BASE/banking/transfers" \
   -H "X-User-Id: $USER_ID" \
   -H "X-Actor-Role: customer" \
   -H "Idempotency-Key: $IDEMPOTENCY_KEY" \
@@ -38,7 +42,7 @@ RESPONSE1=$(curl -s -X POST "$BASE_URL/banking/transfers" \
 HTTP_CODE1=$(echo "$RESPONSE1" | tail -n 1)
 
 # 立即第二次相同請求
-RESPONSE2=$(curl -s -X POST "$BASE_URL/banking/transfers" \
+RESPONSE2=$(curl -s -X POST "$API_BASE/banking/transfers" \
   -H "X-User-Id: $USER_ID" \
   -H "X-Actor-Role: customer" \
   -H "Idempotency-Key: $IDEMPOTENCY_KEY-again" \
@@ -69,7 +73,7 @@ echo "[Test 2] Rate Limiting Detection (10 秒內 >20 個請求)"
 # 快速發送 25 個請求到同一 IP
 for i in {1..25}; do
   IDEMPOTENCY_KEY="test-ratelimit-$i-$(date +%s%N)"
-  curl -s -X POST "$BASE_URL/banking/transfers" \
+  curl -s -X POST "$API_BASE/banking/transfers" \
     -H "X-User-Id: CIF00000000$((i % 10))" \
     -H "X-Actor-Role: customer" \
     -H "Idempotency-Key: $IDEMPOTENCY_KEY" \
@@ -86,7 +90,7 @@ done
 wait
 
 # 讀取最後一個調用的狀態
-RESPONSE=$(curl -s -X POST "$BASE_URL/banking/transfers" \
+RESPONSE=$(curl -s -X POST "$API_BASE/banking/transfers" \
   -H "X-User-Id: $USER_ID" \
   -H "X-Actor-Role: customer" \
   -H "Idempotency-Key: test-ratelimit-final" \
@@ -118,7 +122,7 @@ IDEMPOTENCY_KEY="test-anomalous-$(date +%s%N)"
 
 # 正常金額轉帳建立基線
 for i in {1..3}; do
-  curl -s -X POST "$BASE_URL/banking/transfers" \
+  curl -s -X POST "$API_BASE/banking/transfers" \
     -H "X-User-Id: $USER_ID" \
     -H "X-Actor-Role: customer" \
     -H "Idempotency-Key: test-baseline-$i-$(date +%s%N)" \
@@ -135,7 +139,7 @@ done
 sleep 1
 
 # 發送異常大的轉帳金額 (假設基線是 1000，異常值是 10000+)
-RESPONSE=$(curl -s -X POST "$BASE_URL/banking/transfers" \
+RESPONSE=$(curl -s -X POST "$API_BASE/banking/transfers" \
   -H "X-User-Id: $USER_ID" \
   -H "X-Actor-Role: customer" \
   -H "Idempotency-Key: $IDEMPOTENCY_KEY" \
