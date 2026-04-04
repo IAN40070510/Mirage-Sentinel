@@ -229,7 +229,7 @@ def custom_openapi():
         paths_to_remove = [
             path
             for path in output["paths"].keys()
-            if path.startswith("/api/v1/dashboard/")
+            if path == "/api/v1/dashboard" or path.startswith("/api/v1/dashboard/")
         ]
         for path in paths_to_remove:
             del output["paths"][path]
