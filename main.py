@@ -208,9 +208,7 @@ def custom_openapi():
     生成 OpenAPI schema，當 ENABLE_DASHBOARD=false 時，隱藏 Dashboard 路由。
     符合 AGENTS.md 安全規範：公開蜜罐不應暴露敏感監控功能。
     """
-    if app.openapi_schema:
-        return app.openapi_schema
-
+    # 每次都重新生成，不使用緩存，確保 ENABLE_DASHBOARD 值被正確應用
     output = get_openapi(
         title=app.title,
         version=app.version,
