@@ -64,15 +64,15 @@ BODY2=$(echo "$RESPONSE2" | sed '$d')
 # 重放檢測應該將第二個請求路由到欺敵；若實作以防禦性 400 拒絕，也視為通過。
 if [[ "$HTTP_CODE2" == "200" ]] || [[ "$HTTP_CODE2" == "202" ]]; then
   echo "✓ Test 1 passed (HTTP $HTTP_CODE2)"
-  ((TEST_PASSED++))
+  TEST_PASSED=$((TEST_PASSED + 1))
 elif [[ "$HTTP_CODE2" == "400" ]] && echo "$BODY2" | grep -qiE "replication|deception|duplicate|replay"; then
   echo "✓ Test 1 passed (HTTP $HTTP_CODE2, defensive rejection detected)"
-  ((TEST_PASSED++))
+  TEST_PASSED=$((TEST_PASSED + 1))
 else
   echo "✗ Test 1 failed (Expected 200/202/400+replication marker, got $HTTP_CODE2)"
   echo "Response body:"
   echo "$BODY2"
-  ((TEST_FAILED++))
+  TEST_FAILED=$((TEST_FAILED + 1))
 fi
 echo ""
 
@@ -117,10 +117,10 @@ HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
 # 高頻請求應該被路由到欺敵或返回成功（取決於實現）
 if [[ "$HTTP_CODE" == "200" ]] || [[ "$HTTP_CODE" == "202" ]]; then
   echo "✓ Test 2 passed (HTTP $HTTP_CODE)"
-  ((TEST_PASSED++))
+  TEST_PASSED=$((TEST_PASSED + 1))
 else
   echo "✗ Test 2 failed (Expected 200/202, got $HTTP_CODE)"
-  ((TEST_FAILED++))
+  TEST_FAILED=$((TEST_FAILED + 1))
 fi
 echo ""
 
@@ -169,14 +169,14 @@ if [[ "$HTTP_CODE" == "200" ]] || [[ "$HTTP_CODE" == "202" ]]; then
   # 檢查 notice 是否包含 deception 標記
   if echo "$BODY" | grep -q "deception\|欺敵"; then
     echo "✓ Test 3 passed (HTTP $HTTP_CODE, routed to deception)"
-    ((TEST_PASSED++))
+    TEST_PASSED=$((TEST_PASSED + 1))
   else
     echo "⚠ Test 3 passed with HTTP $HTTP_CODE but no clear deception marker (may be intentional)"
-    ((TEST_PASSED++))
+    TEST_PASSED=$((TEST_PASSED + 1))
   fi
 else
   echo "✗ Test 3 failed (Expected 200/202, got $HTTP_CODE)"
-  ((TEST_FAILED++))
+  TEST_FAILED=$((TEST_FAILED + 1))
 fi
 echo ""
 

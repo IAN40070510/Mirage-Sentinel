@@ -32,14 +32,14 @@ if [[ "$HTTP_CODE" == "200" ]]; then
   # 驗證回應結構
   if echo "$BODY" | grep -q "\"route\":\"real\""; then
     echo "✓ Test 1 passed (HTTP $HTTP_CODE, returned real events)"
-    ((TEST_PASSED++))
+    TEST_PASSED=$((TEST_PASSED + 1))
   else
     echo "✗ Test 1 failed (HTTP $HTTP_CODE but missing route field)"
-    ((TEST_FAILED++))
+    TEST_FAILED=$((TEST_FAILED + 1))
   fi
 else
   echo "✗ Test 1 failed (Expected 200, got $HTTP_CODE)"
-  ((TEST_FAILED++))
+  TEST_FAILED=$((TEST_FAILED + 1))
 fi
 echo ""
 
@@ -56,14 +56,14 @@ BODY=$(echo "$RESPONSE" | sed '$d')
 if [[ "$HTTP_CODE" == "200" ]]; then
   if echo "$BODY" | grep -q "\"route\":\"deception\""; then
     echo "✓ Test 2 passed (HTTP $HTTP_CODE, returned deception events)"
-    ((TEST_PASSED++))
+    TEST_PASSED=$((TEST_PASSED + 1))
   else
     echo "✗ Test 2 failed (HTTP $HTTP_CODE but missing deception route)"
-    ((TEST_FAILED++))
+    TEST_FAILED=$((TEST_FAILED + 1))
   fi
 else
   echo "✗ Test 2 failed (Expected 200, got $HTTP_CODE)"
-  ((TEST_FAILED++))
+  TEST_FAILED=$((TEST_FAILED + 1))
 fi
 echo ""
 
@@ -80,14 +80,14 @@ BODY=$(echo "$RESPONSE" | sed '$d')
 if [[ "$HTTP_CODE" == "200" ]]; then
   if echo "$BODY" | grep -q "\"min_score\":60"; then
     echo "✓ Test 3 passed (HTTP $HTTP_CODE, returned risk score filtered events)"
-    ((TEST_PASSED++))
+    TEST_PASSED=$((TEST_PASSED + 1))
   else
     echo "✗ Test 3 failed (HTTP $HTTP_CODE but missing min_score field)"
-    ((TEST_FAILED++))
+    TEST_FAILED=$((TEST_FAILED + 1))
   fi
 else
   echo "✗ Test 3 failed (Expected 200, got $HTTP_CODE)"
-  ((TEST_FAILED++))
+  TEST_FAILED=$((TEST_FAILED + 1))
 fi
 echo ""
 
@@ -105,14 +105,14 @@ if [[ "$HTTP_CODE" == "200" ]] || [[ "$HTTP_CODE" == "404" ]]; then
   # 200 = 找到攻擊鏈，404 = 沒有該用戶的事件（也算通過）
   if echo "$BODY" | grep -q "\"query_id\":\"CIF000001001\""; then
     echo "✓ Test 4 passed (HTTP $HTTP_CODE, returned chain with query_id)"
-    ((TEST_PASSED++))
+    TEST_PASSED=$((TEST_PASSED + 1))
   else
     echo "✓ Test 4 passed (HTTP $HTTP_CODE, endpoint working)"
-    ((TEST_PASSED++))
+    TEST_PASSED=$((TEST_PASSED + 1))
   fi
 else
   echo "✗ Test 4 failed (Expected 200/404, got $HTTP_CODE)"
-  ((TEST_FAILED++))
+  TEST_FAILED=$((TEST_FAILED + 1))
 fi
 echo ""
 
@@ -130,14 +130,14 @@ if [[ "$HTTP_CODE" == "200" ]]; then
   # 驗證返回錯誤訊息或空結果
   if echo "$BODY" | grep -q "error\|Invalid"; then
     echo "✓ Test 5 passed (HTTP $HTTP_CODE, properly rejected invalid route)"
-    ((TEST_PASSED++))
+    TEST_PASSED=$((TEST_PASSED + 1))
   else
     echo "⚠ Test 5 passed with HTTP $HTTP_CODE (no explicit error)"
-    ((TEST_PASSED++))
+    TEST_PASSED=$((TEST_PASSED + 1))
   fi
 else
   echo "✓ Test 5 passed (HTTP $HTTP_CODE, rejected invalid route)"
-  ((TEST_PASSED++))
+  TEST_PASSED=$((TEST_PASSED + 1))
 fi
 echo ""
 
@@ -151,10 +151,10 @@ HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
 
 if [[ "$HTTP_CODE" == "401" ]] || [[ "$HTTP_CODE" == "403" ]]; then
   echo "✓ Test 6 passed (HTTP $HTTP_CODE, API key required)"
-  ((TEST_PASSED++))
+  TEST_PASSED=$((TEST_PASSED + 1))
 else
   echo "⚠ Test 6 passed with HTTP $HTTP_CODE (expected 401/403)"
-  ((TEST_PASSED++))
+  TEST_PASSED=$((TEST_PASSED + 1))
 fi
 echo ""
 
