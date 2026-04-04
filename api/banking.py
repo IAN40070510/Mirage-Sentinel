@@ -1,4 +1,5 @@
 import uuid
+import re
 from datetime import datetime
 
 from fastapi import APIRouter, Header, HTTPException, Path, Query
@@ -147,7 +148,7 @@ BANKING_API_NOTE = """銀行 API（PostgreSQL 強制模式）。
 - 必須設定且可連線 DATABASE_URL，否則 API 直接回應 503
 
 回應辨識：
-- notice = (真實資料庫查詢)
+- notice = (真實資訊)
 
 欄位格式：
 - user_id / X-User-Id：`CIF` + 9 碼數字；Header 範例：`X-User-Id: CIF*********`
@@ -232,7 +233,7 @@ def _account_display(account_id: str) -> str:
 def _real_query_meta() -> dict:
     """Return metadata based on whether real DB is being used"""
     if is_real_db_enabled():
-        return {"notice": "(真實資料庫查詢)"}
+        return {"notice": "(真實資訊)"}
     else:
         return {"notice": "(Demo 資料)"}
 
@@ -323,7 +324,19 @@ def _require_user(x_user_id: str | None) -> str:
 
     if not x_user_id or not x_user_id.strip():
         raise HTTPException(status_code=401, detail="Missing X-User-Id header")
-    return _resolve_real_user_id(x_user_id)
+
+    user_id = _resolve_real_user_id(x_user_id)
+    if not re.fullmatch(r"CIF\d{8,9}", user_id):
+        raise HTTPException(
+            status_code=422,
+            detail="X-User-Id format invalid. Expected CIF + 8~9 digits.",
+        )
+
+    # 真實 DB 模式：確保合法 CIF 用戶有預設帳戶（idempotent）
+    if is_real_db_enabled():
+        DBOperations.ensure_user_account(user_id)
+
+    return user_id
 
 
 def _ensure_account_owner(account_id: str, user_id: str) -> dict:
@@ -349,6 +362,30 @@ def _ensure_account_owner(account_id: str, user_id: str) -> dict:
     summary="查詢帳戶清單",
     description="取得目前使用者可存取的帳戶清單；請在 Header 帶入 `X-User-Id`。",
     response_model=ListAccountsResponse,
+    responses={
+        200: {
+            "description": "成功回傳帳戶清單",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "user_id": "CIF000001001",
+                        "accounts": [
+                            {
+                                "account_id": "ACCOD48PUCAEHKH",
+                                "customer_name": "王小明",
+                                "account_display": "ACCOD48PUCAEHKH(真實帳戶)",
+                                "currency": "USD",
+                                "balance": 182700.46,
+                                "status": "ACTIVE",
+                                "created_at": "2021-03-27",
+                            }
+                        ],
+                        "notice": "(真實資訊)",
+                    }
+                }
+            },
+        }
+    },
 )
 async def list_accounts(
     x_user_id: str | None = Header(

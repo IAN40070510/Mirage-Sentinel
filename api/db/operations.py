@@ -1,5 +1,7 @@
 """Database operations for Banking API"""
 
+from datetime import datetime
+
 from .models import Account, Transaction, Beneficiary, Idempotency
 from .session import get_db, is_real_db_enabled
 
@@ -36,6 +38,60 @@ class DBOperations:
                     }
                 )
             return result
+        finally:
+            db.close()
+
+    @staticmethod
+    def ensure_user_account(user_id: str) -> dict | None:
+        """Ensure a user and a default account exist (idempotent)."""
+        if not is_real_db_enabled():
+            return None
+
+        db = get_db()
+        if not db:
+            return None
+
+        try:
+            from .models import User
+
+            user = db.query(User).filter(User.user_id == user_id).first()
+            if not user:
+                suffix = user_id[-4:] if len(user_id) >= 4 else user_id
+                user = User(
+                    user_id=user_id,
+                    name=f"客戶{suffix}",
+                    email=f"{user_id.lower()}@mirage.local",
+                )
+                db.add(user)
+
+            account = db.query(Account).filter(Account.user_id == user_id).first()
+            if not account:
+                digits = "".join(ch for ch in user_id if ch.isdigit())
+                account_id = f"ACC{digits.zfill(12)[-12:]}"
+                account = Account(
+                    account_id=account_id,
+                    user_id=user_id,
+                    account_type="Checking",
+                    currency="USD",
+                    balance=182700.46,
+                    status="ACTIVE",
+                    open_date=datetime.utcnow().date().isoformat(),
+                )
+                db.add(account)
+
+            db.commit()
+
+            return {
+                "user_id": user.user_id,
+                "account_id": account.account_id,
+                "currency": account.currency,
+                "balance": account.balance,
+                "status": account.status,
+                "open_date": account.open_date,
+            }
+        except Exception:
+            db.rollback()
+            return None
         finally:
             db.close()
 
