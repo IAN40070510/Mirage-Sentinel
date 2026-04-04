@@ -128,15 +128,13 @@ class TransferResponse(BaseModel):
 
 router = APIRouter(prefix="/banking", tags=["Banking API"])
 
-BANKING_API_NOTE = """銀行 API（支援雙模式）。
+BANKING_API_NOTE = """銀行 API（PostgreSQL 強制模式）。
 
 模式說明：
-- 若有設定且可連線 DATABASE_URL：走 PostgreSQL 真實資料查詢
-- 若未設定或連線失敗：走 Demo mock 資料
+- 必須設定且可連線 DATABASE_URL，否則 API 直接回應 503
 
 回應辨識：
 - notice = (真實資料庫查詢)
-- notice = (Demo 資料)
 
 欄位格式：
 - user_id / X-User-Id：`CIF` + 9 碼數字；Header 範例：`X-User-Id: CIF*********`
@@ -270,9 +268,8 @@ def _resolve_real_account_id(account_id: str, is_destination: bool = False) -> s
 
 
 def _resolve_real_user_id(_user_id: str | None) -> str:
-    if is_real_db_enabled() and _user_id:
-        return _user_id.strip()
-    return DEMO_USER_ID
+    # 保留呼叫端送入的 user_id，避免在 Demo 模式下被強制映射成同一帳號。
+    return (_user_id or "").strip()
 
 
 class BeneficiaryCreateRequest(BaseModel):
@@ -305,6 +302,12 @@ class TransferRequest(BaseModel):
 
 
 def _require_user(x_user_id: str | None) -> str:
+    if not is_real_db_enabled():
+        raise HTTPException(
+            status_code=503,
+            detail="PostgreSQL mode is required. Please configure DATABASE_URL.",
+        )
+
     if not x_user_id or not x_user_id.strip():
         raise HTTPException(status_code=401, detail="Missing X-User-Id header")
     return _resolve_real_user_id(x_user_id)
@@ -362,19 +365,22 @@ async def list_accounts(
         ]
         return {"user_id": user_id, "accounts": items, **_real_query_meta()}
 
-    # Fallback to mock data
-    items = [
-        {
-            "account_id": v["account_id"],
-            "customer_name": DEMO_CUSTOMER_NAME,
-            "account_display": _real_account_label(v["account_id"]),
-            "currency": v["currency"],
-            "balance": v["balance"],
-            "status": v["status"],
-            "created_at": v["open_date"],
-        }
-        for v in DEMO_ACCOUNTS.values()
-    ]
+    # Fallback to mock data：僅 DEMO_USER_ID 可看到 demo 帳戶。
+    if user_id == DEMO_USER_ID:
+        items = [
+            {
+                "account_id": v["account_id"],
+                "customer_name": DEMO_CUSTOMER_NAME,
+                "account_display": _real_account_label(v["account_id"]),
+                "currency": v["currency"],
+                "balance": v["balance"],
+                "status": v["status"],
+                "created_at": v["open_date"],
+            }
+            for v in DEMO_ACCOUNTS.values()
+        ]
+    else:
+        items = []
     return {"user_id": user_id, "accounts": items, **_real_query_meta()}
 
 
