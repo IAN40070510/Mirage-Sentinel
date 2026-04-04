@@ -1,9 +1,20 @@
 """Database operations for Banking API"""
 
 from datetime import datetime
+from faker import Faker
 
 from .models import Account, Transaction, Beneficiary, Idempotency
 from .session import get_db, is_real_db_enabled
+
+
+faker_zh_tw = Faker("zh_TW")
+
+
+def _build_traditional_chinese_name(user_id: str) -> str:
+    digits = "".join(ch for ch in user_id if ch.isdigit())
+    seed_value = int(digits or "1")
+    faker_zh_tw.seed_instance(seed_value)
+    return faker_zh_tw.name()
 
 
 class DBOperations:
@@ -56,10 +67,9 @@ class DBOperations:
 
             user = db.query(User).filter(User.user_id == user_id).first()
             if not user:
-                suffix = user_id[-4:] if len(user_id) >= 4 else user_id
                 user = User(
                     user_id=user_id,
-                    name=f"客戶{suffix}",
+                    name=_build_traditional_chinese_name(user_id),
                     email=f"{user_id.lower()}@mirage.local",
                 )
                 db.add(user)
