@@ -1,0 +1,40 @@
+# .pre-commit-config.yaml
+# Mirage-Sentinel 自動化靜態分析與程式碼排版護欄
+
+default_language_version:
+  python: python3.13
+
+repos:
+
+  # 基礎檔案格式檢查
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace   # 移除行尾多餘空白
+      - id: end-of-file-fixer     # 確保檔案結尾只有一個空行
+      - id: check-yaml            # 檢查 YAML 語法
+      - id: check-added-large-files # 防止不小心 commit 過大的檔案
+
+# 程式碼自動排版 (Black)
+  - repo: https://github.com/psf/black
+    rev: 24.3.0
+    hooks:
+      - id: black
+
+  # 程式碼語法與風格檢查 (Flake8)
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        args:
+          - --max-line-length=120
+          - --extend-ignore=D100,D101,D102,D103,D104,D105,D106,D107,D200,D202,D205,D400,E402,E501,F401,F541
+        additional_dependencies: [flake8-docstrings]
+
+  # 資安漏洞靜態掃描 (Bandit) - 核心安全護欄
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.8
+    hooks:
+      - id: bandit
+        args: ["-s", "B104,B110,B310,B311,B404,B603,B607"]
+        additional_dependencies: ["bandit[toml]"]
