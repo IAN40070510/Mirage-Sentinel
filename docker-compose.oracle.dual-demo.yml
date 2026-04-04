@@ -1,6 +1,22 @@
 version: "3.8"
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mirage_sentinel_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=mirage_sentinel
+      - POSTGRES_USER=mirage_user
+      - POSTGRES_PASSWORD=mirage_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mirage_user -d mirage_sentinel"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   sandbox:
     build:
       context: .
@@ -35,6 +51,7 @@ services:
     volumes:
       - ./data:/app/data
     depends_on:
+      - postgres
       - sandbox
 
   backend_soc:
@@ -56,6 +73,7 @@ services:
     volumes:
       - ./data:/app/data
     depends_on:
+      - postgres
       - sandbox
 
   frontend_soc:
@@ -73,3 +91,6 @@ services:
       - BACKEND_API_BASE_URL=http://backend_soc:8000/api/v1/dashboard
     depends_on:
       - backend_soc
+
+volumes:
+  pgdata:
