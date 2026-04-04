@@ -191,7 +191,7 @@ if ENABLE_BANKING_API:
     app.include_router(
         banking.router,
         prefix="/api/v1",
-        tags=["Banking"],
+        tags=["Banking API"],
     )
 
 # CORS：目前開發期全面放行，正式環境可改為白名單。
