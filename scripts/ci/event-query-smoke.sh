@@ -9,7 +9,7 @@ API_BASE="${BASE_URL%/}"
 if [[ "$API_BASE" != */api/v1 ]]; then
   API_BASE="$API_BASE/api/v1"
 fi
-API_KEY="dev-local-api-key-change-me"
+API_KEY="${2:-${API_KEY:-dev-local-api-key-change-me}}"
 
 echo "🔍 Event Query & Replay Smoke Test"
 echo "Base URL: $BASE_URL"
