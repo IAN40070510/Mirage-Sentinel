@@ -1,0 +1,47 @@
+name: Post-Deploy Smoke Test
+
+on:
+  workflow_run:
+    workflows:
+      - Deploy to Oracle Cloud
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  smoke-test:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run post-deploy smoke checks on OCI host
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          port: ${{ secrets.OCI_PORT }}
+          script: |
+            set -euo pipefail
+            cd ~/Mirage-Sentinel
+
+            if docker compose version >/dev/null 2>&1; then
+              COMPOSE_CMD="sudo docker compose"
+            elif docker-compose version >/dev/null 2>&1; then
+              COMPOSE_CMD="sudo docker-compose"
+            else
+              echo "[smoke] ERROR: docker compose/docker-compose not found"
+              exit 1
+            fi
+
+            bash scripts/ci/smoke.sh \
+              --health-url http://127.0.0.1:8000/healthz \
+              --health-url http://127.0.0.1:8002/healthz \
+              --openapi-url http://127.0.0.1:8000/openapi.json \
+              --banking-url http://127.0.0.1:8000/banking/accounts \
+              --user-id 000000001 \
+              --banking-allow 200 \
+              --retries 30 \
+              --sleep 3 \
+              --compose-cmd "$COMPOSE_CMD" \
+              --compose-file docker-compose.oracle.dual-demo.yml \
+              --log-services "backend_public backend_soc sandbox postgres"

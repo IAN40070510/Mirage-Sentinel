@@ -1,0 +1,46 @@
+name: PR Compose Smoke Test
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  compose-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and start compose stack
+        run: |
+          set -euo pipefail
+          docker compose up -d --build
+
+      - name: Run shared smoke checks
+        run: |
+          set -euo pipefail
+          bash scripts/ci/smoke.sh \
+            --health-url http://127.0.0.1:8000/healthz \
+            --openapi-url http://127.0.0.1:8000/openapi.json \
+            --banking-url http://127.0.0.1:8000/banking/accounts \
+            --user-id 000000001 \
+            --banking-allow 200,401,403,503 \
+            --retries 60 \
+            --sleep 2
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --tail=200 app sandbox postgres || true
+
+      - name: Tear down compose stack
+        if: always()
+        run: |
+          docker compose down -v --remove-orphans

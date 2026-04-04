@@ -77,13 +77,67 @@ AI 掃描器對抗： 利用動態變異的 API 結構與錯誤回應，破壞 A
 2. 每一種場景都能被導入欺敵路徑，且不影響真實使用者流程。
 3. SOC 可一鍵回放事件鏈，並輸出可行動的防禦建議。
 
+### 兩週實作 Backlog (Actionable Backlog)
+
+第 1 週（先建立可運行防禦閉環）
+
+1. 身分分流骨架（P0）
+- 目標：真實使用者走 real path，可疑請求走 deception path。
+- 落點：`main.py`、`api/banking.py`。
+- 完成條件：同一 API 可根據風險分數回傳不同路徑，且有事件紀錄。
+
+2. 權限模型與最小授權（P0）
+- 目標：補齊 object-level authorization 與角色控制。
+- 落點：`api/banking.py`、`api/db/operations.py`。
+- 完成條件：越權查詢必定被攔截並記錄（不可直接讀取他人資源）。
+
+3. 交易風險規則第一版（P0）
+- 目標：建立重放、短時間高頻、異常金額序列的規則偵測。
+- 落點：`api/banking.py`、`core/sentinel.py`。
+- 完成條件：可觸發 deception 分流，SOC 能看到觸發原因。
+
+4. 鑑識事件欄位標準化（P0）
+- 目標：事件結構統一，包含 `route`, `risk_score`, `deception_reason`。
+- 落點：`core/traffic_db.py`、`services/dashboard_service.py`。
+- 完成條件：Dashboard 可按欄位篩選並回放攻擊鏈。
+
+第 2 週（提升欺敵深度與可運營性）
+
+1. 欺敵登入狀態機（P1）
+- 目標：未授權/可疑用戶不直接拒絕，改導入擬真登入流程。
+- 落點：`api/banking.py`、`core/mirage.py`。
+- 完成條件：可維持多步互動一致性，延長攻擊停留時間。
+
+2. AI 掃描器對抗策略（P1）
+- 目標：加入回應擾動、Tarpitting、語義噪音注入。
+- 落點：`core/api_mirage.py`、`model/llama.py`。
+- 完成條件：高頻自動化探測命中率下降且 token 消耗上升。
+
+3. 部署與回歸安全閘門（P1）
+- 目標：部署後自動跑健康檢查 + 風險路由 smoke test。
+- 落點：`.github/workflows/deploy.yml`。
+- 完成條件：任何回歸都在 CI 階段失敗並附帶可讀 logs。
+
+4. 事件回放與運維手冊（P1）
+- 目標：新增故障與攻擊回放 Runbook。
+- 落點：`docs/README.md` 或新增 `docs/RUNBOOK.md`。
+- 完成條件：新成員可依文件完成部署、排障、攻擊回放。
+
+### 文件入口 (Documentation Index)
+
+- 需求規格：[`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md)
+- 開發規範：[`docs/DEVELOPMENT_GUIDELINES.md`](docs/DEVELOPMENT_GUIDELINES.md)
+- SecLists 維護：[`docs/SECLISTS_UPDATE_GUIDE.md`](docs/SECLISTS_UPDATE_GUIDE.md)
+- 運維與回放：[`docs/RUNBOOK.md`](docs/RUNBOOK.md)
+
 ---
 
 ## 系統架構亮點 (Architecture Highlights)
 
 * **無縫流量轉發與欺敵 (Seamless Traffic Routing)：** 當「哨兵閘道」偵測到惡意攻擊或異常探測時，系統**不會斷開連線**，而是即時將該流量無縫導向至 Docker 沙盒環境中，觸發 Mirage 引擎進行深度的欺敵工程。
 * **Harness Engineering 與沙盒邊界：** 運用 Docker 容器化技術，將欺敵環境嚴格限縮在隔離網路內，禁用特權模式，防止容器逃逸與橫向移動。
-* **資料庫實體解耦 (Database Decoupling)：** * 鑑識追蹤日誌 (`traffic_logs.db`) 與欺敵狀態記憶 (`mirage_memory.db`) 進行實體分離。
+* **資料庫實體解耦 (Database Decoupling)：**
+  * 鑑識追蹤日誌 (`traffic_logs.db`) 與欺敵狀態記憶 (`mirage_memory.db`) 進行實體分離。
   * 阻斷反鑑識操作，並消除時間側信道 (Timing Side-Channel) 指紋。
 * **毫秒級精度 (Millisecond Precision)：** 全系統強制 NTP 時鐘同步與毫秒級日誌記錄，確保攻擊鏈重構的絕對正確性。
 * **SOC 資安戰情室：** 整合宏觀的趨勢統計與微觀的即時攻擊指令串流（透過 WebSocket），提供上帝視角的威脅視覺化介面。
@@ -256,3 +310,44 @@ docker compose --profile db up --build
 - Frontend Dashboard：http://127.0.0.1:3000
 - Sandbox Service：http://127.0.0.1:8001
 - PostgreSQL（可選）：localhost:5432
+
+### 一鍵驗收流程 (Smoke Test)
+
+本機一行版（自動啟動、檢查、清理）：
+
+```powershell
+# Windows PowerShell
+./scripts/ci/run-local-smoke.ps1
+```
+
+```bash
+# Bash
+bash scripts/ci/run-local-smoke.sh
+```
+
+部署或啟動後，請依序執行以下檢查：
+
+```bash
+# 1) 服務健康檢查
+curl -i http://127.0.0.1:8000/healthz
+curl -i http://127.0.0.1:8002/healthz
+
+# 2) OpenAPI 文件可用性
+curl -i http://127.0.0.1:8000/openapi.json
+
+# 3) Banking 端點基本驗證（示例）
+curl -i -H "X-User-Id: 000000001" http://127.0.0.1:8000/banking/accounts
+```
+
+驗收判準：
+
+1. `/healthz`（8000/8002）回應 200。
+2. `/openapi.json` 回應 200 且為有效 JSON。
+3. `/banking/accounts` 回應符合當前模式（真實路徑或欺敵路徑），且事件可被記錄。
+
+若任一步驟失敗，請直接參照 [`docs/RUNBOOK.md`](docs/RUNBOOK.md) 的「503 排障 SOP」與「DB 建置、補種與遷移」。
+
+CI 自動化：
+
+1. 合併前由 [`PR Compose Smoke Test`](.github/workflows/pr-smoke.yml) 執行本地 compose 驗收。
+2. 部署成功後由 [`Post-Deploy Smoke Test`](.github/workflows/post-deploy-smoke.yml) 進行線上同等驗收。
