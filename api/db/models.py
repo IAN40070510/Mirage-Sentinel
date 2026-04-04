@@ -4,7 +4,6 @@ from datetime import datetime
 from sqlalchemy import (
     Column,
     String,
-    Float,
     DateTime,
     Integer,
     ForeignKey,
@@ -36,7 +35,7 @@ class Account(Base):
     user_id = Column(String(50), ForeignKey("users.user_id"), nullable=False)
     account_type = Column(String(50), default="Checking")
     currency = Column(String(10), default="USD")
-    balance = Column(Float, default=0.0)
+    balance = Column(Integer, default=0)
     status = Column(String(20), default="ACTIVE")
     open_date = Column(String(20))
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -55,9 +54,9 @@ class Transaction(Base):
     tx_id = Column(String(50), primary_key=True)
     from_account = Column(String(50), ForeignKey("accounts.account_id"), nullable=False)
     to_account = Column(String(50), ForeignKey("accounts.account_id"), nullable=False)
-    amount = Column(Float, nullable=False)
+    amount = Column(Integer, nullable=False)
     currency = Column(String(10), default="USD")
-    fee = Column(Float, default=0.0)
+    fee = Column(Integer, default=0)
     status = Column(String(20), default="SUCCESS")
     note = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

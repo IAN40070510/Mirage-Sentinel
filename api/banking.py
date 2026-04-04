@@ -31,7 +31,7 @@ class Account(BaseModel):
     customer_name: str
     account_display: str
     currency: str
-    balance: float
+    balance: int
     status: str
     created_at: str
 
@@ -47,7 +47,7 @@ class BalanceResponse(BaseModel):
     customer_name: str
     account_display: str
     currency: str
-    balance: float
+    balance: int
     status: str
     notice: str
 
@@ -60,9 +60,9 @@ class Transaction(BaseModel):
     to_account: str
     to_account_display: str
     to_customer_name: str
-    amount: float
+    amount: int
     currency: str
-    fee: float
+    fee: int
     status: str
     created_at: str
     note: str | None = None
@@ -110,8 +110,8 @@ class TransferTransaction(BaseModel):
     to_account: str
     to_account_display: str
     to_customer_name: str
-    amount: float
-    fee: float
+    amount: int
+    fee: int
     currency: str
     created_at: str
     note: str | None = None
@@ -120,7 +120,7 @@ class TransferTransaction(BaseModel):
 class TransferResponse(BaseModel):
     status: str
     transaction: TransferTransaction
-    source_account_after_balance: float
+    source_account_after_balance: int
     source_account_display: str
     source_customer_name: str
     destination_customer_name: str
@@ -156,7 +156,7 @@ BANKING_API_NOTE = """銀行 API（PostgreSQL 強制模式）。
 - account_id：英數字 12-20 碼（例：`ACCOD48PUCAEHKH`）
 - account_id 遮罩範例：`ACC**********KH`
 - tx_id：交易編號，前綴 `TX-` 或 `TXN`
-- currency：ISO 4217 三碼（例：`USD`）
+- currency：ISO 4217 三碼（例：`TWD`）
 """
 
 router.description = BANKING_API_NOTE
@@ -173,8 +173,8 @@ DEMO_ACCOUNTS = {
         "account_id": DEMO_ACCOUNT_ID,
         "customer_id": "CUSAEOACKBH8CK6",
         "account_type": "Checking",
-        "currency": "USD",
-        "balance": 182700.46,
+        "currency": "TWD",
+        "balance": 5680000,
         "status": "ACTIVE",
         "open_date": "2021-03-27",
     }
@@ -186,8 +186,8 @@ DEMO_TRANSACTIONS = [
         "from_account": DEMO_ACCOUNT_ID,
         "to_account": "MERNGTU3WAVTQJF",
         "amount": 2981.61,
-        "currency": "USD",
-        "fee": 0.0,
+        "currency": "TWD",
+        "fee": 0,
         "status": "SUCCESS",
         "created_at": "2019-07-06 16:17:06",
         "note": "POS purchase",
@@ -197,8 +197,8 @@ DEMO_TRANSACTIONS = [
         "from_account": DEMO_ACCOUNT_ID,
         "to_account": "MERZI1ODLZ6LPJO",
         "amount": 7833.28,
-        "currency": "USD",
-        "fee": 0.0,
+        "currency": "TWD",
+        "fee": 0,
         "status": "SUCCESS",
         "created_at": "2024-06-10 04:08:36",
         "note": "Wire transfer",
@@ -311,7 +311,7 @@ class TransferRequest(BaseModel):
         max_length=40,
         description="收款帳戶識別碼，格式同 `ACC**********KH`。",
     )
-    amount: float = Field(..., gt=0, description=AMOUNT_DESCRIPTION)
+    amount: int = Field(..., gt=0, description="轉帳金額（整數），必須大於 0。")
     note: str | None = Field(default=None, max_length=200, description=NOTE_DESCRIPTION)
 
 
@@ -445,7 +445,7 @@ async def get_balance(
         "customer_name": DEMO_CUSTOMER_NAME,
         "account_display": _real_account_label(row["account_id"]),
         "currency": row["currency"],
-        "balance": round(float(row["balance"]), 2),
+        "balance": int(row["balance"]),
         "status": row["status"],
         **_real_query_meta(),
     }
@@ -660,7 +660,7 @@ async def transfer_money(
             return {
                 "status": "already_processed",
                 "transaction": _transaction_with_display(cached_tx),
-                "source_account_after_balance": round(float(owner["balance"]), 2),
+                "source_account_after_balance": int(owner["balance"]),
                 "source_account_display": _account_display(cached_tx["from_account"]),
                 "source_customer_name": _get_customer_name_by_account(
                     cached_tx["from_account"]
@@ -677,9 +677,9 @@ async def transfer_money(
             )
 
         from_owner = _ensure_account_owner(req.from_account, user_id)
-        fee = 15.0 if req.amount >= 10000 else 5.0
+        fee = 15 if req.amount >= 10000 else 5
         total_debit = req.amount + fee
-        if float(from_owner["balance"]) < total_debit:
+        if int(from_owner["balance"]) < total_debit:
             raise HTTPException(status_code=400, detail="Insufficient balance")
 
         tx = DBOperations.transfer_money(
@@ -698,7 +698,7 @@ async def transfer_money(
         return {
             "status": "success",
             "transaction": _transaction_with_display(tx),
-            "source_account_after_balance": round(float(tx["new_balance"]), 2),
+            "source_account_after_balance": int(tx["new_balance"]),
             "source_account_display": _account_display(tx["from_account"]),
             "source_customer_name": _get_customer_name_by_account(tx["from_account"]),
             "destination_customer_name": _get_customer_name_by_account(
@@ -713,12 +713,12 @@ async def transfer_money(
         # 重新計算該交易後的帳戶餘額
         from_account_id = cached_tx["from_account"]
         from_account = DEMO_ACCOUNTS.get(from_account_id)
-        cached_balance = from_account["balance"] if from_account else 0.0
+        cached_balance = from_account["balance"] if from_account else 0
 
         return {
             "status": "already_processed",
             "transaction": _transaction_with_display(cached_tx),
-            "source_account_after_balance": round(cached_balance, 2),
+            "source_account_after_balance": int(cached_balance),
             "source_account_display": _account_display(from_account_id),
             "source_customer_name": DEMO_CUSTOMER_NAME,
             "destination_customer_name": _get_customer_name_by_account(
@@ -751,8 +751,8 @@ async def transfer_money(
         to_account = {
             "account_id": to_account_id,
             "status": "ACTIVE",
-            "currency": "USD",
-            "balance": 999999999.99,  # 無限餘額
+            "currency": "TWD",
+            "balance": 999999999,  # 無限餘額
         }
 
     if to_account["status"] != "ACTIVE":
@@ -764,21 +764,21 @@ async def transfer_money(
     if from_account["currency"] != to_account["currency"]:
         raise HTTPException(status_code=400, detail="Currency mismatch")
 
-    fee = 15.0 if req.amount >= 10000 else 5.0
+    fee = 15 if req.amount >= 10000 else 5
     total_debit = req.amount + fee
-    if float(from_account["balance"]) < total_debit:
+    if int(from_account["balance"]) < total_debit:
         raise HTTPException(status_code=400, detail="Insufficient balance")
 
     tx_id = f"TX-{uuid.uuid4().hex[:12].upper()}"
     now = datetime.utcnow().isoformat(timespec="seconds")
 
-    DEMO_ACCOUNTS[from_account_id]["balance"] = round(
-        float(from_account["balance"]) - total_debit, 2
+    DEMO_ACCOUNTS[from_account_id]["balance"] = (
+        int(from_account["balance"]) - total_debit
     )
     # 仅當目標帳戶存在於 DEMO_ACCOUNTS 中時，才更新其餘額
     if to_account_id in DEMO_ACCOUNTS:
-        DEMO_ACCOUNTS[to_account_id]["balance"] = round(
-            float(to_account["balance"]) + req.amount, 2
+        DEMO_ACCOUNTS[to_account_id]["balance"] = (
+            int(to_account["balance"]) + req.amount
         )
 
     # 取得收款人名稱
@@ -805,7 +805,7 @@ async def transfer_money(
     return {
         "status": "success",
         "transaction": _transaction_with_display(tx),
-        "source_account_after_balance": round(new_balance, 2),
+        "source_account_after_balance": int(new_balance),
         "source_account_display": _account_display(from_account_id),
         "source_customer_name": DEMO_CUSTOMER_NAME,
         "destination_customer_name": to_customer_name,

@@ -16,6 +16,8 @@ from api.db.session import init_db, create_tables, get_db, is_real_db_enabled
 
 
 faker_zh_tw = Faker("zh_TW")
+DEFAULT_CURRENCY = "TWD"
+DEFAULT_INITIAL_BALANCE = 5680000
 
 
 def parse_args() -> argparse.Namespace:
@@ -32,9 +34,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--initial-balance",
-        type=float,
-        default=182700.46,
+        type=int,
+        default=DEFAULT_INITIAL_BALANCE,
         help="Initial account balance",
+    )
+    parser.add_argument(
+        "--currency",
+        type=str,
+        default=DEFAULT_CURRENCY,
+        help="Default account currency (example: TWD)",
     )
     parser.add_argument(
         "--archive-zip",
@@ -46,6 +54,11 @@ def parse_args() -> argparse.Namespace:
         "--refresh-existing-names",
         action="store_true",
         help="Rewrite legacy names like 客戶123 into faker zh_TW names",
+    )
+    parser.add_argument(
+        "--refresh-existing-accounts",
+        action="store_true",
+        help="Rewrite legacy account defaults (USD/182700.46) into current defaults",
     )
     return parser.parse_args()
 
@@ -146,12 +159,6 @@ def run() -> int:
                 account_type = (
                     account_template.get("account_type") or "Checking"
                 ).strip() or "Checking"
-                try:
-                    balance = float(
-                        account_template.get("balance_usd") or args.initial_balance
-                    )
-                except Exception:
-                    balance = args.initial_balance
                 open_date_candidate = (account_template.get("open_date") or "").strip()
                 if open_date_candidate:
                     open_date = open_date_candidate
@@ -176,13 +183,19 @@ def run() -> int:
                     account_id=account_id,
                     user_id=user_id,
                     account_type=account_type,
-                    currency="USD",
+                    currency=args.currency,
                     balance=balance,
                     status="ACTIVE",
                     open_date=open_date,
                 )
                 db.add(account)
                 created_accounts += 1
+            elif args.refresh_existing_accounts and (
+                (account.currency or "").upper() == "USD"
+                and abs(float(account.balance) - 182700.46) < 0.0001
+            ):
+                account.currency = args.currency
+                account.balance = args.initial_balance
 
             if idx % args.batch_size == 0:
                 db.commit()

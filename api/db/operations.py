@@ -9,6 +9,8 @@ from .session import get_db, is_real_db_enabled
 
 
 faker_zh_tw = Faker("zh_TW")
+DEFAULT_CURRENCY = "TWD"
+DEFAULT_INITIAL_BALANCE = 5680000
 
 
 def _build_traditional_chinese_name(user_id: str) -> str:
@@ -47,7 +49,7 @@ class DBOperations:
                         "customer_name": acc.user.name if acc.user else "Unknown",
                         "account_type": acc.account_type,
                         "currency": acc.currency,
-                        "balance": acc.balance,
+                        "balance": int(acc.balance),
                         "status": acc.status,
                         "open_date": acc.open_date,
                         "created_at": (
@@ -92,12 +94,17 @@ class DBOperations:
                     account_id=account_id,
                     user_id=user_id,
                     account_type="Checking",
-                    currency="USD",
-                    balance=182700.46,
+                    currency=DEFAULT_CURRENCY,
+                    balance=DEFAULT_INITIAL_BALANCE,
                     status="ACTIVE",
                     open_date=datetime.utcnow().date().isoformat(),
                 )
                 db.add(account)
+            elif (account.currency or "").upper() == "USD" and abs(
+                float(account.balance) - 182700.46
+            ) < 0.0001:
+                account.currency = DEFAULT_CURRENCY
+                account.balance = DEFAULT_INITIAL_BALANCE
 
             db.commit()
 
@@ -105,7 +112,7 @@ class DBOperations:
                 "user_id": user.user_id,
                 "account_id": account.account_id,
                 "currency": account.currency,
-                "balance": account.balance,
+                "balance": int(account.balance),
                 "status": account.status,
                 "open_date": account.open_date,
             }
@@ -139,7 +146,7 @@ class DBOperations:
                 "account_id": account.account_id,
                 "customer_name": account.user.name if account.user else "Unknown",
                 "currency": account.currency,
-                "balance": account.balance,
+                "balance": int(account.balance),
                 "status": account.status,
                 "created_at": (
                     account.created_at.isoformat() if account.created_at else None
@@ -282,8 +289,8 @@ class DBOperations:
         user_id: str,
         from_account: str,
         to_account: str,
-        amount: float,
-        fee: float,
+        amount: int,
+        fee: int,
         note: str,
     ) -> dict | None:
         """Execute a transfer transaction"""
@@ -346,7 +353,7 @@ class DBOperations:
                 "currency": tx.currency,
                 "status": tx.status,
                 "created_at": tx.created_at.isoformat() if tx.created_at else None,
-                "new_balance": from_acc.balance,
+                "new_balance": int(from_acc.balance),
             }
         except Exception:
             db.rollback()
