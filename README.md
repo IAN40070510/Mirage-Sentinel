@@ -311,6 +311,10 @@ npm --prefix frontend start
 - 後端 API 文件：http://127.0.0.1:8000/docs
 - 前端儀表板：http://127.0.0.1:3000
 
+OCI 線上環境：
+
+- 服務網址：http://161.33.154.211
+
 ### Docker 部署（本地）
 
 ```bash
