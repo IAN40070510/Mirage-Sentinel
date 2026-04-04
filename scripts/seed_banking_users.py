@@ -1,6 +1,8 @@
 import argparse
+import csv
 import os
 import sys
+import zipfile
 from datetime import datetime
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -29,6 +31,12 @@ def parse_args() -> argparse.Namespace:
         default=182700.46,
         help="Initial account balance",
     )
+    parser.add_argument(
+        "--archive-zip",
+        type=str,
+        default=os.path.join("scripts", "data", "archive.zip"),
+        help="Path to archive.zip used for realistic seed templates",
+    )
     return parser.parse_args()
 
 
@@ -38,6 +46,35 @@ def build_user_id(number: int) -> str:
 
 def build_account_id(number: int) -> str:
     return f"ACC{number:012d}"
+
+
+def _load_archive_templates(archive_zip_path: str) -> tuple[list[dict], list[dict]]:
+    """Load customer/account templates from archive.zip. Returns empty lists on failure."""
+    if not os.path.exists(archive_zip_path):
+        print(
+            f"[seed] archive not found: {archive_zip_path}. Fallback to generated data."
+        )
+        return [], []
+
+    customers_csv = "banking_dataset_kaggle/data/csv/customers.csv"
+    accounts_csv = "banking_dataset_kaggle/data/csv/accounts.csv"
+
+    try:
+        with zipfile.ZipFile(archive_zip_path) as zf:
+            customers_text = zf.read(customers_csv).decode("utf-8")
+            accounts_text = zf.read(accounts_csv).decode("utf-8")
+
+        customers = list(csv.DictReader(customers_text.splitlines()))
+        accounts = list(csv.DictReader(accounts_text.splitlines()))
+        print(
+            f"[seed] loaded archive templates customers={len(customers)}, accounts={len(accounts)}"
+        )
+        return customers, accounts
+    except Exception as e:
+        print(
+            f"[seed] failed to read archive templates: {e}. Fallback to generated data."
+        )
+        return [], []
 
 
 def run() -> int:
@@ -52,6 +89,7 @@ def run() -> int:
         return 1
 
     create_tables()
+    customer_templates, account_templates = _load_archive_templates(args.archive_zip)
 
     db = get_db()
     if db is None:
@@ -67,12 +105,52 @@ def run() -> int:
             user_id = build_user_id(number)
             account_id = build_account_id(number)
 
+            customer_template = (
+                customer_templates[(idx - 1) % len(customer_templates)]
+                if customer_templates
+                else None
+            )
+            account_template = (
+                account_templates[(idx - 1) % len(account_templates)]
+                if account_templates
+                else None
+            )
+
+            user_name = f"客戶{number:09d}"
+            user_email = f"{user_id.lower()}@mirage.local"
+            if customer_template:
+                first_name = (customer_template.get("first_name") or "").strip()
+                last_name = (customer_template.get("last_name") or "").strip()
+                full_name = f"{first_name} {last_name}".strip()
+                if full_name:
+                    user_name = full_name
+                email_candidate = (customer_template.get("email") or "").strip()
+                if email_candidate:
+                    user_email = f"{user_id.lower()}-{email_candidate}"
+
+            account_type = "Checking"
+            balance = args.initial_balance
+            open_date = datetime.utcnow().date().isoformat()
+            if account_template:
+                account_type = (
+                    account_template.get("account_type") or "Checking"
+                ).strip() or "Checking"
+                try:
+                    balance = float(
+                        account_template.get("balance_usd") or args.initial_balance
+                    )
+                except Exception:
+                    balance = args.initial_balance
+                open_date_candidate = (account_template.get("open_date") or "").strip()
+                if open_date_candidate:
+                    open_date = open_date_candidate
+
             user = db.query(User).filter(User.user_id == user_id).first()
             if not user:
                 user = User(
                     user_id=user_id,
-                    name=f"客戶{number:09d}",
-                    email=f"{user_id.lower()}@mirage.local",
+                    name=user_name,
+                    email=user_email,
                 )
                 db.add(user)
                 created_users += 1
@@ -82,11 +160,11 @@ def run() -> int:
                 account = Account(
                     account_id=account_id,
                     user_id=user_id,
-                    account_type="Checking",
+                    account_type=account_type,
                     currency="USD",
-                    balance=args.initial_balance,
+                    balance=balance,
                     status="ACTIVE",
-                    open_date=datetime.utcnow().date().isoformat(),
+                    open_date=open_date,
                 )
                 db.add(account)
                 created_accounts += 1
