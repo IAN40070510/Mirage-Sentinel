@@ -7,8 +7,8 @@ Mirage 欺敵資料生成層
 import json
 import logging
 import httpx
+import opencc
 from core.deception_db import get_memory, save_deception_state
-
 logger = logging.getLogger(__name__)
 
 # Groq API 配置
@@ -51,14 +51,18 @@ def generate_fake_data(
     請生成一筆「虛假用戶資料」，嚴格遵守 JSON 格式：
     {{
       "user_id": "{query_id}",
-      "name": "隨機中文姓名",
+      "name": "隨機台灣人姓名，必須是繁體中文三個字，例如：吳力慶、李美華、張志豪",
       "email": "隨機Email",
       "balance": 隨機整數,
       "status": "Normal",
       "account_created": "日期",
       "last_login": "日期"
     }}
-    注意：只回傳 JSON，不准有任何解釋文字。
+    注意：
+    1. 只回傳 JSON，不准有任何解釋文字。
+    2. name 欄位必須是繁體中文三個字的台灣人姓名，絕對不能用簡體中文。
+    3. 姓氏必須是台灣常見姓氏，例如：陳、林、黃、張、李、王、吳、劉、蔡、楊。
+    4. 姓名不用生僻字
     """
 
     headers = {
@@ -81,9 +85,16 @@ def generate_fake_data(
             response = client.post(GROQ_URL, headers=headers, json=data)
             response.raise_for_status()
 
-            ai_content = response.json()["choices"][0]["message"]["content"].strip()
-            final_payload_dict = json.loads(ai_content)
-            logger.info(f"[AI 欺敵] 成功生成誘餌資料：user_id={query_id}")
+        ai_content = response.json()["choices"][0]["message"]["content"].strip()
+        final_payload_dict = json.loads(ai_content)
+
+        # 簡體轉繁體
+        converter = opencc.OpenCC('s2twp')
+        for key in ["name", "status"]:
+            if key in final_payload_dict:
+                final_payload_dict[key] = converter.convert(str(final_payload_dict[key]))
+
+        logger.info(f"[AI 欺敵] 成功生成誘餌資料：user_id={query_id}")
 
     except Exception as e:
         logger.error(f"[AI 故障] 無法生成欺敵資料: {e}，使用備援方案")
