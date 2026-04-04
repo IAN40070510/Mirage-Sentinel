@@ -1,4 +1,4 @@
-"""
+﻿"""
 Mirage-Sentinel 主入口（API Gateway）
 
 本檔案負責：
@@ -48,6 +48,8 @@ from api import dashboard
 from api import banking
 from api.db.session import init_db, create_tables
 import model.ai_sentinel as model
+
+from model.llama import generate_fake_data_llama
 
 sys.modules["__main__"].SentinelModule = model.SentinelModule
 sys.modules["__main__"].SecurityExtractor = model.SecurityExtractor
@@ -215,8 +217,8 @@ def custom_openapi():
             version=app.version,
             description=app.description,
             routes=app.routes,
-            tags=app.tags,
-            servers=app.servers,
+            tags=getattr(app, "tags", None),
+            servers=getattr(app, "servers", None),
         )
     except Exception as generate_error:
         logger.error(f"Failed to generate OpenAPI schema: {generate_error}")
@@ -268,6 +270,142 @@ async def root():
 async def healthz():
     """容器/平台健康檢查端點。"""
     return {"status": "ok"}
+
+
+@app.get("/api/v1/user/llama/{user_id}")
+async def get_user_data_llama(
+    user_id: str,
+    payload: str = Query(
+        None, max_length=2000, description="指令測試區 (最多 2000 字)"
+    ),
+    request: Request = None,
+    background_tasks: BackgroundTasks = None,
+):
+    """
+    Llama 專屬入口：直接由本地 Llama 3.1 8B 模型生成完整的假資料。
+    不再依賴外部 Docker Sandbox，解決連線超時與依賴問題。
+    """
+    if request is None:
+        raise HTTPException(status_code=400, detail="Request context is required")
+
+    start_perf = time.perf_counter()
+    request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    client_ip = request.client.host
+    user_agent = request.headers.get("user-agent", "Unknown")
+
+    current_payload = payload if payload else ""
+    detection_target = (
+        f"{user_id} {current_payload}".strip() if current_payload else str(user_id)
+    )
+
+    # 1. 意圖分析 (本機 AI 哨兵檢測)
+    is_attack, confidence, attack_vector = analyze_intent(detection_target)
+    should_intercept = is_attack and confidence > 0.75
+
+    process_ms = None
+    response_at = None
+    event_payload = {
+        "request_at": request_at,
+        "client_ip": client_ip,
+        "location": "Cloud/LLaMA",
+        "is_proxy": detect_proxy(request),
+        "user_agent": user_agent,
+        "tls_fingerprint": "N/A",
+        "raw_payload": detection_target,
+        "query_id": user_id,
+        "attack_vector": attack_vector if is_attack else None,
+        "risk_level": int(confidence * 100) if is_attack else 0,
+        "is_attack": 1 if should_intercept else 0,
+    }
+
+    if should_intercept:
+        # ==========================================
+        # 惡意請求攔截：啟動欺敵與記憶機制
+        # ==========================================
+        risk_score = int(confidence * 100)
+
+        # 查欺敵記憶
+        mem = get_memory(client_ip, user_id)
+
+        # 計算互動深度指標
+        metrics = compute_interaction_metrics(
+            client_ip=client_ip,
+            query_id=user_id,
+            current_payload=detection_target,
+            has_memory_hit=bool(mem),
+        )
+
+        dwell_time = float(metrics["dwell_seconds"])
+        interaction_depth = int(metrics["depth_score"])
+        hits = 1
+
+        if mem:
+            # 記憶命中：沿用舊假資料，維持欺敵一致性
+            hits = mem["hits"] + 1
+            fake_data = mem["payload"]
+            logger.info(f"[欺敵記憶命中] 攻擊者 {client_ip} 繼續餵給 LLaMA 舊資料")
+        else:
+            # 無記憶：直接呼叫 LLaMA 生成全新且完整的假資料
+            fake_data = generate_fake_data_llama(
+                query_id=user_id, attack_vector=attack_vector
+            )
+
+        process_ms = int((time.perf_counter() - start_perf) * 1000)
+        response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+
+        event_payload.update(
+            {
+                "response_at": response_at,
+                "process_ms": process_ms,
+                "response_payload": fake_data,
+                "hits": hits,
+                "interaction_depth": interaction_depth,
+                "dwell_time": dwell_time,
+                "mitigation_status": "LLaMA_Generated",  # 狀態標記為 LLaMA 直出
+                "risk_level": risk_score,
+            }
+        )
+
+        # 紀錄流量 (背景或同步)
+        if background_tasks:
+            background_tasks.add_task(log_traffic_event, event_payload)
+        else:
+            log_traffic_event(event_payload)
+
+        # 寫入記憶體，供下次攔截時使用
+        save_deception_state(client_ip, user_id, attack_vector, risk_score, fake_data)
+
+        logger.info(
+            f"[LLaMA] 哨兵攔截成功：{attack_vector} (信心: {confidence}) | "
+            f"深度: {interaction_depth} | 漏斗: {metrics['funnel_level']}"
+        )
+        return fake_data
+
+    # ==========================================
+    # 正常請求：放行
+    # ==========================================
+    process_ms = int((time.perf_counter() - start_perf) * 1000)
+    response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+
+    event_payload.update(
+        {
+            "response_at": response_at,
+            "process_ms": process_ms,
+            "response_payload": None,
+            "hits": 0,
+            "interaction_depth": 0,
+            "dwell_time": 0.0,
+            "mitigation_status": "normal",
+            "risk_level": 0,
+        }
+    )
+
+    if background_tasks:
+        background_tasks.add_task(log_traffic_event, event_payload)
+    else:
+        log_traffic_event(event_payload)
+
+    return {"user_id": user_id, "name": "真實用戶", "status": "Normal"}
 
 
 @app.get("/api/v1/user/{user_id}")
