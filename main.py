@@ -715,4 +715,6 @@ def is_known_proxy_ip(ip: str) -> bool:
 if __name__ == "__main__":
     # 生產環境通常交給 process manager / container 指令啟動。
     # 這裡保留本機開發入口，方便直接 python main.py。
-    uvicorn.run("main:app", host="127.0.0.1", port=8000)
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run("main:app", host=host, port=port)
