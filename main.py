@@ -209,14 +209,18 @@ def custom_openapi():
     符合 AGENTS.md 安全規範：公開蜜罐不應暴露敏感監控功能。
     """
     # 每次都重新生成，不使用緩存，確保 ENABLE_DASHBOARD 值被正確應用
-    output = get_openapi(
-        title=app.title,
-        version=app.version,
-        description=app.description,
-        routes=app.routes,
-        tags=app.tags,
-        servers=app.servers,
-    )
+    try:
+        output = get_openapi(
+            title=app.title,
+            version=app.version,
+            description=app.description,
+            routes=app.routes,
+            tags=app.tags,
+            servers=app.servers,
+        )
+    except Exception as generate_error:
+        logger.error(f"Failed to generate OpenAPI schema: {generate_error}")
+        return {"paths": {}, "components": {}}
 
     # 當 Dashboard 禁用時，移除所有 Dashboard 路由的文檔
     if not ENABLE_DASHBOARD and output.get("paths"):
@@ -233,6 +237,10 @@ def custom_openapi():
             output["tags"] = [
                 tag for tag in output["tags"] if tag.get("name") != "Dashboard"
             ]
+
+        logger.info(
+            f"Filtered OpenAPI schema: removed {len(paths_to_remove)} Dashboard paths"
+        )
 
     app.openapi_schema = output
     return app.openapi_schema
