@@ -48,11 +48,15 @@ services:
       - ENABLE_DASHBOARD=false
       - DASHBOARD_INTERNAL_ONLY=true
       - SANDBOX_API_URL=http://sandbox:8001/simulate_attack
+      - DB_INIT_RETRIES=90
+      - DB_INIT_RETRY_INTERVAL=2
     volumes:
       - ./data:/app/data
     depends_on:
-      - postgres
-      - sandbox
+      postgres:
+        condition: service_healthy
+      sandbox:
+        condition: service_started
 
   backend_soc:
     build:
@@ -70,11 +74,15 @@ services:
       - ENABLE_DASHBOARD=true
       - DASHBOARD_INTERNAL_ONLY=true
       - SANDBOX_API_URL=http://sandbox:8001/simulate_attack
+      - DB_INIT_RETRIES=90
+      - DB_INIT_RETRY_INTERVAL=2
     volumes:
       - ./data:/app/data
     depends_on:
-      - postgres
-      - sandbox
+      postgres:
+        condition: service_healthy
+      sandbox:
+        condition: service_started
 
   frontend_soc:
     build:
@@ -90,7 +98,8 @@ services:
       - PORT=3000
       - BACKEND_API_BASE_URL=http://backend_soc:8000/api/v1/dashboard
     depends_on:
-      - backend_soc
+      backend_soc:
+        condition: service_started
 
 volumes:
   pgdata:
