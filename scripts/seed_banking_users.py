@@ -1,6 +1,7 @@
 import argparse
 import csv
 import os
+import re
 import sys
 import zipfile
 from datetime import datetime
@@ -40,6 +41,11 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default=os.path.join("scripts", "data", "archive.zip"),
         help="Path to archive.zip used for realistic seed templates",
+    )
+    parser.add_argument(
+        "--refresh-existing-names",
+        action="store_true",
+        help="Rewrite legacy names like 客戶123 into faker zh_TW names",
     )
     return parser.parse_args()
 
@@ -159,6 +165,10 @@ def run() -> int:
                 )
                 db.add(user)
                 created_users += 1
+            elif args.refresh_existing_names and re.fullmatch(
+                r"客戶\d+", (user.name or "").strip()
+            ):
+                user.name = user_name
 
             account = db.query(Account).filter(Account.account_id == account_id).first()
             if not account:
