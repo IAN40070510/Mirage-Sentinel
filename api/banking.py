@@ -126,7 +126,20 @@ class TransferResponse(BaseModel):
     notice: str
 
 
-router = APIRouter(prefix="/banking", tags=["Banking API"])
+class ErrorResponse(BaseModel):
+    detail: str
+
+
+router = APIRouter(
+    prefix="/banking",
+    tags=["Banking API"],
+    responses={
+        503: {
+            "description": "PostgreSQL unavailable or DATABASE_URL not configured",
+            "model": ErrorResponse,
+        }
+    },
+)
 
 BANKING_API_NOTE = """銀行 API（PostgreSQL 強制模式）。
 
