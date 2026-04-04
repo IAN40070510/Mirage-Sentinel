@@ -15,6 +15,10 @@ let highestZ = 200;
 const rowConfigs = [];
 const totalRows = 22;
 
+// Chart 實例
+let countryPieInstance = null;
+let attackMethodRankInstance = null;
+
 // DOM
 const ipTrafficList = document.getElementById("ipTrafficList");
 const attackMethodList = document.getElementById("attackMethodList");
@@ -27,6 +31,7 @@ const detailBehavior = document.getElementById("detailBehavior");
 const detailPayload = document.getElementById("detailPayload");
 const detailCurl = document.getElementById("detailCurl");
 const detailRecentLogs = document.getElementById("detailRecentLogs");
+const logResponseBox = document.querySelector(".log-response");
 
 const normalPercent = document.getElementById("normalPercent");
 const attackPercent = document.getElementById("attackPercent");
@@ -47,8 +52,16 @@ const statusText = document.getElementById("statusText");
 
 const overviewTabs = document.querySelectorAll(".overview-tab");
 const overviewPanels = document.querySelectorAll(".overview-panel");
-
 const layoutModeSelect = document.getElementById("layoutModeSelect");
+
+const honeypotTargetList = document.getElementById("honeypotTargetList");
+const countryPieCanvas = document.getElementById("countryPieChart");
+const countryPieEmpty = document.getElementById("countryPieEmpty");
+const attackMethodRankCanvas = document.getElementById("attackMethodRankChart");
+const attackMethodEmpty = document.getElementById("attackMethodEmpty");
+
+// GeoIP 快取
+const geoCache = new Map();
 
 // =========================
 // 初始化設定
@@ -114,9 +127,7 @@ function generateCurlCommand(clientIp, payload, userId = "1001") {
     payload: payload || "test",
     client_ip: clientIp || "10.10.10.1",
   });
-  
-  const curl = `curl -X POST "${baseUrl}?${params.toString()}"`;
-  return curl;
+  return `curl -X POST "${baseUrl}?${params.toString()}"`;
 }
 
 function formatUpdateTime(date = new Date()) {
@@ -129,9 +140,7 @@ function formatUpdateTime(date = new Date()) {
 }
 
 function setStatusTime(date = new Date()) {
-  if (statusText) {
-    statusText.textContent = formatUpdateTime(date);
-  }
+  if (statusText) statusText.textContent = formatUpdateTime(date);
 }
 
 function rand(min, max) {
@@ -144,6 +153,80 @@ function randInt(min, max) {
 
 function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function isPrivateOrLocalIp(ip) {
+  if (!ip) return true;
+  if (ip === "::1" || ip === "localhost") return true;
+  if (/^(127\.)/.test(ip)) return true;
+  if (/^(10\.)/.test(ip)) return true;
+  if (/^(192\.168\.)/.test(ip)) return true;
+  if (/^(172\.(1[6-9]|2\d|3[0-1])\.)/.test(ip)) return true;
+  if (/^(169\.254\.)/.test(ip)) return true;
+  return false;
+}
+
+async function resolveCountryByIp(ip) {
+  const normalizedIp = String(ip || "").trim();
+  if (!normalizedIp || normalizedIp === "-") return "-";
+
+  if (isPrivateOrLocalIp(normalizedIp)) {
+    if (normalizedIp === "127.0.0.1" || normalizedIp === "::1" || normalizedIp === "localhost") {
+      return "Localhost";
+    }
+    return "Private Network";
+  }
+
+  if (geoCache.has(normalizedIp)) {
+    return geoCache.get(normalizedIp);
+  }
+
+  try {
+    const response = await fetch(`https://ipapi.co/${encodeURIComponent(normalizedIp)}/json/`);
+    if (!response.ok) throw new Error(`Geo lookup failed: ${response.status}`);
+    const data = await response.json();
+    const country = data.country_name || data.country || data.region || "Unknown";
+    geoCache.set(normalizedIp, country);
+    return country;
+  } catch (error) {
+    console.warn("Geo lookup error:", normalizedIp, error);
+    const fallback = "Unknown";
+    geoCache.set(normalizedIp, fallback);
+    return fallback;
+  }
+}
+
+function extractFakeResponse(detail) {
+  return detail.response_payload
+    ?? detail.details?.response_payload
+    ?? detail.fake_data
+    ?? detail.mirage_memory?.payload
+    ?? detail.event_log?.response_payload
+    ?? null;
+}
+
+function detectIsAttack(detail) {
+  const level = safeNumber(detail.risk_level ?? detail.details?.risk_level, 0);
+  return Boolean(
+    detail.is_attack
+    ?? detail.details?.is_attack
+    ?? detail.event_log?.is_attack
+    ?? (level > 0)
+  );
+}
+
+function formatFakeResponse(fakeResponse) {
+  if (!fakeResponse) return "";
+  if (typeof fakeResponse === "string") return fakeResponse;
+  return JSON.stringify(fakeResponse, null, 2);
+}
+
+function inferTargetFromLog(log) {
+  return log.target_ip || log.target || log.query_id || log.user_id || "1001";
+}
+
+function hasUsableApiData() {
+  return Array.isArray(latestIpList) && latestIpList.length > 0;
 }
 
 // =========================
@@ -167,16 +250,6 @@ function apiFetchTrafficCompare() {
 
 function apiAutoUpdateCheck() {
   return fetchJson(`${API_BASE}/auto_updates`);
-}
-
-function apiExecuteCommand(commandText) {
-  return fetchJson(`${API_BASE}/terminal_cmd`, {
-    method: "POST",
-    body: JSON.stringify({
-      command_text: commandText,
-      selected_ip: selectedIp,
-    }),
-  });
 }
 
 // =========================
@@ -222,10 +295,85 @@ function normalizeIpBundleResponse(data) {
     protocol: obj.protocol ?? details.tls_fingerprint ?? "-",
     port: obj.port ?? details.query_id ?? "-",
     behavior: obj.behavior ?? details.attack_vector ?? details.mitigation_status ?? "-",
-    payload: obj.payload ?? details.raw_payload ?? "等待 API 資料...",
+    payload: obj.payload ?? details.raw_payload ?? "",
     timeline,
     details,
   };
+}
+
+// =========================
+// 離線 / 無資料提示
+// =========================
+function destroyAnalysisCharts() {
+  if (countryPieInstance) {
+    countryPieInstance.destroy();
+    countryPieInstance = null;
+  }
+  if (attackMethodRankInstance) {
+    attackMethodRankInstance.destroy();
+    attackMethodRankInstance = null;
+  }
+}
+
+function renderGroupMaliciousAnalysisEmpty(message = "請先開啟 main.py 才能顯示分析資料") {
+  destroyAnalysisCharts();
+
+  if (honeypotTargetList) {
+    honeypotTargetList.innerHTML = `<div class="analysis-empty">${escapeHtml(message)}</div>`;
+  }
+
+  if (countryPieEmpty) {
+    countryPieEmpty.style.display = "block";
+    countryPieEmpty.textContent = message;
+  }
+
+  if (attackMethodEmpty) {
+    attackMethodEmpty.style.display = "block";
+    attackMethodEmpty.textContent = message;
+  }
+}
+
+function renderSystemOfflineState() {
+  const message = "目前尚未取得 Dashboard API 資料，請先開啟 main.py 後再重新整理頁面";
+
+  if (ipTrafficList) {
+    ipTrafficList.innerHTML = `<div class="system-empty">${escapeHtml(message)}</div>`;
+  }
+
+  if (attackMethodList) {
+    attackMethodList.innerHTML = `<div class="system-empty">${escapeHtml(message)}</div>`;
+  }
+
+  if (detailIp) detailIp.textContent = "";
+  if (detailRisk) detailRisk.textContent = "";
+  if (detailGeo) detailGeo.textContent = "";
+  if (detailTraffic) detailTraffic.textContent = "";
+  if (detailProto) detailProto.textContent = "";
+  if (detailBehavior) detailBehavior.textContent = "";
+  if (detailPayload) detailPayload.textContent = message;
+  if (detailCurl) detailCurl.textContent = message;
+
+  if (detailRecentLogs) {
+    detailRecentLogs.innerHTML = `<div class="system-empty">${escapeHtml(message)}</div>`;
+  }
+
+  if (logResponseBox) {
+    logResponseBox.innerHTML = `<div class="log-block">${escapeHtml(message)}</div>`;
+  }
+
+  if (normalPercent) normalPercent.textContent = "";
+  if (attackPercent) attackPercent.textContent = "";
+  if (trafficNormalCount) trafficNormalCount.textContent = "";
+  if (trafficAttackCount) trafficAttackCount.textContent = "";
+  if (trafficNormalRatio) trafficNormalRatio.textContent = "";
+  if (trafficAttackRatio) trafficAttackRatio.textContent = "";
+  if (trafficSummary) trafficSummary.textContent = message;
+
+  if (ctx && chartCanvas) {
+    ctx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
+  }
+
+  renderGroupMaliciousAnalysisEmpty(message);
 }
 
 // =========================
@@ -237,12 +385,9 @@ function renderIpList(list) {
 
   if (!Array.isArray(list) || list.length === 0) {
     ipTrafficList.innerHTML = `
-      <div class="ip-item">
-        <div class="ip-top">
-          <span class="strong">no data</span>
-          <span>-</span>
-        </div>
-        <div class="muted">尚未取得 API 資料</div>
+      <div class="system-empty">
+        目前尚未取得 Dashboard API 資料<br />
+        請先開啟 main.py 才能顯示內容
       </div>
     `;
     return;
@@ -251,7 +396,7 @@ function renderIpList(list) {
   list.forEach((item) => {
     const ip = item.client_ip || item.ip || "-";
     const traffic = safeNumber(item.traffic ?? item.total_requests ?? item.request_count ?? item.count, 0);
-    const country = item.country || item.location || "-";
+    const presetCountry = item.country || item.location || "";
     const risk = item.risk || (safeNumber(item.attack_requests, 0) > 0 ? "HIGH" : "LOW");
 
     const div = document.createElement("div");
@@ -261,7 +406,7 @@ function renderIpList(list) {
         <span class="strong">${escapeHtml(ip)}</span>
         <span>${traffic}</span>
       </div>
-      <div class="muted">${escapeHtml(country)} / ${escapeHtml(risk)}</div>
+      <div class="muted" data-country-slot>${escapeHtml(presetCountry || "檢測中...")} / ${escapeHtml(risk)}</div>
     `;
 
     div.addEventListener("click", () => {
@@ -271,31 +416,66 @@ function renderIpList(list) {
     });
 
     ipTrafficList.appendChild(div);
+
+    if (!presetCountry || presetCountry === "-" || presetCountry === "Unknown") {
+      resolveCountryByIp(ip).then((country) => {
+        const slot = div.querySelector("[data-country-slot]");
+        if (slot) {
+          slot.innerHTML = `${escapeHtml(country)} / ${escapeHtml(risk)}`;
+        }
+      });
+    }
   });
 }
 
 function renderDetail(data) {
+  if (!data || Object.keys(toObject(data)).length === 0) {
+    renderSystemOfflineState();
+    return;
+  }
+
   const detail = normalizeIpBundleResponse(data);
+  const rawDetail = toObject(data);
+  const mergedDetail = { ...detail.details, ...rawDetail.details, ...rawDetail, ...detail };
   const timeline = toArray(detail.timeline);
 
-  if (detailIp) detailIp.textContent = detail.client_ip || "-";
-  if (detailRisk) detailRisk.textContent = detail.risk || "-";
-  if (detailGeo) detailGeo.textContent = detail.country || "-";
+  if (detailIp) detailIp.textContent = detail.client_ip || "";
+  if (detailRisk) detailRisk.textContent = detail.risk || "";
+  if (detailGeo) {
+    detailGeo.textContent = detail.country && detail.country !== "-" ? detail.country : "檢測中...";
+    if (!detail.country || detail.country === "-" || detail.country === "Unknown") {
+      resolveCountryByIp(detail.client_ip).then((country) => {
+        if (detailGeo && detailIp && detailIp.textContent === (detail.client_ip || "")) {
+          detailGeo.textContent = country;
+        }
+      });
+    }
+  }
   if (detailTraffic) detailTraffic.textContent = `${safeNumber(detail.traffic, 0)}`;
   if (detailProto) {
     detailProto.textContent =
       detail.protocol && detail.port
         ? `${detail.protocol} / ${detail.port}`
-        : (detail.protocol || detail.port || "-");
+        : (detail.protocol || detail.port || "");
   }
-  if (detailBehavior) detailBehavior.textContent = detail.behavior || "-";
-  if (detailPayload) detailPayload.textContent = detail.payload || "等待 API 資料...";
-  
+  if (detailBehavior) detailBehavior.textContent = detail.behavior || "";
+  if (detailPayload) detailPayload.textContent = detail.payload || "";
+
+  const fakeResponse = extractFakeResponse(mergedDetail);
+  const isAttack = detectIsAttack(mergedDetail);
+  if (logResponseBox) {
+    if (isAttack && fakeResponse) {
+      logResponseBox.innerHTML = `<div class="log-block">${escapeHtml(formatFakeResponse(fakeResponse))}</div>`;
+    } else {
+      logResponseBox.innerHTML = `<div class="log-block">目前沒有 fake response 資料</div>`;
+    }
+  }
+
   if (detailCurl) {
     const curlCmd = generateCurlCommand(
       detail.client_ip || "10.10.10.1",
       detail.payload || "../../../../etc/passwd",
-      "1001"
+      String(mergedDetail.query_id || mergedDetail.details?.query_id || "1001")
     );
     detailCurl.textContent = curlCmd;
     detailCurl.onclick = () => {
@@ -315,21 +495,33 @@ function renderDetail(data) {
   detailRecentLogs.innerHTML = "";
 
   if (!timeline.length) {
-    detailRecentLogs.innerHTML = `
-      <div class="log-item">
-        <span class="log-time">--</span>等待 API 資料...
-      </div>
-    `;
+    detailRecentLogs.innerHTML = `<div class="system-empty">目前沒有此 IP 的時間軸紀錄</div>`;
     return;
   }
 
   timeline.slice(0, 5).forEach((log, index) => {
     const div = document.createElement("div");
     div.className = "log-item";
+    const logText = log.action || log.event || log.description || "-";
     div.innerHTML = `
       <span class="log-time">${escapeHtml(log.time || log.timestamp || index + 1)}</span>
-      ${escapeHtml(log.action || log.event || log.description || "-")}
+      ${escapeHtml(logText)}
     `;
+    div.title = "點擊可切換詳細內容";
+    div.style.cursor = "pointer";
+    div.addEventListener("click", () => {
+      if (detailPayload) {
+        detailPayload.textContent = typeof logText === "string" ? logText : JSON.stringify(log, null, 2);
+      }
+      if (detailCurl) {
+        const clickedCurl = generateCurlCommand(
+          detail.client_ip || "10.10.10.1",
+          log.raw_payload || log.payload || logText || detail.payload || "../../../../etc/passwd",
+          String(inferTargetFromLog(log))
+        );
+        detailCurl.textContent = clickedCurl;
+      }
+    });
     detailRecentLogs.appendChild(div);
   });
 }
@@ -341,11 +533,9 @@ function renderAttacks(data) {
   const list = normalizeCommandHeatmapResponse(data);
   if (!list.length) {
     attackMethodList.innerHTML = `
-      <div class="attack-row">
-        <div class="rank">-</div>
-        <div class="attack-name">no data</div>
-        <div class="bar-wrap"><div class="bar" style="width: 0%"></div></div>
-        <div>0</div>
+      <div class="system-empty">
+        目前尚未取得 Dashboard API 資料<br />
+        請先開啟 main.py 才能顯示內容
       </div>
     `;
     return;
@@ -425,39 +615,199 @@ function renderTrafficOverview(data) {
   const attackCount = result.attack_requests;
   const total = result.total_requests || (normalCount + attackCount);
 
-  const normalRatio = total > 0 ? `${Math.round((normalCount / total) * 100)}%` : "0%";
-  const attackRatio = total > 0 ? `${Math.round((attackCount / total) * 100)}%` : "0%";
+  const normalRatio = total > 0 ? `${Math.round((normalCount / total) * 100)}%` : "";
+  const attackRatio = total > 0 ? `${Math.round((attackCount / total) * 100)}%` : "";
 
-  if (trafficNormalCount) trafficNormalCount.textContent = normalCount;
-  if (trafficAttackCount) trafficAttackCount.textContent = attackCount;
+  if (trafficNormalCount) trafficNormalCount.textContent = total ? normalCount : "";
+  if (trafficAttackCount) trafficAttackCount.textContent = total ? attackCount : "";
   if (trafficNormalRatio) trafficNormalRatio.textContent = normalRatio;
   if (trafficAttackRatio) trafficAttackRatio.textContent = attackRatio;
   if (normalPercent) normalPercent.textContent = normalRatio;
   if (attackPercent) attackPercent.textContent = attackRatio;
 
   if (trafficSummary) {
-    trafficSummary.textContent =
-      `normal traffic: ${normalCount}\nattack traffic: ${attackCount}\ntotal traffic: ${total}`;
+    trafficSummary.textContent = total
+      ? `normal traffic: ${normalCount}\nattack traffic: ${attackCount}\ntotal traffic: ${total}`
+      : "請先開啟 main.py 才能顯示內容";
   }
 
   drawTrafficChart(normalCount, attackCount);
 }
 
+// =========================
+// 惡意分析圖表
+// =========================
+function buildMockHoneypotTargets() {
+  return [
+    { name: "Finance-Portal-01", hits: 14, level: "high" },
+    { name: "Auth-Gateway-02", hits: 11, level: "high" },
+    { name: "Storage-Node-07", hits: 8, level: "medium" },
+    { name: "Legacy-ERP-03", hits: 6, level: "medium" },
+    { name: "Payroll-API-01", hits: 5, level: "low" }
+  ];
+}
 
-// =======================
-// 
+function drawAttackMethodRankChart(items) {
+  if (!attackMethodRankCanvas || typeof Chart === "undefined") return;
 
-//          /\_/\
-//         ( o.o )
-//          > ^ <
-//         /     \
-//        (  ) (  )
-//         \(___)/
+  if (attackMethodRankInstance) {
+    attackMethodRankInstance.destroy();
+  }
 
-//           MEOW
+  if (!items.length) {
+    if (attackMethodEmpty) {
+      attackMethodEmpty.style.display = "block";
+      attackMethodEmpty.textContent = "目前尚無攻擊手段資料";
+    }
+    return;
+  }
 
-// ciallo 
-// =======================
+  if (attackMethodEmpty) {
+    attackMethodEmpty.style.display = "none";
+  }
+
+  attackMethodRankInstance = new Chart(attackMethodRankCanvas, {
+    type: "bar",
+    data: {
+      labels: items.map((item) => item.name),
+      datasets: [{
+        label: "事件數",
+        data: items.map((item) => item.count),
+        backgroundColor: [
+          "rgba(0,255,136,0.85)",
+          "rgba(0,255,136,0.72)",
+          "rgba(0,255,136,0.58)",
+          "rgba(0,255,136,0.44)",
+          "rgba(0,255,136,0.32)"
+        ],
+        borderColor: "rgba(0,255,136,0.95)",
+        borderWidth: 1,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: "y",
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        x: {
+          ticks: { color: "rgba(0,255,136,0.72)" },
+          grid: { color: "rgba(0,255,136,0.08)" }
+        },
+        y: {
+          ticks: { color: "rgba(0,255,136,0.82)" },
+          grid: { display: false }
+        }
+      }
+    }
+  });
+}
+
+function drawCountryPieChart(items) {
+  if (!countryPieCanvas || typeof Chart === "undefined") return;
+
+  if (countryPieInstance) {
+    countryPieInstance.destroy();
+  }
+
+  if (!items.length) {
+    if (countryPieEmpty) {
+      countryPieEmpty.style.display = "block";
+      countryPieEmpty.textContent = "目前沒有足夠資料可繪製國家分布";
+    }
+    return;
+  }
+
+  if (countryPieEmpty) {
+    countryPieEmpty.style.display = "none";
+  }
+
+  countryPieInstance = new Chart(countryPieCanvas, {
+    type: "pie",
+    data: {
+      labels: items.map((item) => item.name),
+      datasets: [{
+        data: items.map((item) => item.count),
+        backgroundColor: [
+          "rgba(0,255,136,0.92)",
+          "rgba(0,255,136,0.72)",
+          "rgba(0,255,136,0.54)",
+          "rgba(0,255,136,0.38)",
+          "rgba(0,255,136,0.24)"
+        ],
+        borderColor: "rgba(0,20,10,0.95)",
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: {
+            color: "rgba(0,255,136,0.82)",
+            boxWidth: 14,
+            padding: 14
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderGroupMaliciousAnalysis() {
+  if (!hasUsableApiData()) {
+    renderGroupMaliciousAnalysisEmpty();
+    return;
+  }
+
+  const attackItems = latestIpList.filter((item) => {
+    const risk = String(item.risk || "").toUpperCase();
+    const attackRequests = safeNumber(item.attack_requests ?? item.risk_level ?? 0, 0);
+    return risk === "HIGH" || risk === "MEDIUM" || attackRequests > 0;
+  });
+
+  const methodCounter = new Map();
+  const countryCounter = new Map();
+
+  attackItems.forEach((item) => {
+    const method = item.attack_vector || item.behavior || item.method || "未知手段";
+    const country = item.country || item.location || geoCache.get(item.client_ip || item.ip || "") || "Unknown";
+
+    methodCounter.set(method, (methodCounter.get(method) || 0) + 1);
+    countryCounter.set(country, (countryCounter.get(country) || 0) + 1);
+  });
+
+  const topMethods = Array.from(methodCounter.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([name, count]) => ({ name, count }));
+
+  const countries = Array.from(countryCounter.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([name, count]) => ({ name, count }));
+
+  drawAttackMethodRankChart(topMethods);
+  drawCountryPieChart(countries);
+
+  const mockTargets = buildMockHoneypotTargets()
+    .map((item, index) => `
+      <div class="analysis-item">
+        ${index + 1}. ${escapeHtml(item.name)}<br>
+        被探測次數：${item.hits} / 風險等級：${escapeHtml(item.level)}
+      </div>
+    `)
+    .join("");
+
+  if (honeypotTargetList) {
+    honeypotTargetList.innerHTML = mockTargets || `<div class="analysis-empty">目前沒有蜜罐對象資料</div>`;
+  }
+}
 
 // =========================
 // 載入資料
@@ -477,17 +827,18 @@ function loadIpList() {
       }
 
       renderIpList(latestIpList);
+      renderGroupMaliciousAnalysis();
     })
     .catch((error) => {
       console.error("IP list error:", error);
       latestIpList = [];
-      renderIpList([]);
+      renderSystemOfflineState();
     });
 }
 
 function loadIpDetail() {
   if (!selectedIp) {
-    renderDetail({});
+    renderSystemOfflineState();
     return Promise.resolve();
   }
 
@@ -497,7 +848,7 @@ function loadIpDetail() {
     })
     .catch((error) => {
       console.error("IP detail error:", error);
-      renderDetail({});
+      renderSystemOfflineState();
     });
 }
 
@@ -505,10 +856,11 @@ function loadAttacks() {
   return apiFetchTopAttackMethods()
     .then((data) => {
       renderAttacks(data);
+      renderGroupMaliciousAnalysis();
     })
     .catch((error) => {
       console.error("Attack ranking error:", error);
-      renderAttacks([]);
+      renderSystemOfflineState();
     });
 }
 
@@ -516,61 +868,36 @@ function loadTrafficOverview() {
   return apiFetchTrafficCompare()
     .then((data) => {
       renderTrafficOverview(data);
+      renderGroupMaliciousAnalysis();
     })
     .catch((error) => {
       console.error("Traffic overview error:", error);
-      renderTrafficOverview({});
+      renderSystemOfflineState();
     });
 }
 
 // =========================
-// 綁定事件
-// =========================
-// =========================
 // 指令系統
-// 格式：
-// /api api_name {param1, param2}
-// /cmd cmd_name {param1}
-// /extra terminal_cmd {text...}
 // =========================
-
 function showCommandResult(title, payload) {
-  const text =
-    typeof payload === "string"
-      ? payload
-      : JSON.stringify(payload, null, 2);
+  const text = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
 
-  if (detailPayload) {
-    detailPayload.textContent = `[${title}]\n${text}`;
-  }
-
-  if (trafficSummary) {
-    trafficSummary.textContent = `[${title}]\n${text}`;
-  }
+  if (detailPayload) detailPayload.textContent = `[${title}]\n${text}`;
+  if (trafficSummary) trafficSummary.textContent = `[${title}]\n${text}`;
 
   console.log(`[${title}]`, payload);
 }
 
 function showCommandError(message) {
-  if (detailPayload) {
-    detailPayload.textContent = `[COMMAND ERROR]\n${message}`;
-  }
+  if (detailPayload) detailPayload.textContent = `[COMMAND ERROR]\n${message}`;
   console.error("[COMMAND ERROR]", message);
 }
 
 function parseCommandText(inputText) {
   const text = String(inputText || "").trim();
-  if (!text) {
-    throw new Error("請輸入指令");
-  }
+  if (!text) throw new Error("請輸入指令");
 
-  // 支援格式：
-  // /api live_ips {500}
-  // /api ip_bundle {192.168.1.1}
-  // /cmd select_ip {192.168.1.1}
-  // /extra terminal_cmd {whoami}
   const match = text.match(/^\/(\w+)\s+([A-Za-z0-9_]+)\s*(?:\{([\s\S]*)\})?$/);
-
   if (!match) {
     throw new Error("指令格式錯誤，請使用 /api 名稱 {參數} 或 /cmd 名稱 {參數}");
   }
@@ -578,167 +905,75 @@ function parseCommandText(inputText) {
   const scope = match[1].toLowerCase();
   const name = match[2];
   const rawArgs = (match[3] || "").trim();
-
-  const args = rawArgs
-    ? rawArgs
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean)
-    : [];
+  const args = rawArgs ? rawArgs.split(",").map((item) => item.trim()).filter(Boolean) : [];
 
   return { scope, name, args, raw: text };
 }
 
-// =========================
-// API 指令表
-// =========================
 const apiCommandMap = {
   live_ips: async (args) => {
     const limit = Number(args[0] || 500);
     return fetchJson(`${API_BASE}/live_ips?limit=${encodeURIComponent(limit)}`);
   },
-
   ip_bundle: async (args) => {
     const ip = args[0] || selectedIp;
     if (!ip) throw new Error("ip_bundle 需要 IP 參數，且目前沒有 selectedIp");
     return fetchJson(`${API_BASE}/ip_bundle/${encodeURIComponent(ip)}`);
   },
-
-  ip_details: async (args) => {
-    const ip = args[0] || selectedIp;
-    if (!ip) throw new Error("ip_details 需要 IP 參數，且目前沒有 selectedIp");
-    return fetchJson(`${API_BASE}/ip_details/${encodeURIComponent(ip)}`);
-  },
-
-  command_heatmap: async () => {
-    return fetchJson(`${API_BASE}/command_heatmap`);
-  },
-
+  command_heatmap: async () => fetchJson(`${API_BASE}/command_heatmap`),
   traffic_compare: async (args) => {
     const limit = Number(args[0] || 1000);
     return fetchJson(`${API_BASE}/traffic_compare?limit=${encodeURIComponent(limit)}`);
   },
-
-  auto_updates: async () => {
-    return fetchJson(`${API_BASE}/auto_updates`);
-  },
-
-  recent_traffic: async (args) => {
-    const limit = Number(args[0] || 100);
-    const mode = args[1] || "all";
-    return fetchJson(
-      `${API_BASE}/recent_traffic?limit=${encodeURIComponent(limit)}&mode=${encodeURIComponent(mode)}`
-    );
-  },
-
-  dwell_time: async (args) => {
-    const ip = args[0] || selectedIp;
-    if (!ip) throw new Error("dwell_time 需要 IP 參數，且目前沒有 selectedIp");
-    return fetchJson(`${API_BASE}/dwell_time/${encodeURIComponent(ip)}`);
-  },
-
-  attack_timeline: async (args) => {
-    const ip = args[0] || selectedIp;
-    if (!ip) throw new Error("attack_timeline 需要 IP 參數，且目前沒有 selectedIp");
-    return fetchJson(`${API_BASE}/attack_timeline/${encodeURIComponent(ip)}`);
-  },
-
-  terminal_cmd: async (args) => {
-    const commandText = args.join(", ").trim();
-    if (!commandText) throw new Error("terminal_cmd 需要指令文字");
-    return fetchJson(`${API_BASE}/terminal_cmd`, {
-      method: "POST",
-      body: JSON.stringify({
-        command_text: commandText,
-        selected_ip: selectedIp,
-      }),
-    });
-  },
+  auto_updates: async () => fetchJson(`${API_BASE}/auto_updates`)
 };
 
-// =========================
-// CMD 指令表
-// =========================
 const cmdCommandMap = {
   reload: async () => {
     await refreshDashboard(true);
-    return {
-      status: "success",
-      message: "Dashboard 已重新載入",
-    };
+    return { status: "success", message: "Dashboard 已重新載入" };
   },
-
   close: async () => {
-    // 注意：window.close() 只有在 script 開啟的視窗通常才有效
     try {
       window.close();
     } catch (err) {
       console.warn("window.close failed:", err);
     }
-
     setTimeout(() => {
-      if (!window.closed) {
-        location.href = "about:blank";
-      }
+      if (!window.closed) location.href = "about:blank";
     }, 150);
-
-    return {
-      status: "success",
-      message: "已嘗試關閉頁面；若瀏覽器阻擋，會切到空白頁",
-    };
+    return { status: "success", message: "已嘗試關閉頁面；若瀏覽器阻擋，會切到空白頁" };
   },
-
   select_ip: async (args) => {
     const ip = args[0];
     if (!ip) throw new Error("select_ip 需要 IP 參數");
-
     selectedIp = ip;
     renderIpList(latestIpList);
     await loadIpDetail();
-
-    return {
-      status: "success",
-      selected_ip: selectedIp,
-      message: `已切換選定 IP 為 ${selectedIp}`,
-    };
-  },
-
-  help: async () => {
-    return {
-      cmd: [
-        "/cmd reload {}",
-        "/cmd close {}",
-        "/cmd select_ip {192.168.1.1}",
-      ],
-      api: Object.keys(apiCommandMap).map((name) => `/api ${name} {...}`),
-    };
-  },
+    return { status: "success", selected_ip: selectedIp, message: `已切換選定 IP 為 ${selectedIp}` };
+  }
 };
 
-// =========================
-// 指令執行器
-// =========================
 async function executeParsedCommand(parsed) {
   const { scope, name, args, raw } = parsed;
 
   if (scope === "api") {
     const handler = apiCommandMap[name];
-    if (!handler) {
-      throw new Error(`找不到 API 指令：${name}`);
-    }
-
+    if (!handler) throw new Error(`找不到 API 指令：${name}`);
     const result = await handler(args);
 
-    // 依 API 類型順便更新畫面
     if (name === "live_ips") {
       latestIpList = normalizeLiveIpsResponse(result);
       renderIpList(latestIpList);
+      renderGroupMaliciousAnalysis();
     } else if (name === "ip_bundle") {
       renderDetail(result);
     } else if (name === "command_heatmap") {
       renderAttacks(result);
+      renderGroupMaliciousAnalysis();
     } else if (name === "traffic_compare") {
       renderTrafficOverview(result);
+      renderGroupMaliciousAnalysis();
     }
 
     showCommandResult(raw, result);
@@ -747,40 +982,15 @@ async function executeParsedCommand(parsed) {
 
   if (scope === "cmd") {
     const handler = cmdCommandMap[name];
-    if (!handler) {
-      throw new Error(`找不到 CMD 指令：${name}`);
-    }
-
+    if (!handler) throw new Error(`找不到 CMD 指令：${name}`);
     const result = await handler(args);
     showCommandResult(raw, result);
     return result;
   }
 
-  if (scope === "extra") {
-    if (name !== "terminal_cmd") {
-      throw new Error(`找不到 EXTRA 指令：${name}`);
-    }
-
-    const result = await apiCommandMap.terminal_cmd(args);
-    showCommandResult(raw, result);
-    return result;
-  }
-
-  
-  if (scope === "muxiang") {
-    window.open("https://github.com/xiang0105");
-    return {
-      status: "success",
-      message: "已前往 muxiang GitHub 頁面",
-    };
-  }
-
   throw new Error(`不支援的指令類別：${scope}`);
 }
 
-// =========================
-// 綁定輸入框
-// =========================
 function bindCommandInput() {
   if (!commandInput || !commandSendBtn) return;
 
@@ -798,11 +1008,8 @@ function bindCommandInput() {
   };
 
   commandSendBtn.addEventListener("click", submitCommand);
-
   commandInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      submitCommand();
-    }
+    if (event.key === "Enter") submitCommand();
   });
 }
 
@@ -822,7 +1029,6 @@ function bindOverviewTabs() {
       overviewPanels.forEach((panel) => panel.classList.remove("active"));
 
       tab.classList.add("active");
-
       const targetPanel = document.getElementById(targetId);
       if (targetPanel) targetPanel.classList.add("active");
     });
@@ -879,13 +1085,12 @@ function bindDragWindows() {
 // =========================
 // 背景動畫
 // =========================
-
 const tokens = [
   "POST", "GET", "DROP", "payload", "inject", "overflow",
   "auth_bypass", "token", "session", "beacon", "scan",
   "shell", "exec", "worm", "C2", "bind", "443", "8080",
   "0xAF", "0x1D", "../", "/dev/null", "xor", "decode",
-  "memory", "buffer", "thread", "root", "cmd","i am muxiang","ciallo"
+  "memory", "buffer", "thread", "root", "cmd", "muxiang", "ciallo"
 ];
 
 function makeLine(length = 120) {
@@ -955,24 +1160,18 @@ function animateRows() {
 
     if (row.direction === 1 && row.x > ww + row.resetPadding) {
       row.x = -width - randInt(60, 240);
-      if (Math.random() > 0.52) {
-        row.el.textContent = makeLine(randInt(85, 140));
-      }
+      if (Math.random() > 0.52) row.el.textContent = makeLine(randInt(85, 140));
     }
 
     if (row.direction === -1 && row.x < -width - row.resetPadding) {
       row.x = ww + randInt(60, 240);
-      if (Math.random() > 0.52) {
-        row.el.textContent = makeLine(randInt(85, 140));
-      }
+      if (Math.random() > 0.52) row.el.textContent = makeLine(randInt(85, 140));
     }
 
     row.updateCounter += 1;
     if (row.updateCounter >= row.mutateEvery) {
       row.updateCounter = 0;
-      if (Math.random() > 0.45) {
-        row.el.textContent = makeLine(randInt(85, 140));
-      }
+      if (Math.random() > 0.45) row.el.textContent = makeLine(randInt(85, 140));
     }
   }
 
@@ -983,9 +1182,7 @@ function animateRows() {
 // 自動刷新
 // =========================
 function refreshDashboard(manual = false) {
-  if (manual) {
-    setStatusTime(new Date());
-  }
+  if (manual) setStatusTime(new Date());
 
   return apiAutoUpdateCheck()
     .catch((error) => {
@@ -1015,17 +1212,9 @@ function applyLayoutMode(mode, { persist = true, resetWindows = true } = {}) {
   const finalMode = LAYOUT_MODES.includes(mode) ? mode : "layout-17";
   document.body.setAttribute("data-layout-mode", finalMode);
 
-  if (layoutModeSelect) {
-    layoutModeSelect.value = finalMode;
-  }
-
-  if (persist) {
-    localStorage.setItem(LAYOUT_STORAGE_KEY, finalMode);
-  }
-
-  if (resetWindows) {
-    resetWindowPositionsForLayout();
-  }
+  if (layoutModeSelect) layoutModeSelect.value = finalMode;
+  if (persist) localStorage.setItem(LAYOUT_STORAGE_KEY, finalMode);
+  if (resetWindows) resetWindowPositionsForLayout();
 }
 
 function resetWindowPositionsForLayout() {
@@ -1042,9 +1231,7 @@ function resetWindowPositionsForLayout() {
 function bindLayoutModeSelector() {
   if (!layoutModeSelect) return;
 
-  const savedMode = localStorage.getItem(LAYOUT_STORAGE_KEY);
-  const defaultMode = savedMode && LAYOUT_MODES.includes(savedMode) ? savedMode : "layout-17";
-  applyLayoutMode(defaultMode, { persist: false, resetWindows: true });
+  applyLayoutMode("layout-17", { persist: true, resetWindows: true });
 
   layoutModeSelect.addEventListener("change", (event) => {
     applyLayoutMode(event.target.value, { persist: true, resetWindows: true });

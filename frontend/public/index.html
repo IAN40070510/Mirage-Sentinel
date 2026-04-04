@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Cyber Security Monitoring Dashboard</title>
   <link rel="stylesheet" href="./style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="./main.js" defer></script>
 </head>
 <body data-layout-mode="layout-17">
@@ -14,12 +15,12 @@
 
     <div class="hud">
       <div class="hud-left">
-        <div class="hud-box" style="padding: 1rem;">threat stream / live monitoring</div>
+        <div class="hud-box" style="padding: 1rem;">THREAT STREAM / LIVE MONITORING</div>
 
         <div class="hud-box layout-box">
-          <label for="layoutModeSelect" class="layout-label">Display Mode</label>
+          <label for="layoutModeSelect" class="layout-label">DISPLAY MODE</label>
           <select id="layoutModeSelect" class="layout-select">
-            <option value="layout-15">15 吋螢幕</option>
+            <option value="layout-15">13 吋螢幕</option>
             <option value="layout-17" selected>17 吋螢幕</option>
             <option value="layout-25">25 吋螢幕</option>
           </select>
@@ -32,6 +33,7 @@
       </div>
     </div>
 
+    <!-- 主視窗 -->
     <div class="window main-window draggable" id="mainWindow">
       <div class="window-header drag-handle">
         <div class="window-title">selected ip detail</div>
@@ -40,41 +42,48 @@
       <div class="window-body">
         <div class="section-title">目前選定目標</div>
         <div class="traffic-meta">
-          <div>IP: <span class="strong" id="detailIp">-</span></div>
-          <div>Risk: <span class="strong" id="detailRisk">-</span></div>
+          <div>IP: <span class="strong" id="detailIp"></span></div>
+          <div>Risk: <span class="strong" id="detailRisk"></span></div>
         </div>
 
         <div class="main-grid">
           <div class="info-card">
             <div class="label">來源地區</div>
-            <div class="value" id="detailGeo">-</div>
+            <div class="value" id="detailGeo"></div>
           </div>
           <div class="info-card">
             <div class="label">目前流量</div>
-            <div class="value" id="detailTraffic">-</div>
+            <div class="value" id="detailTraffic"></div>
           </div>
           <div class="info-card">
             <div class="label">協定 / Port</div>
-            <div class="value" id="detailProto">-</div>
+            <div class="value" id="detailProto"></div>
           </div>
           <div class="info-card">
             <div class="label">最近行為</div>
-            <div class="value" id="detailBehavior">-</div>
+            <div class="value" id="detailBehavior"></div>
           </div>
         </div>
 
-        <div class="log-block" id="detailPayload">等待 API 資料...</div>
+        <div class="log-block" id="detailPayload"></div>
+
+        <div class="section-title section-gap">Fake Response</div>
+        <div class="log-response"></div>
 
         <div class="section-title section-gap">Curl 指令</div>
-        <div class="log-block" id="detailCurl" style="font-family: monospace; font-size: 0.85rem; background: rgba(0,0,0,0.3); padding: 0.5rem; border-radius: 3px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; cursor: pointer;" title="點擊複製">等待 API 資料...</div>
+        <div
+          class="log-block"
+          id="detailCurl"
+          style="font-family: monospace; font-size: 0.85rem; background: rgba(0,0,0,0.3); padding: 0.5rem; border-radius: 3px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; cursor: pointer;"
+          title="點擊複製"
+        ></div>
 
         <div class="section-title section-gap">最近紀錄</div>
-        <div class="log-list" id="detailRecentLogs">
-          <div class="log-item"><span class="log-time">--</span>等待 API 資料...</div>
-        </div>
+        <div class="log-list" id="detailRecentLogs"></div>
       </div>
     </div>
 
+    <!-- 左上 -->
     <div class="window sub-window draggable w1">
       <div class="window-header drag-handle">
         <div class="window-title">live ip traffic</div>
@@ -82,18 +91,11 @@
       </div>
       <div class="window-body fixed-window-body">
         <div class="section-title">資料庫全部 IP</div>
-        <div class="ip-list" id="ipTrafficList">
-          <div class="ip-item">
-            <div class="ip-top">
-              <span class="strong">loading...</span>
-              <span>-</span>
-            </div>
-            <div class="muted">等待 API 資料</div>
-          </div>
-        </div>
+        <div class="ip-list" id="ipTrafficList"></div>
       </div>
     </div>
 
+    <!-- 右側 -->
     <div class="window sub-window draggable w2">
       <div class="window-header drag-handle">
         <div class="window-title">traffic overview</div>
@@ -102,13 +104,13 @@
       <div class="window-body fixed-window-body traffic-overview-body">
         <div class="overview-tabs" id="overviewTabs">
           <button class="overview-tab active" type="button" data-panel="overview-panel-traffic">流量總覽</button>
-          <button class="overview-tab" type="button" data-panel="overview-panel-placeholder">其他內容</button>
+          <button class="overview-tab" type="button" data-panel="overview-panel-placeholder">惡意分析</button>
         </div>
 
         <div class="overview-panel active" id="overview-panel-traffic">
           <div class="traffic-meta">
-            <div>Normal: <span id="normalPercent">-</span></div>
-            <div>Attack: <span id="attackPercent">-</span></div>
+            <div>Normal: <span id="normalPercent"></span></div>
+            <div>Attack: <span id="attackPercent"></span></div>
           </div>
 
           <div class="chart-placeholder">
@@ -119,50 +121,66 @@
           <div class="overview-card-grid">
             <div class="info-card">
               <div class="label">正常流量</div>
-              <div class="value" id="trafficNormalCount">-</div>
+              <div class="value" id="trafficNormalCount"></div>
             </div>
             <div class="info-card">
               <div class="label">攻擊流量</div>
-              <div class="value" id="trafficAttackCount">-</div>
+              <div class="value" id="trafficAttackCount"></div>
             </div>
             <div class="info-card">
               <div class="label">正常比率</div>
-              <div class="value" id="trafficNormalRatio">-</div>
+              <div class="value" id="trafficNormalRatio"></div>
             </div>
             <div class="info-card">
               <div class="label">攻擊比率</div>
-              <div class="value" id="trafficAttackRatio">-</div>
+              <div class="value" id="trafficAttackRatio"></div>
             </div>
           </div>
 
-          <div class="log-block" id="trafficSummary">等待 API 資料...</div>
+          <div class="log-block" id="trafficSummary"></div>
         </div>
 
         <div class="overview-panel" id="overview-panel-placeholder">
-          <div class="section-title">暫定無內容</div>
-          <div class="log-block">此分頁目前先保留框架，之後可再加入其他流量分析內容。</div>
+          <div class="section-title">群體惡意分析</div>
+
+          <div class="analysis-stack">
+            <div class="info-card analysis-card">
+              <div class="label">主要攻擊手段</div>
+              <div class="analysis-chart-wrap tall-chart">
+                <canvas id="attackMethodRankChart"></canvas>
+                <div id="attackMethodEmpty" class="analysis-empty"></div>
+              </div>
+            </div>
+
+            <div class="info-card analysis-card">
+              <div class="label">惡意國家攻擊來源</div>
+              <div class="analysis-chart-wrap pie-chart-wrap">
+                <canvas id="countryPieChart"></canvas>
+                <div id="countryPieEmpty" class="analysis-empty"></div>
+              </div>
+            </div>
+
+            <div class="info-card analysis-card">
+              <div class="label">目前被蜜罐對象列表</div>
+              <div id="honeypotTargetList" class="analysis-list"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
+    <!-- 左下 -->
     <div class="window sub-window draggable w3">
       <div class="window-header drag-handle">
         <div class="window-title">top 10 attack methods</div>
         <div class="window-dots"><span></span><span></span><span></span></div>
       </div>
       <div class="window-body fixed-window-body">
-        <div class="attack-list" id="attackMethodList">
-          <div class="attack-row">
-            <div class="rank">-</div>
-            <div class="attack-name">loading...</div>
-            <div class="bar-wrap"><div class="bar" style="width: 0%"></div></div>
-            <div>0</div>
-          </div>
-        </div>
+        <div class="attack-list" id="attackMethodList"></div>
       </div>
     </div>
 
-    <div class="window sub-window draggable w4">
+    <!-- <div class="window sub-window draggable w4">
       <div class="window-header drag-handle">
         <div class="window-title">live log</div>
         <div class="window-dots"><span></span><span></span><span></span></div>
@@ -174,19 +192,20 @@
           <div class="log-item"><span class="log-time">safe</span>指令框目前只會送到 terminal_cmd，service 不會直接執行系統命令。</div>
         </div>
       </div>
-    </div>
+    </div> -->
 
+    <!-- 指令輸入 -->
     <div class="cmd-bar">
       <div class="cmd-top">command input</div>
       <div class="cmd-input-wrap">
-        <div class="cmd-prefix">root@matrix:~$</div>
+        <span class="cmd-prefix">root@matrix:~$</span>
         <input
-          type="text"
-          class="cmd-input"
           id="commandInput"
+          class="cmd-input"
+          type="text"
           placeholder="輸入內容會送往 /api/dashboard/terminal_cmd"
         />
-        <button class="cmd-send" id="commandSendBtn" type="button">EXEC</button>
+        <button id="commandSendBtn" class="cmd-btn" type="button">EXEC</button>
       </div>
     </div>
   </div>
