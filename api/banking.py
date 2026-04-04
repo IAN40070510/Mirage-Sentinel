@@ -16,7 +16,12 @@ from pydantic import BaseModel, Field
 from .db.session import is_real_db_enabled
 from .db.operations import DBOperations
 from core.traffic_db import log_traffic_event
-from core.sentinel import analyze_intent
+from core.sentinel import (
+    analyze_intent,
+    detect_replication_risk,
+    detect_rate_limiting_risk,
+    detect_anomalous_amount_risk,
+)
 from model.llama import generate_fake_data_llama
 
 
@@ -294,6 +299,60 @@ def _compute_risk_score(
     return score, reason_text, route
 
 
+def _compute_transfer_risk_score(
+    x_user_id: str | None,
+    request: Request,
+    transfer_amount: int | None = None,
+    from_account: str | None = None,
+) -> tuple[int, str, str]:
+    """交易風險評分：在基礎風險分數基礎上加入交易特定規則（重放、高頻、異常金額）。"""
+    # 先執行基礎風險評分
+    score, reason_text, route = _compute_risk_score(x_user_id, request)
+
+    # 若已確定為欺敵路由，直接返回
+    if route == "deception":
+        return score, reason_text, route
+
+    reasons = reason_text.split(",") if reason_text and reason_text != "none" else []
+    client_ip = request.client.host if request.client else "unknown"
+    user_id = (x_user_id or "").strip()
+
+    # 構建原始 payload（用於重放檢測）
+    raw_payload = (
+        f"path={request.url.path};query={request.url.query};amount={transfer_amount}"
+    )
+
+    # 規則 1：重放檢測
+    is_replication, replication_reason = detect_replication_risk(
+        user_id, raw_payload, limit_seconds=30
+    )
+    if is_replication:
+        score += 40
+        reasons.append(replication_reason)
+
+    # 規則 2：高頻檢測
+    is_rate_limited, rate_reason = detect_rate_limiting_risk(
+        client_ip, limit_seconds=10, threshold=20
+    )
+    if is_rate_limited:
+        score += 35
+        reasons.append(rate_reason)
+
+    # 規則 3：異常金額檢測
+    if transfer_amount and transfer_amount > 0:
+        is_anomalous, amount_reason = detect_anomalous_amount_risk(
+            user_id, transfer_amount, limit_hours=24
+        )
+        if is_anomalous:
+            score += 25
+            reasons.append(amount_reason)
+
+    score = min(score, 100)
+    reason_text = ",".join(reasons) if reasons else "none"
+    route = "deception" if score >= 60 else "real"
+    return score, reason_text, route
+
+
 def _log_banking_route_event(
     request: Request,
     user_id: str | None,
@@ -324,6 +383,53 @@ def _log_banking_route_event(
                 "endpoint": endpoint,
             },
             "attack_vector": "banking_route_decision",
+            "risk_level": risk_score,
+            "hits": 1,
+            "interaction_depth": 1,
+            "dwell_time": 0.0,
+            "mitigation_status": route,
+        }
+    )
+
+
+def _log_banking_transfer_event(
+    request: Request,
+    user_id: str | None,
+    from_account: str | None,
+    to_account: str | None,
+    amount: int | None,
+    route: str,
+    risk_score: int,
+    deception_reason: str,
+) -> None:
+    """轉帳專用日誌記錄，包括金額與帳戶資訊供後續規則檢測使用。"""
+    client_ip = request.client.host if request.client else "unknown"
+    now = _now_ms_iso()
+    log_traffic_event(
+        {
+            "request_at": now,
+            "response_at": now,
+            "process_ms": 0,
+            "client_ip": client_ip,
+            "location": "banking:transfers",
+            "is_proxy": bool(request.headers.get("x-forwarded-for")),
+            "user_agent": request.headers.get("user-agent", "Unknown"),
+            "tls_fingerprint": request.headers.get("x-tls-fingerprint", "N/A"),
+            "query_id": user_id or "anonymous",
+            "is_attack": route == "deception",
+            "raw_payload": f"path={request.url.path};from={from_account};to={to_account};amount={amount}",
+            "response_payload": {
+                "route": route,
+                "risk_score": risk_score,
+                "deception_reason": deception_reason,
+                "endpoint": "transfers",
+                "transaction": {
+                    "from_account": from_account,
+                    "to_account": to_account,
+                    "amount": amount,
+                },
+            },
+            "attack_vector": "banking_transfer_decision",
             "risk_level": risk_score,
             "hits": 1,
             "interaction_depth": 1,
@@ -1004,12 +1110,16 @@ async def transfer_money(
         description=IDEMPOTENCY_KEY_DESCRIPTION,
     ),
 ):
-    risk_score, deception_reason, route = _compute_risk_score(x_user_id, request)
+    risk_score, deception_reason, route = _compute_transfer_risk_score(
+        x_user_id, request, req.amount, req.from_account
+    )
     background_tasks.add_task(
-        _log_banking_route_event,
+        _log_banking_transfer_event,
         request,
         x_user_id,
-        "transfers",
+        req.from_account,
+        req.to_account,
+        req.amount,
         route,
         risk_score,
         deception_reason,

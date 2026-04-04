@@ -399,6 +399,258 @@ def compare_traffic(limit: int = 1000) -> dict:
     }
 
 
+# ========== 鑑識事件標準化查詢層 (Forensic Event Standardized Query Layer) ==========
+
+
+def get_events_by_route(route: str, limit: int = 100, offset: int = 0) -> dict:
+    """按路由分類查詢事件 (real 或 deception)."""
+    if route not in ("real", "deception"):
+        return {"error": "Invalid route. Must be 'real' or 'deception'", "events": []}
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # 查詢欺敵路由（is_attack=1）或真實路由（is_attack=0）
+            is_attack = 1 if route == "deception" else 0
+
+            cursor.execute(
+                """
+                SELECT
+                    t.id,
+                    t.request_at,
+                    c.ip AS client_ip,
+                    t.query_id,
+                    t.location,
+                    d.response_payload,
+                    d.risk_level,
+                    d.attack_vector
+                FROM traffic_logs t
+                JOIN clients c ON t.client_id = c.id
+                LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+                WHERE t.is_attack = ?
+                ORDER BY t.request_at DESC
+                LIMIT ? OFFSET ?
+                """,
+                (is_attack, limit, offset),
+            )
+            rows = cursor.fetchall()
+
+        events = []
+        for row in rows:
+            event = {
+                "id": row["id"],
+                "request_at": row["request_at"],
+                "client_ip": row["client_ip"],
+                "query_id": row["query_id"],
+                "location": row["location"],
+                "route": route,
+                "risk_level": int(row["risk_level"] or 0),
+                "attack_vector": row["attack_vector"],
+                "risk_score": None,
+                "deception_reason": None,
+            }
+
+            # 解析 response_payload 以提取 route/risk_score/deception_reason
+            if row["response_payload"]:
+                try:
+                    payload = (
+                        json.loads(row["response_payload"])
+                        if isinstance(row["response_payload"], str)
+                        else row["response_payload"]
+                    )
+                    event["risk_score"] = payload.get("risk_score")
+                    event["deception_reason"] = payload.get("deception_reason")
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            events.append(event)
+
+        return {"route": route, "total": len(events), "events": events}
+    except Exception as exc:
+        logger.error("Failed to get events by route %s: %r", route, exc)
+        return {"error": str(exc), "events": []}
+
+
+def get_events_by_risk_score(
+    min_score: int = 0, max_score: int = 100, limit: int = 100
+) -> dict:
+    """按風險分數範圍查詢事件."""
+    if not (0 <= min_score <= 100 and 0 <= max_score <= 100 and min_score <= max_score):
+        return {
+            "error": "Invalid score range. Must be 0-100 and min <= max",
+            "events": [],
+        }
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            cursor.execute(
+                """
+                SELECT
+                    t.id,
+                    t.request_at,
+                    c.ip AS client_ip,
+                    t.query_id,
+                    t.location,
+                    d.response_payload,
+                    d.risk_level,
+                    d.attack_vector
+                FROM traffic_logs t
+                JOIN clients c ON t.client_id = c.id
+                LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+                WHERE d.risk_level >= ? AND d.risk_level <= ?
+                ORDER BY d.risk_level DESC, t.request_at DESC
+                LIMIT ?
+                """,
+                (min_score, max_score, limit),
+            )
+            rows = cursor.fetchall()
+
+        events = []
+        for row in rows:
+            event = {
+                "id": row["id"],
+                "request_at": row["request_at"],
+                "client_ip": row["client_ip"],
+                "query_id": row["query_id"],
+                "location": row["location"],
+                "risk_level": int(row["risk_level"] or 0),
+                "attack_vector": row["attack_vector"],
+                "risk_score": None,
+                "deception_reason": None,
+                "route": None,
+            }
+
+            # 解析 response_payload
+            if row["response_payload"]:
+                try:
+                    payload = (
+                        json.loads(row["response_payload"])
+                        if isinstance(row["response_payload"], str)
+                        else row["response_payload"]
+                    )
+                    event["risk_score"] = payload.get("risk_score")
+                    event["deception_reason"] = payload.get("deception_reason")
+                    event["route"] = payload.get("route")
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            events.append(event)
+
+        return {
+            "min_score": min_score,
+            "max_score": max_score,
+            "total": len(events),
+            "events": events,
+        }
+    except Exception as exc:
+        logger.error("Failed to get events by risk score: %r", exc)
+        return {"error": str(exc), "events": []}
+
+
+def get_deception_chain(query_id: str) -> dict:
+    """回放攻擊鏈：按 query_id 聚合相關事件，重現完整攻擊路徑"""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            cursor.execute(
+                """
+                SELECT
+                    t.id,
+                    t.request_at,
+                    c.ip AS client_ip,
+                    t.query_id,
+                    t.location,
+                    t.is_attack,
+                    d.response_payload,
+                    d.raw_payload,
+                    d.risk_level,
+                    d.attack_vector,
+                    d.interaction_depth,
+                    d.dwell_time
+                FROM traffic_logs t
+                JOIN clients c ON t.client_id = c.id
+                LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+                WHERE t.query_id = ?
+                ORDER BY t.request_at ASC
+                """,
+                (query_id,),
+            )
+            rows = cursor.fetchall()
+
+        if not rows:
+            return {
+                "query_id": query_id,
+                "chain_length": 0,
+                "events": [],
+                "message": "No events found",
+            }
+
+        events = []
+        total_dwell_time = 0.0
+        max_risk_score = 0
+        deception_events = 0
+
+        for row in rows:
+            event = {
+                "timestamp": row["request_at"],
+                "client_ip": row["client_ip"],
+                "location": row["location"],
+                "is_attack": bool(row["is_attack"]),
+                "attack_vector": row["attack_vector"],
+                "raw_payload": row["raw_payload"],
+                "risk_level": int(row["risk_level"] or 0),
+                "risk_score": None,
+                "deception_reason": None,
+                "route": None,
+                "endpoint": None,
+            }
+
+            # 解析 response_payload
+            if row["response_payload"]:
+                try:
+                    payload = (
+                        json.loads(row["response_payload"])
+                        if isinstance(row["response_payload"], str)
+                        else row["response_payload"]
+                    )
+                    event["risk_score"] = payload.get("risk_score")
+                    event["deception_reason"] = payload.get("deception_reason")
+                    event["route"] = payload.get("route")
+                    event["endpoint"] = payload.get("endpoint")
+
+                    # 追蹤最高風險分數與欺敵事件數
+                    if event["risk_score"]:
+                        max_risk_score = max(max_risk_score, event["risk_score"])
+                    if payload.get("route") == "deception":
+                        deception_events += 1
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            if row["dwell_time"]:
+                total_dwell_time = max(total_dwell_time, float(row["dwell_time"]))
+
+            events.append(event)
+
+        return {
+            "query_id": query_id,
+            "client_ip": rows[0]["client_ip"] if rows else None,
+            "chain_length": len(events),
+            "deception_events": deception_events,
+            "max_risk_score": max_risk_score,
+            "total_dwell_time": total_dwell_time,
+            "first_event": rows[0]["request_at"] if rows else None,
+            "last_event": rows[-1]["request_at"] if rows else None,
+            "events": events,
+        }
+    except Exception as exc:
+        logger.error("Failed to get deception chain for query_id %s: %r", query_id, exc)
+        return {"query_id": query_id, "error": str(exc), "events": []}
+
+
 def auto_updates() -> dict:
     """提供前端輪詢用的輕量更新資訊。"""
     with get_db_connection() as conn:

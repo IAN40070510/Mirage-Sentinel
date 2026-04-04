@@ -200,3 +200,109 @@ def get_recent_traffic(limit: int = 100):
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+
+def get_recent_transactions_by_user(
+    user_id: str, limit_seconds: int = 300, max_results: int = 50
+) -> list[dict]:
+    """查詢使用者最近 X 秒內的交易。用於檢測重放與高頻規則。"""
+    from datetime import datetime, timedelta
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # 計算時間下限（UTC）
+    cutoff_time = (datetime.utcnow() - timedelta(seconds=limit_seconds)).strftime(
+        "%Y-%m-%d %H:%M:%S.%f"
+    )[:-3]
+
+    cursor.execute(
+        """
+        SELECT t.*, c.ip AS client_ip, d.raw_payload, d.response_payload, d.attack_vector
+        FROM traffic_logs t
+        JOIN clients c ON t.client_id = c.id
+        LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+        WHERE t.query_id = ? AND t.request_at > ?
+        ORDER BY t.request_at DESC
+        LIMIT ?
+        """,
+        (user_id, cutoff_time, max_results),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def get_recent_transactions_by_ip(
+    client_ip: str, limit_seconds: int = 60, max_results: int = 100
+) -> list[dict]:
+    """查詢 IP 最近 X 秒內的 API 呼叫。用於檢測速率限制 (DDoS/Rate-limit) 規則。"""
+    from datetime import datetime, timedelta
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cutoff_time = (datetime.utcnow() - timedelta(seconds=limit_seconds)).strftime(
+        "%Y-%m-%d %H:%M:%S.%f"
+    )[:-3]
+
+    cursor.execute(
+        """
+        SELECT t.*, f.user_agent
+        FROM traffic_logs t
+        JOIN clients c ON t.client_id = c.id
+        LEFT JOIN fingerprints f ON t.fingerprint_id = f.id
+        WHERE c.ip = ? AND t.request_at > ?
+        ORDER BY t.request_at DESC
+        LIMIT ?
+        """,
+        (client_ip, cutoff_time, max_results),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def get_transaction_amounts_by_user(
+    user_id: str, limit_hours: int = 24, max_results: int = 100
+) -> list[int]:
+    """查詢使用者過去 X 小時的所有交易金額。用於檢測異常金額序列。"""
+    from datetime import datetime, timedelta
+    import json
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cutoff_time = (datetime.utcnow() - timedelta(hours=limit_hours)).strftime(
+        "%Y-%m-%d %H:%M:%S.%f"
+    )[:-3]
+
+    # 查詢所有轉帳請求（不只是攻擊），從 traffic_logs 和 response_payload 提取金額
+    cursor.execute(
+        """
+        SELECT d.response_payload
+        FROM traffic_logs t
+        LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+        WHERE t.query_id = ? AND t.request_at > ?
+        AND t.location = 'banking:transfers'
+        AND d.response_payload IS NOT NULL
+        ORDER BY t.request_at DESC
+        LIMIT ?
+        """,
+        (user_id, cutoff_time, max_results),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+
+    amounts = []
+    for row in rows:
+        try:
+            payload = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+            if isinstance(payload, dict) and "transaction" in payload:
+                amount = payload["transaction"].get("amount")
+                if amount and isinstance(amount, (int, float)):
+                    amounts.append(int(amount))
+        except (json.JSONDecodeError, TypeError, KeyError):
+            pass
+
+    return amounts

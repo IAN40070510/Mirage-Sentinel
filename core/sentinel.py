@@ -160,3 +160,114 @@ _detector = SentinelEngine(SECLISTS_PATH)
 
 def analyze_intent(text: str):
     return _detector.analyze(text)
+
+
+# ========== 交易風險規則引擎 (Transaction Risk Rules) ==========
+
+
+def detect_replication_risk(
+    user_id: str | None, raw_payload: str | None, limit_seconds: int = 30
+) -> tuple[bool, str]:
+    """
+    重放檢測 (Replication Detection)：
+    檢測同一使用者在短時間內是否提交了相同的 payload。
+
+    Return: (is_risky, reason)
+    """
+    if not user_id or not raw_payload:
+        return False, ""
+
+    try:
+        from core.traffic_db import get_recent_transactions_by_user
+
+        recent = get_recent_transactions_by_user(
+            user_id, limit_seconds=limit_seconds, max_results=10
+        )
+
+        for record in recent:
+            existing_payload = record.get("raw_payload", "")
+            if existing_payload and existing_payload == raw_payload:
+                return True, f"replication_detected:{limit_seconds}s"
+
+        return False, ""
+    except Exception as e:
+        logger.warning(f"[Sentinel] Replication check failed: {e}")
+        return False, ""
+
+
+def detect_rate_limiting_risk(
+    client_ip: str | None, limit_seconds: int = 10, threshold: int = 20
+) -> tuple[bool, str]:
+    """
+    高頻檢測 (Rate-limiting Detection)：
+    檢測同一 IP 在短時間內是否發送了過多的 API 呼叫。
+
+    Return: (is_risky, reason)
+    """
+    if not client_ip:
+        return False, ""
+
+    try:
+        from core.traffic_db import get_recent_transactions_by_ip
+
+        recent = get_recent_transactions_by_ip(
+            client_ip, limit_seconds=limit_seconds, max_results=threshold + 5
+        )
+
+        if len(recent) >= threshold:
+            return True, f"rate_limit_exceeded:{len(recent)}_requests_{limit_seconds}s"
+
+        return False, ""
+    except Exception as e:
+        logger.warning(f"[Sentinel] Rate-limiting check failed: {e}")
+        return False, ""
+
+
+def detect_anomalous_amount_risk(
+    user_id: str | None, current_amount: int | None, limit_hours: int = 24
+) -> tuple[bool, str]:
+    """
+    異常金額檢測 (Anomalous Amount Detection)：
+    檢測轉帳金額是否與使用者歷史行為相悖。
+    規則：
+    - 若過去 24 小時無交易紀錄，則不判定為異常
+    - 若金額超過過去 24 小時平均交易金額的 3 倍，標記為異常
+    - 若金額超過過去 24 小時最大交易金額的 2 倍，標記為異常
+
+    Return: (is_risky, reason)
+    """
+    if not user_id or current_amount is None or current_amount <= 0:
+        return False, ""
+
+    try:
+        from core.traffic_db import get_transaction_amounts_by_user
+
+        amounts = get_transaction_amounts_by_user(
+            user_id, limit_hours=limit_hours, max_results=100
+        )
+
+        # 如果過去 24 小時無交易紀錄，不判定為異常
+        if not amounts:
+            return False, ""
+
+        avg_amount = sum(amounts) / len(amounts)
+        max_amount = max(amounts) if amounts else 0
+
+        # 規則 1：金額超過平均的 3 倍
+        if current_amount > avg_amount * 3:
+            return (
+                True,
+                f"anomalous_amount_3x_avg:{int(current_amount)}_vs_avg_{int(avg_amount)}",
+            )
+
+        # 規則 2：金額超過最大的 2 倍
+        if max_amount > 0 and current_amount > max_amount * 2:
+            return (
+                True,
+                f"anomalous_amount_2x_max:{int(current_amount)}_vs_max_{int(max_amount)}",
+            )
+
+        return False, ""
+    except Exception as e:
+        logger.warning(f"[Sentinel] Anomalous amount check failed: {e}")
+        return False, ""

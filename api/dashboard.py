@@ -339,3 +339,70 @@ async def get_time_series(
         raise HTTPException(
             status_code=500, detail=f"取得時間序列統計失敗: {exc}"
         ) from exc
+
+
+# ========== 鑑識事件標準化查詢層 API (Forensic Event Standardized Queries) ==========
+
+
+@router.get(
+    "/events/by_route/{route}",
+    summary="按路由分類查詢事件（real 或 deception）",
+    description="查詢按分流路由分類的事件。支援 real（真實用戶）或 deception（欺敵路由）。",
+)
+async def get_events_by_route(
+    route: str,
+    limit: int = Query(100, ge=1, le=500, description="筆數上限"),
+    offset: int = Query(0, ge=0, description="分頁偏移"),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+):
+    verify_api_key(x_api_key)
+    try:
+        return ws.get_events_by_route(route, limit=limit, offset=offset)
+    except Exception as exc:
+        logger.error("查詢路由事件失敗: %r", exc)
+        raise HTTPException(status_code=500, detail=f"查詢路由事件失敗: {exc}") from exc
+
+
+@router.get(
+    "/events/by_risk_score",
+    summary="按風險分數範圍查詢事件",
+    description="查詢特定風險分數範圍內的事件（0-100）。",
+)
+async def get_events_by_risk_score(
+    min_score: int = Query(0, ge=0, le=100, description="最低風險分數"),
+    max_score: int = Query(100, ge=0, le=100, description="最高風險分數"),
+    limit: int = Query(100, ge=1, le=500, description="筆數上限"),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+):
+    verify_api_key(x_api_key)
+    try:
+        return ws.get_events_by_risk_score(min_score, max_score, limit)
+    except Exception as exc:
+        logger.error("查詢風險分數事件失敗: %r", exc)
+        raise HTTPException(
+            status_code=500, detail=f"查詢風險分數事件失敗: {exc}"
+        ) from exc
+
+
+@router.get(
+    "/replay/{query_id}",
+    summary="回放攻擊鏈",
+    description="按 query_id 回放完整的一條攻擊鏈，包含時間軸、每步決策理由、風險評分。",
+)
+async def get_deception_chain_replay(
+    query_id: str = Query(
+        ..., min_length=1, max_length=100, description="用戶識別碼或查詢 ID"
+    ),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+):
+    verify_api_key(x_api_key)
+    try:
+        result = ws.get_deception_chain(query_id)
+        if "error" in result and result.get("chain_length", 0) == 0:
+            raise HTTPException(status_code=404, detail="查無該攻擊鏈事件")
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("回放攻擊鏈失敗: %r", exc)
+        raise HTTPException(status_code=500, detail=f"回放攻擊鏈失敗: {exc}") from exc

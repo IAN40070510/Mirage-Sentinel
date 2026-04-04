@@ -48,3 +48,9 @@ jobs:
 
             # Authorization regression checks on live deployment.
             bash scripts/ci/authz-smoke.sh http://127.0.0.1:8000
+
+            # Transaction risk rules checks on live deployment.
+            bash scripts/ci/transaction-risk-smoke.sh http://127.0.0.1:8000
+
+            # Event query and replay checks on live deployment.
+            bash scripts/ci/event-query-smoke.sh http://127.0.0.1:8000

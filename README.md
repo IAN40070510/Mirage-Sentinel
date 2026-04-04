@@ -97,11 +97,29 @@ AI 掃描器對抗： 利用動態變異的 API 結構與錯誤回應，破壞 A
 - 目標：建立重放、短時間高頻、異常金額序列的規則偵測。
 - 落點：`api/banking.py`、`core/sentinel.py`。
 - 完成條件：可觸發 deception 分流，SOC 能看到觸發原因。
+- 目前進度（2026-04）：已實裝三大規則引擎
+  - 重放檢測（Replication Detection）：30 秒內偵測相同 payload
+  - 高頻檢測（Rate-limiting Detection）：10 秒內 >20 個請求觸發
+  - 異常金額檢測（Anomalous Amount Detection）：超過過往 24 小時平均 3 倍或最大 2 倍
+  - 集成 `_compute_transfer_risk_score()`，轉帳端點優先套用
+  - CI 迴歸新增 `scripts/ci/transaction-risk-smoke.sh` (3 個測試用例)
+
 
 4. 鑑識事件欄位標準化（P0）
 - 目標：事件結構統一，包含 `route`, `risk_score`, `deception_reason`。
-- 落點：`core/traffic_db.py`、`services/dashboard_service.py`。
+- 落點：`core/traffic_db.py`、`services/dashboard_service.py`、`api/dashboard.py`。
 - 完成條件：Dashboard 可按欄位篩選並回放攻擊鏈。
+- 目前進度（2026-04）：已實裝查詢層與 API 端點
+  - 查詢函數新增：
+    - `get_events_by_route(route)` - 按 real/deception 路由篩選
+    - `get_events_by_risk_score(min_score, max_score)` - 按風險分數範圍篩選
+    - `get_deception_chain(query_id)` - 回放完整攻擊鏈（含時間軸、決策理由、風險評分）
+  - API 端點新增：
+    - `GET /dashboard/events/by_route/{route}` - 路由查詢
+    - `GET /dashboard/events/by_risk_score` - 風險分數查詢
+    - `GET /dashboard/replay/{query_id}` - 攻擊鏈回放
+  - CI 迴歸新增 `scripts/ci/event-query-smoke.sh` (6 個測試用例：路由篩選、風險分數篩選、攻擊鏈回放、參數驗證、API Key 驗證)
+
 
 第 2 週（提升欺敵深度與可運營性）
 
@@ -351,5 +369,44 @@ curl -i -H "X-User-Id: 000000001" http://127.0.0.1:8000/banking/accounts
 
 CI 自動化：
 
-1. 合併前由 [`PR Compose Smoke Test`](.github/workflows/pr-smoke.yml) 執行本地 compose 驗收（含權限回歸檢查：role gate / object-level authorization）。
-2. 部署成功後由 [`Post-Deploy Smoke Test`](.github/workflows/post-deploy-smoke.yml) 進行線上同等驗收（含權限回歸檢查）。
+1. 合併前由 [`PR Compose Smoke Test`](.github/workflows/pr-smoke.yml) 執行本地 compose 驗收，包括：
+   - 健康檢查與 OpenAPI 可用性
+   - 權限回歸測試（`scripts/ci/authz-smoke.sh`）：role gate / object-level authorization
+   - 交易風險規則測試（`scripts/ci/transaction-risk-smoke.sh`）：重放檢測、高頻檢測、異常金額檢測
+   - 鑑識事件查詢測試（`scripts/ci/event-query-smoke.sh`）：路由篩選、風險分數篩選、攻擊鏈回放
+2. 部署成功後由 [`Post-Deploy Smoke Test`](.github/workflows/post-deploy-smoke.yml) 進行線上同等驗收，包括以上所有項目。
+
+### Dashboard 事件查詢與回放 API
+
+P0 鑑識事件欄位標準化提供三個新的查詢端點，支援按路由、風險分數篩選與完整攻擊鏈回放：
+
+```bash
+# 設定 API Key（預設為 dev-local-api-key-change-me）
+API_KEY="dev-local-api-key-change-me"
+
+# 1) 查詢欺敵路由事件（deception）
+curl -H "X-API-Key: $API_KEY" \
+  "http://127.0.0.1:8000/dashboard/events/by_route/deception?limit=10"
+
+# 2) 查詢真實路由事件（real）
+curl -H "X-API-Key: $API_KEY" \
+  "http://127.0.0.1:8000/dashboard/events/by_route/real?limit=10"
+
+# 3) 查詢特定風險分數範圍的事件（0-100）
+curl -H "X-API-Key: $API_KEY" \
+  "http://127.0.0.1:8000/dashboard/events/by_risk_score?min_score=60&max_score=100&limit=20"
+
+# 4) 回放完整攻擊鏈（包含時間軸、每步決策理由、風險評分）
+curl -H "X-API-Key: $API_KEY" \
+  "http://127.0.0.1:8000/dashboard/replay/CIF000001001"
+```
+
+**回應欄位說明：**
+- `route` - 分流路由（`real` 或 `deception`）
+- `risk_score` - 風險評分（0-100 整數）
+- `deception_reason` - 欺敵觸發原因（如 `invalid_user_id_format,suspicious_user_agent`）
+- `attack_vector` - 攻擊向量分類（如 `sqli`, `lfi`, `paths`）
+- `chain_length` - 攻擊鏈完整步驟數（回放端點時）
+- `deception_events` - 鏈中欺敵事件計數（回放端點時）
+
+這些端點已集成到 CI 迴歸測試，確保新增欄位在 PR 與線上部署時保持可用。
