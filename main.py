@@ -19,6 +19,7 @@ from fastapi import (
     Depends,
     Header,
 )
+from fastapi.openapi.utils import get_openapi
 import sys
 import uvicorn
 import time
@@ -199,6 +200,47 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# 自定義 OpenAPI schema 生成：根據 ENABLE_DASHBOARD 過濾文檔
+def custom_openapi():
+    """
+    生成 OpenAPI schema，當 ENABLE_DASHBOARD=false 時，隱藏 Dashboard 路由。
+    符合 AGENTS.md 安全規範：公開蜜罐不應暴露敏感監控功能。
+    """
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    output = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+        tags=app.tags,
+        servers=app.servers,
+    )
+
+    # 當 Dashboard 禁用時，移除所有 Dashboard 路由的文檔
+    if not ENABLE_DASHBOARD and output.get("paths"):
+        paths_to_remove = [
+            path
+            for path in output["paths"].keys()
+            if path.startswith("/api/v1/dashboard/")
+        ]
+        for path in paths_to_remove:
+            del output["paths"][path]
+
+        # 移除 Dashboard tag
+        if output.get("tags"):
+            output["tags"] = [
+                tag for tag in output["tags"] if tag.get("name") != "Dashboard"
+            ]
+
+    app.openapi_schema = output
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
 
 
 @app.get("/")
