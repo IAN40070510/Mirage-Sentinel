@@ -10,6 +10,7 @@ from sqlalchemy.pool import NullPool
 _engine = None
 _SessionLocal = None
 _is_real_db_enabled = False
+DEFAULT_CURRENCY = "USD"
 
 
 def init_db():
@@ -54,6 +55,19 @@ def init_db():
     return False
 
 
+def ensure_real_db_enabled() -> bool:
+    """Ensure the real database is initialized; retry lazily if startup missed it."""
+    global _is_real_db_enabled
+    if _is_real_db_enabled:
+        return True
+
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    if not database_url:
+        return False
+
+    return init_db()
+
+
 def get_db() -> Session:
     """Get database session if real DB is enabled"""
     if not _is_real_db_enabled or _SessionLocal is None:
@@ -91,6 +105,18 @@ def seed_banking_demo_data() -> bool:
         "BANKING_DEMO_USER_EMAIL", "demo.user@mirage.local"
     ).strip()
     demo_account_id = os.getenv("BANKING_DEMO_ACCOUNT_ID", "ACCOD48PUCAEHKH").strip()
+    demo_beneficiary_user_id = os.getenv(
+        "BANKING_DEMO_BENEFICIARY_USER_ID", "CIF000009999"
+    ).strip()
+    demo_beneficiary_user_name = os.getenv(
+        "BANKING_DEMO_BENEFICIARY_USER_NAME", "External Beneficiary"
+    ).strip()
+    demo_beneficiary_user_email = os.getenv(
+        "BANKING_DEMO_BENEFICIARY_USER_EMAIL", "external.beneficiary@mirage.local"
+    ).strip()
+    demo_beneficiary_account_id = os.getenv(
+        "BANKING_DEMO_BENEFICIARY_ACCOUNT_ID", "MERNGTU3WAVTQJF"
+    ).strip()
 
     db = _SessionLocal()
     try:
@@ -118,11 +144,39 @@ def seed_banking_demo_data() -> bool:
             )
             db.add(account)
 
+        beneficiary_user = (
+            db.query(User).filter(User.user_id == demo_beneficiary_user_id).first()
+        )
+        if not beneficiary_user:
+            beneficiary_user = User(
+                user_id=demo_beneficiary_user_id,
+                name=demo_beneficiary_user_name,
+                email=demo_beneficiary_user_email,
+            )
+            db.add(beneficiary_user)
+
+        beneficiary_account = (
+            db.query(Account)
+            .filter(Account.account_id == demo_beneficiary_account_id)
+            .first()
+        )
+        if not beneficiary_account:
+            beneficiary_account = Account(
+                account_id=demo_beneficiary_account_id,
+                user_id=demo_beneficiary_user_id,
+                account_type="Checking",
+                currency=DEFAULT_CURRENCY,
+                balance=0,
+                status="ACTIVE",
+                open_date="2021-03-27",
+            )
+            db.add(beneficiary_account)
+
         beneficiary = (
             db.query(Beneficiary)
             .filter(
                 Beneficiary.user_id == demo_user_id,
-                Beneficiary.account_id == "MERNGTU3WAVTQJF",
+                Beneficiary.account_id == demo_beneficiary_account_id,
             )
             .first()
         )
@@ -132,7 +186,7 @@ def seed_banking_demo_data() -> bool:
                     user_id=demo_user_id,
                     nickname="Primary Merchant",
                     bank_code="812",
-                    account_id="MERNGTU3WAVTQJF",
+                    account_id=demo_beneficiary_account_id,
                     beneficiary_name="Demo Beneficiary",
                 )
             )

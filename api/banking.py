@@ -13,7 +13,7 @@ from fastapi import (
 )
 from pydantic import BaseModel, Field
 
-from .db.session import is_real_db_enabled
+from .db.session import ensure_real_db_enabled, is_real_db_enabled
 from .db.operations import DBOperations
 from core.traffic_db import log_traffic_event
 from core.sentinel import (
@@ -646,6 +646,7 @@ class TransferRequest(BaseModel):
 
 
 def _require_user(x_user_id: str | None) -> str:
+    ensure_real_db_enabled()
     if not is_real_db_enabled():
         raise HTTPException(
             status_code=503,
