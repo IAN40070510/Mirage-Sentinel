@@ -217,12 +217,14 @@ def custom_openapi():
             version=app.version,
             description=app.description,
             routes=app.routes,
-            tags=getattr(app, "tags", None),
-            servers=getattr(app, "servers", None),
         )
     except Exception as generate_error:
         logger.error(f"Failed to generate OpenAPI schema: {generate_error}")
-        return {"paths": {}, "components": {}}
+        return {
+            "openapi": "3.0.2",
+            "info": {"title": app.title, "version": app.version},
+            "paths": {},
+        }
 
     # 當 Dashboard 禁用時，移除所有 Dashboard 路由的文檔
     if not ENABLE_DASHBOARD and output.get("paths"):

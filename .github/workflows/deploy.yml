@@ -17,8 +17,43 @@ jobs:
           key: ${{ secrets.OCI_SSH_KEY }}
           port: ${{ secrets.OCI_PORT }}
           script: |
+            set -euo pipefail
             cd ~/Mirage-Sentinel
-            git pull origin main
-            sudo docker-compose -f docker-compose.oracle.dual-demo.yml down
-            sudo docker-compose -f docker-compose.oracle.dual-demo.yml up -d --build
+
+            if docker compose version >/dev/null 2>&1; then
+              COMPOSE_CMD="sudo docker compose"
+            elif docker-compose version >/dev/null 2>&1; then
+              COMPOSE_CMD="sudo docker-compose"
+            else
+              echo "[deploy] ERROR: docker compose/docker-compose not found"
+              exit 1
+            fi
+
+            git pull --ff-only origin main
+            $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml down
+            $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml up -d --build --remove-orphans
+
+            # Deploy gate: both public and SOC backends must become healthy.
+            for i in $(seq 1 30); do
+              pub_ok=0
+              soc_ok=0
+              if curl -fsS http://127.0.0.1:8000/healthz >/dev/null 2>&1; then
+                pub_ok=1
+              fi
+              if curl -fsS http://127.0.0.1:8002/healthz >/dev/null 2>&1; then
+                soc_ok=1
+              fi
+              if [ "$pub_ok" -eq 1 ] && [ "$soc_ok" -eq 1 ]; then
+                echo "[deploy] health checks passed"
+                break
+              fi
+              if [ "$i" -eq 30 ]; then
+                echo "[deploy] ERROR: health checks failed"
+                $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml ps
+                $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml logs --tail=120 backend_public backend_soc sandbox
+                exit 1
+              fi
+              sleep 3
+            done
+
             sudo docker image prune -f
