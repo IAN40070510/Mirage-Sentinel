@@ -85,8 +85,17 @@ async def verify_dashboard_access(
     x_dashboard_key: str | None = Header(default=None, alias="X-Dashboard-Key"),
 ):
     """
-    金融常見做法：戰情室僅限內網；若需外部維運，可用管理金鑰放行。
+    根據 ENABLE_DASHBOARD 決定是否允許訪問。
+    若 Dashboard 禁用，返回 403。
+    若啟用，則檢查內網 IP 或管理金鑰。
     """
+    # 如果 Dashboard 功能被禁用，直接拒絕訪問
+    if not ENABLE_DASHBOARD:
+        raise HTTPException(
+            status_code=403, detail="Dashboard is disabled on this instance"
+        )
+
+    # Dashboard 啟用時，檢查內網限制
     if not DASHBOARD_INTERNAL_ONLY:
         return
 
@@ -156,25 +165,24 @@ async def lifespan(app: FastAPI):
 
 
 # ===== FastAPI App 建立 =====
-# 根據 ENABLE_DASHBOARD 決定是否公開 OpenAPI 文檔
+# 始終保留 OpenAPI 文檔供查看，但 Dashboard 路由會檢查 ENABLE_DASHBOARD
 app = FastAPI(
     title="Mirage-Sentinel API Gateway",
     version="1.6-FullSentinel",
     lifespan=lifespan,
-    docs_url="/docs" if ENABLE_DASHBOARD else None,  # 禁用 /docs 如果 dashboard 已關閉
-    redoc_url=(
-        "/redoc" if ENABLE_DASHBOARD else None
-    ),  # 禁用 /redoc 如果 dashboard 已關閉
-    openapi_url="/openapi.json" if ENABLE_DASHBOARD else None,  # 禁用 OpenAPI schema
+    docs_url="/docs",  # 始終允許查看 API 文規
+    redoc_url="/redoc",  # 始終允許 ReDoc
+    openapi_url="/openapi.json",  # 始終允許 OpenAPI schema
 )
 
-if ENABLE_DASHBOARD:
-    app.include_router(
-        dashboard.router,
-        prefix="/api/v1",
-        tags=["Dashboard"],
-        dependencies=[Depends(verify_dashboard_access)],
-    )
+
+# 始終包含 Dashboard 路由，但 verify_dashboard_access 會根據 ENABLE_DASHBOARD 拒絕訪問
+app.include_router(
+    dashboard.router,
+    prefix="/api/v1",
+    tags=["Dashboard"],
+    dependencies=[Depends(verify_dashboard_access)],
+)
 
 if ENABLE_BANKING_API:
     app.include_router(
