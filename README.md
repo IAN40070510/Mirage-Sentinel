@@ -1,63 +1,172 @@
 # Mirage-Sentinel
 
-Mirage-Sentinel 是一個以 FastAPI 為核心的主動式防禦 API Gateway。
-系統先進行攻擊意圖判斷，對高風險請求隔離沙盒並回傳一致假資料，同時記錄完整攻防軌跡。
+Mirage-Sentinel 是一個基於人工智慧 (AI) 的主動防禦與欺敵系統 (Active Defense and Deception System)。
 
-**狀態**：v1.6.2 | 核心功能已成熟 | 支援本地與 Oracle Cloud 部署
+面對現代自動化與 AI 驅動的網路攻擊，傳統的靜態防禦與誘餌已難以發揮效用。本專案透過動態生成的沙盒誘餌網路、嚴格的實體資料庫解耦，以及 AI 驅動的動態響應與反制機制（Counter-AI），旨在精準捕獲駭客手法、消耗攻擊方資源，並為資安團隊提供即時且具備實用價值的威脅情報。
+---
 
-## 關鍵特性
+## 核心防禦目標 (Core Objectives)
+本專案的核心目標在於建立一個具備高度感知與自適應能力的防禦體系，專注於以下三大技術維度：
 
-**Sentinel 攻擊偵測**
-- 特徵型快篩：19 個在地 fallback 簽名（SQLi、LFI、Path Traversal）
-- 支援完整 SecLists 目錄結構自動尋找（若有部署）
-- 安全降級模式：簽名缺失時仍可運作
+1. 深度行為追蹤與威脅情報收集 (Threat Intelligence & Technique Capture)
+不同於傳統僅記錄 IP 或連線時間的誘餌，本系統旨在完整還原攻擊者的操作行為鏈。
 
-**Mirage 欺敵生成**  
-- 假資料一致性保證：同 IP + 目標的重複攻擊回傳相同資料
-- 記憶機制：`mirage_memory.db` 快取欺敵狀態
-- Faker 庫支持多語言場景（繁體中文、英文等）
+全封包與指令審計： 透過核心層級或反向代理層的監控，擷取攻擊者輸入的每一條指令、上傳的惡意載荷 (Payload) 以及採用的自動化工具特徵。
 
-**雙資料庫分離**
-- `traffic_logs.db`：戰情室唯一查詢來源（所有攻防事件、風險分數、處置狀態）
-- `mirage_memory.db`：欺敵流程內部狀態，不對外暴露
+攻擊手法建模： 將捕獲的行為資料轉化為可分析的威脅情報，協助安全團隊理解當前最前線的入侵路徑與漏洞利用策略。
 
-**儀表板與監控**
-- 前端自動版面判斷（15/17/25 吋螢幕適配）
-- 實時流量總覽、IP 追蹤、攻擊類型熱圖
-- Dashboard API 提供唯讀查詢（需 API Key）
+2. 高交互性與動態狀態保持 (Stateful Deception)
+為了解決傳統靜態誘餌容易被識破的問題，本系統著重於建立「真假難辨」的虛擬環境。
 
-**安全架構**
-- API Key 隱式驗證（Header `X-API-Key`）
-- HTML XSS 風險緩解已修補
-- 環境變數管理敏感配置
+動態環境響應： 系統具備狀態保持能力，能對攻擊者的操作給予邏輯連貫的回饋。例如，若攻擊者在誘餌環境中建立帳號或修改設定，系統後續的查詢結果將會如實反映這些變化，大幅延長攻擊者受困於誘餌中的時間。
 
-## 系統架構
+環境拟真與延遲模擬： 透過精細的系統特徵模擬與隨機化的網路延遲注入，規避常見的欺敵偵測腳本。
+
+3. AI 對抗性防禦與 AI API 攻擊抑制 (Counter-AI & API Security)
+針對現代 AI 驅動的掃描器與自動化攻擊代理，本系統整合了對抗性的防禦機制。
+
+AI 掃描器對抗： 利用動態變異的 API 結構與錯誤回應，破壞 AI 自動化分析工具的解析邏輯，並透過冗長回應技術 (Tarpitting) 消耗攻擊方 AI 的運算資源與 Token 額度。
+
+反向提示注入防護： 在 API 回應中策略性地佈置防護機制，防範攻擊者利用 LLM 進行自動化的漏洞挖掘或 API 邏輯探測。
+
+*(詳細的系統規格與非功能性需求，請參閱 [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md))*
+
+---
+
+## 系統架構亮點 (Architecture Highlights)
+
+* **無縫流量轉發與欺敵 (Seamless Traffic Routing)：** 當「哨兵閘道」偵測到惡意攻擊或異常探測時，系統**不會斷開連線**，而是即時將該流量無縫導向至 Docker 沙盒環境中，觸發 Mirage 引擎進行深度的欺敵工程。
+* **Harness Engineering 與沙盒邊界：** 運用 Docker 容器化技術，將欺敵環境嚴格限縮在隔離網路內，禁用特權模式，防止容器逃逸與橫向移動。
+* **資料庫實體解耦 (Database Decoupling)：** * 鑑識追蹤日誌 (`traffic_logs.db`) 與欺敵狀態記憶 (`mirage_memory.db`) 進行實體分離。
+  * 阻斷反鑑識操作，並消除時間側信道 (Timing Side-Channel) 指紋。
+* **毫秒級精度 (Millisecond Precision)：** 全系統強制 NTP 時鐘同步與毫秒級日誌記錄，確保攻擊鏈重構的絕對正確性。
+* **SOC 資安戰情室：** 整合宏觀的趨勢統計與微觀的即時攻擊指令串流（透過 WebSocket），提供上帝視角的威脅視覺化介面。
+
+---
+
+## 工具棧 (Tech Stack)
+
+本專案採用以下技術架構來平衡高效能攔截與高複雜度 AI 分析：
+
+* **程式語言：** Python
+* **哨兵閘道 (Sentinel Gateway)：** FastAPI + NGINX (負責流量代理與無縫導向)
+* **意圖分析 (Sentinel)：** XGBoost (負責極速特徵辨識與意圖判定)
+* **假資料生成 (Mirage)：** Llama 3.1 8B (測試階段使用 API 串接，負責動態生成高逼真度回應)
+* **資料庫：** PostgreSQL (測試與開發階段使用 SQLite 以加速迭代)
+* **沙盒環境：** Docker (負責環境隔離與誘餌部署)
+* **底層作業系統：** Canonical Ubuntu 24.04
+* **雲端平台：** Oracle Cloud Infrastructure (OCI)
+* **開發工具：** VS Code, GitHub, GitHub Copilot
+
+---
+
+## 雲端部署架構 (Cloud Deployment Architecture)
+
+本專案支援部署於 Oracle Cloud Infrastructure (OCI) 或同等級公有雲環境，採用嚴格的 **VCN 分層隔離架構**，確保防禦核心的絕對安全。
+
+* **公用子網 (Public Subnet) - 誘餌交戰區：**
+  * **公開 API 服務 (Honeypot)：** 部署高度受限的 Docker 誘餌容器，偽裝為對外開放的金融服務 API。
+  * **負載平衡器 (Load Balancer)：** 接收外部流量並齊一化回應時間，協助隱藏後端真實拓撲並消除時間側信道指紋。
+* **專用子網 (Private Subnet) - 戰略指揮區：**
+  * **SOC 後端與 AI 引擎：** 接收誘餌單向傳送的流量複本，進行 AI 意圖判定。完全阻斷來自網際網路的直接存取。
+  * **解耦資料庫集群：** `traffic_logs.db` 與 `mirage_memory.db` 獨立運行，落實最小權限原則。
+  * **SOC 戰情室前端：** 管理員視覺化介面。嚴禁對外暴露，僅限透過 API Gateway 或 Bastion Host (跳板機) 建立安全隧道進行存取。
+
+
+## 專案目錄結構 (Project Structure)
 
 ```
-客戶端請求
-    ↓
-[API Gateway] main.py
-    ↓
-[Sentinel 檢測] core/sentinel.py
-├─ TF-IDF + 安全統計特徵 (AI Sentinel)
-├─ 特徵型快篩（19 簽名或完整 SecLists）
-└─ 風險評分
-    ↓
-    ├─ 低風險 → 正常回應
-    ├─ 中風險 → 二階審查（預留 BERT）
-    └─ 高風險 ↓
-        [沙盒隔離] core/sandbox.py
-            ↓
-        [Mirage 生成] core/mirage.py
-            ├─ 記憶檢查
-            └─ 假資料回傳
-    ↓
-[流量日誌] traffic_logs.db
-    ↓
-[儀表板] frontend + api/dashboard.py
+Mirage-Sentinel/
+├── api/
+│   ├── __init__.py
+│   ├── banking.py
+│   ├── dashboard.py
+│   └── db/
+│       ├── __init__.py
+│       ├── models.py
+│       ├── operations.py
+│       └── session.py
+├── core/
+│   ├── __init__.py
+│   ├── analytics_engine.py
+│   ├── api_mirage.py
+│   ├── banking_db.py
+│   ├── deception_db.py
+│   ├── deception_engine.py
+│   ├── mirage.py
+│   ├── sandbox.py
+│   ├── sentinel.py
+│   ├── traffic_db.py
+│   └── web_attack_dection.py
+├── data/
+│   ├── attack_signatures.json
+│   ├── attack_signatures.txt
+│   ├── traffic_logs_sample.sql
+│   ├── _sanity_tmp/
+│   └── backups/
+│       └── seclists_invalid_20260328_192013/
+│           ├── common.txt
+│           ├── LFI-Jhaddix.txt
+│           └── login_bypass.txt
+├── datasets/
+│   └── SecLists/
+│       ├── CONTRIBUTING.md
+│       ├── CONTRIBUTORS.md
+│       ├── LICENSE
+│       ├── README.md
+│       ├── Ai/
+│       ├── Discovery/
+│       ├── Fuzzing/
+│       ├── Miscellaneous/
+│       ├── Passwords/
+│       ├── Pattern-Matching/
+│       ├── Payloads/
+│       ├── Usernames/
+│       └── Web-Shells/
+├── docs/
+│   ├── README.md
+│   ├── REQUIREMENTS.md
+│   └── SECLISTS_UPDATE_GUIDE.md
+├── frontend/
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── README.md
+│   ├── server.js
+│   └── public/
+│       ├── index.html
+│       ├── main.js
+│       └── style.css
+├── model/
+│   └── ai_sentinel.py
+├── scripts/
+│   ├── generate_sample_traffic_logs.py
+│   ├── generate_signatures.py
+│   ├── sanity_checks.py
+│   ├── update_seclists.py
+│   └── data/
+│       ├── attack_signatures.json
+│       ├── attack_signatures.txt
+│       └── payloads/
+├── services/
+│   ├── __init__.py
+│   └── dashboard_service.py
+├── DATABASE_SETUP.md
+├── docker-compose.oracle.dual-demo.yml
+├── docker-compose.oracle.yml
+├── docker-compose.yml
+├── Dockerfile
+├── main.py
+├── README.md
+├── render.yaml
+├── requirements.txt
+└── sandbox_service.py
 ```
 
-## 快速開始
+---
+
+## 執行與開啟方式 (Quick Start)
+
+以下為根目錄 `README.md` 的執行與開啟方式摘要，方便在本文件直接查閱。
 
 ### 本地開發
 
@@ -76,11 +185,12 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 # 4. 在另一個終端啟動前端
 npm --prefix frontend start
-
-# 5. 開啟儀表板
-# 後端 API：http://127.0.0.1:8000/docs
-# 前端儀表板：http://127.0.0.1:3000
 ```
+
+開啟位置：
+
+- 後端 API 文件：http://127.0.0.1:8000/docs
+- 前端儀表板：http://127.0.0.1:3000
 
 ### Docker 部署（本地）
 
@@ -88,350 +198,16 @@ npm --prefix frontend start
 docker compose up --build
 ```
 
-若要啟用「真實 PostgreSQL（可選）」：
+若要啟用真實 PostgreSQL（可選）：
 
 ```bash
 cp .env.db.example .env
 docker compose --profile db up --build
 ```
 
-啟用後，Banking API 回應中的 `notice` 會顯示 `(真實資料庫查詢)`。
-
 服務清單：
+
 - API Gateway：http://127.0.0.1:8000
 - Frontend Dashboard：http://127.0.0.1:3000
 - Sandbox Service：http://127.0.0.1:8001
-- PostgreSQL（可選）：`localhost:5432`
-
-### Oracle Cloud 部署（建議）
-
-建議使用 **Oracle Cloud Compute VM + Docker Compose**。本專案已提供 `docker-compose.oracle.yml`，會同時啟動：
-
-1. `backend`：FastAPI Gateway
-2. `sandbox`：隔離沙盒回應服務
-3. `frontend`：Express 儀表板代理
-
-#### 1. 建立 VM
-- 建議規格：`2 OCPU / 8 GB RAM` 起跳
-- 作業系統：Oracle Linux 8/9 或 Ubuntu 24.04
-- 安全清單開放埠：`3000`, `8000`, `8001`
-
-#### 2. 安裝 Docker / Compose
-```bash
-sudo yum install -y docker   # Oracle Linux
-sudo systemctl enable --now docker
-sudo usermod -aG docker $USER
-
-# 若系統未內建 compose plugin，再安裝 docker compose
-```
-
-#### 3. 部署專案
-```bash
-git clone <your-repo-url>
-cd Mirage-Sentinel
-
-export API_KEY='replace-with-strong-random-key'
-docker compose -f docker-compose.oracle.yml up -d --build
-```
-
-#### 4. 驗證
-```bash
-curl http://127.0.0.1:8000/healthz
-curl -H "X-API-Key: $API_KEY" http://127.0.0.1:8000/api/v1/dashboard/auto_updates
-```
-
-#### 5. 對外存取
-- 前端：`http://<VM 公網 IP>:3000`
-- 後端 API：`http://<VM 公網 IP>:8000`
-- 沙盒服務：`http://<VM 公網 IP>:8001`（通常只供內網服務呼叫）
-
-> 若你希望只開一個對外入口，可以再加 Nginx / Oracle Load Balancer 做反向代理。
-
-### Oracle Cloud 雙視角 Demo（Public + SOC）
-
-若你要同時展示「一般使用者/駭客視角」與「戰情室視角」，可使用雙後端組態：
-
-1. Public API：`backend_public`（對外，關閉 dashboard）
-2. SOC API：`backend_soc`（內網限制，可看 dashboard）
-3. SOC Frontend：`frontend_soc`（代理到 SOC API）
-
-#### 1. 建立環境檔
-
-```bash
-cp .env.oracle.public.example .env.oracle.public
-cp .env.oracle.soc.example .env.oracle.soc
-```
-
-編輯兩個檔案，至少設定：
-
-- `API_KEY`
-- `DASHBOARD_ADMIN_KEY`（SOC 檔案）
-
-#### 2. 啟動雙視角 Demo
-
-```bash
-docker compose -f docker-compose.oracle.dual-demo.yml up -d --build
-```
-
-> Oracle Cloud 建議將 `SANDBOX_ISOLATION_LEVEL` 設為 `2`；本機開發維持 `1`。
-
-#### 3. Demo 入口
-
-- Public API（一般/駭客行為展示）：`http://<VM-IP>:8000`
-- SOC API（戰情室後端）：`http://<VM-IP>:8002`
-- SOC Frontend（戰情室前端）：`http://<VM-IP>:3000`
-
-#### 4. Demo 指令
-
-```bash
-# A. 正常使用者
-curl "http://<VM-IP>:8000/api/v1/user/1001?payload=hello"
-
-# B. 模擬駭客
-curl "http://<VM-IP>:8000/api/v1/user/1001?payload=union%20select%20*%20from%20users"
-
-# C. 戰情室（SOC）
-curl -H "X-API-Key: <API_KEY>" "http://<VM-IP>:8002/api/v1/dashboard/auto_updates"
-```
-
-## API 使用指南
-
-### Banking API 欄位格式規格
-
-| 欄位 | 格式說明 | 範例 |
-|------|----------|------|
-| `X-User-Id` / `user_id` | CIF 客戶代號，建議 12 碼（`CIF` + 9 碼數字） | `CIF000001001` |
-| `user_id`（遮罩顯示） | 隱碼格式：保留前後段 | `CIF********001` |
-| `account_id` | 帳號識別碼，英數字 12-20 碼 | `ACCOD48PUCAEHKH` |
-| `account_id`（遮罩顯示） | 隱碼格式：僅顯示局部 | `ACC**********KH` |
-| `tx_id` | 交易編號，前綴 `TX-` 或 `TXN` | `TX-0E3D0F9119E0` |
-| `bank_code` | 銀行代碼，3-10 碼數字或字元 | `812` |
-| `currency` | 幣別，ISO 4217 三碼 | `USD` |
-| `amount` / `balance` / `fee` | 金額，正浮點數，建議最多小數 2 位 | `182700.46` |
-| `created_at`（交易） | 時間戳，建議 ISO 8601 | `2026-04-03T19:59:28` |
-| `open_date` / `created_at`（日期） | 日期字串（`YYYY-MM-DD`） | `2021-03-27` |
-
-備註：
-- 文件與展示畫面可用遮罩格式（例如 `CIF********001`、`ACC**********KH`）。
-- 真實 API 回傳可為完整值或遮罩值，取決於環境與安全策略。
-
-### 攻擊檢測與模擬
-
-```bash
-# 1. 正常請求
-curl "http://127.0.0.1:8000/api/v1/user/1001"
-
-# 2. 攻擊測試（LFI）
-curl "http://127.0.0.1:8000/api/v1/user/1001?payload=../../../../etc/passwd"
-
-# 3. 模擬攻擊（切換攻擊者 IP）
-curl -X POST "http://127.0.0.1:8000/api/v1/simulate_attack?user_id=1001&payload=' OR '1'='1&client_ip=10.10.10.1"
-
-# 4. AI Sentinel 直連測試
-curl "http://127.0.0.1:8000/api/v1/ai_sentinel?text=DROP%20TABLE%20users&method=POST"
-```
-
-### 儀表板 API（需 API Key）
-
-```bash
-# 設定 API Key
-export API_KEY="dev-local-api-key-change-me"
-
-# 1. Live IPs
-curl -H "X-API-Key: $API_KEY" \
-  "http://127.0.0.1:8000/api/v1/dashboard/live_ips?limit=50"
-
-# 2. IP 詳細資訊
-curl -H "X-API-Key: $API_KEY" \
-  "http://127.0.0.1:8000/api/v1/dashboard/ip_details/10.10.10.1"
-
-# 3. 流量比較
-curl -H "X-API-Key: $API_KEY" \
-  "http://127.0.0.1:8000/api/v1/dashboard/traffic_compare"
-
-# 4. 自動更新檢查
-curl -H "X-API-Key: $API_KEY" \
-  "http://127.0.0.1:8000/api/v1/dashboard/auto_updates"
-```
-
-## 環境變數
-
-```env
-# .env 或 Oracle Cloud 環境變數
-
-# API 認證（必填：正式環境）
-API_KEY=replace-with-strong-random-key
-
-# OpenAI（選用：功能尚在規劃）
-OPENAI_API_KEY=sk-...
-
-# Sandbox 服務（Docker Compose / OCI VM 可用）
-SANDBOX_API_URL=http://sandbox:8001/simulate_attack
-
-# 沙盒隔離等級
-# 1 = 開發模式（sandbox 失敗可 fallback 本機欺敵）
-# 2 = 嚴格模式（建議 Oracle Cloud，sandbox 失敗不 fallback）
-SANDBOX_ISOLATION_LEVEL=1
-
-# Redis（若你另外部署）
-REDIS_URL=redis://localhost:6379
-
-# Port（Oracle Cloud VM / Compose 建議固定）
-PORT=8000
-```
-
-## Sentinel 簽名機制
-
-### 簽名來源優先級
-
-1. **第一優先：完整 SecLists（若已部署）**
-   - 支援遞迴尋找（位置任意）
-   - 包含數千個已知攻擊模式
-
-2. **第二優先：內建 Fallback 簽名（雲端預設）**
-   - SQLi：6 個簽名（`' or '1'='1`, `union select` 等）
-   - LFI：7 個簽名（`../../`, `/etc/passwd` 等）
-   - Paths：6 個簽名（`/admin`, `/api/admin` 等）
-   - **總計 19 個簽名**
-
-### 部署時的簽名日誌
-
-```
-✅ Sentinel 核心已武裝！總計載入 19 筆簽名          # 雲端環境（fallback）
-✅ Sentinel 核心已武裝！總計載入 2483 筆簽名       # 本地環境（完整 SecLists）
-```
-
-訊息「改用內建 fallback 字典」**不是錯誤**，而是雲端環境的預期行為。
-
-## 資料庫結構
-
-### traffic_logs.db（戰情室查詢來源）
-
-```sql
--- 核心欄位
-request_at              TEXT      -- 請求時間
-response_at             TEXT      -- 回應時間
-process_ms              INTEGER   -- 處理時間
-client_ip               TEXT      -- 攻擊者 IP
-raw_payload             TEXT      -- 原始請求內容
-attack_vector           TEXT      -- 攻擊類型（SQLi、LFI 等）
-risk_level              INTEGER   -- 風險分數 (0-100)
-is_attack               INTEGER   -- 是否為攻擊 (0/1)
-mitigation_status       TEXT      -- 處置狀態（Sandboxed/normal）
-interaction_depth       INTEGER   -- 互動深度
-dwell_time              REAL      -- 駭客停留時間
-hits                    INTEGER   -- 命中次數
-```
-
-### mirage_memory.db（欺敵快取，不對外）
-
-```sql
--- 快取 key: client_ip + query_id
-payload                 JSON      -- 回傳的假資料
-last_seen               TEXT      -- 最後使用時間
-depth                   INTEGER   -- 互動深度
-hits                    INTEGER   -- 累計命中次數
-```
-
-## 已知限制與修複狀態
-
-| 項目 | 狀態 | 說明 |
-|------|------|------|
-| Sentinel 基礎檢測 | 完成 | 19 個簽名 + SecLists 支援 |
-| 雙資料庫分離 | 完成 | traffic_logs + mirage_memory |
-| 前端儀表板 | 完成 | 自動版面、XSS 防護已修補 |
-| Oracle Cloud 部署 | 完成 | Docker Compose、Health Check、三服務架構已可用 |
-| AI Sentinel (XGBoost) | 進行中 | 類名修正完成，模型載入測試待驗 |
-| Mirage Agent (LLM) | 規劃中 | 需集成 Llama 3.1 8B 或 OpenAI API |
-| 二階 BERT 審查 | 規劃中 | 中風險請求的進階判定 |
-
-## 開發與貢獻
-
-### 本機檢測流程
-
-```bash
-# 1. Sentinel 簽名測試
-python3 -c "from core.sentinel import analyze_intent; print(analyze_intent('DROP TABLE'))"
-
-# 2. 前端語法檢查
-node --check frontend/public/main.js
-
-# 3. Backend 單元測試（待實作）
-pytest tests/
-
-# 4. Docker 構建驗證
-docker build -t mirage-sentinel:test .
-```
-
-### 部署檢查清單
-
-- [ ] 所有修改已 `git add` 並 `git commit`
-- [ ] 遠端分支已推送：`git push`
-- [ ] `.env` 已配置正式 `API_KEY`（非預設值）
-- [ ] Oracle Cloud VM 已開啟安全清單埠：3000 / 8000 / 8001
-- [ ] `.env` 或 shell 環境變數已設置 `API_KEY`
-- [ ] Health Check 回傳 `{"status": "ok"}`
-- [ ] Dashboard API 可正常查詢（帶有效 API Key）
-- [ ] 前端儀表板可訪問並顯示數據
-
-## 故障排查
-
-### 啟動失敗：Port binding error
-
-**原因**：容器內服務未正確綁定設定的連接埠，或 Oracle Cloud 安全清單未放行
-**解決**：
-- 確認 Dockerfile `CMD` 正確使用 `sh -c` 包裝
-- 確認 `docker-compose.oracle.yml` 中的 `PORT` 與 `ports` 對應一致
-- 檢查 Oracle Cloud 安全清單是否已開放對應埠
-
-### Sentinel 未載入簽名
-
-**原因**：雲端 SecLists 未部署（預期行為）
-**預期日誌**：
-```
-Sentinel 找不到簽名字典: LFI-Jhaddix.txt，改用內建 fallback 字典。
-Sentinel 找不到簽名字典: common.txt，改用內建 fallback 字典。
-Sentinel 找不到簽名字典: login_bypass.txt，改用內建 fallback 字典。
-✅ Sentinel 核心已武裝！總計載入 19 筆簽名
-```
-**此為正常狀態，不會影響檢測**
-
-### 前端儀表板無數據
-
-**檢查項目**：
-1. 後端 `/healthz` 是否回傳 `{"status": "ok"}`
-2. API Key 是否正確（Header `X-API-Key`）
-3. `traffic_logs.db` 是否存在且有記錄
-4. 前端代理日誌是否有錯誤（`npm logs`）
-
-### AttributeError: module 'model.ai_sentinel' has no attribute 'SentinelModuleV14'
-
-**原因**：類名引用不一致
-**解決**：已修正，確認 `main.py` 第 41 行為 `model.SentinelModule`
-
-## 測試數據示例
-
-```bash
-# 製造攻擊事件（本地）
-for i in {1..10}; do
-  curl "http://127.0.0.1:8000/api/v1/user/$((1000+i))?payload=../../../../etc/passwd"
-done
-
-# 查詢儀表板
-curl -H "X-API-Key: dev-local-api-key-change-me" \
-  "http://127.0.0.1:8000/api/v1/dashboard/traffic_compare"
-```
-
-## 授權
-
-此專案目前未附正式開源授權。若要對外釋出，建議補上 LICENSE。
-
----
-
-**最後更新**：2026-04-02 | v1.6.2
-- Sentinel Fallback 簽名系統
-- 雙資料庫分離（traffic_logs + mirage_memory）
-- Frontend 自動版面 + XSS 防護
-- Oracle Cloud Docker Compose 部署
-- API 健康檢查 (healthz)
-- SentinelModule 類名統一
+- PostgreSQL（可選）：localhost:5432

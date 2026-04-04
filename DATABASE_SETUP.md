@@ -116,7 +116,7 @@ python -m uvicorn main:app --host 127.0.0.1 --port 8000
 psql -U mirage_user -d mirage_sentinel -h localhost
 
 -- 插入使用者
-INSERT INTO users (user_id, name, email) VALUES 
+INSERT INTO users (user_id, name, email) VALUES
 ('CIF000001001', '王小明', 'wang@example.com'),
 ('CIF000001002', '李大安', 'li@example.com');
 
@@ -275,4 +275,3 @@ $env:DATABASE_URL = "postgresql://user:pass@localhost:5432/db"
 1. **開發環境**：使用 Mock 模式快速迭代
 2. **測試環境**：連接測試 PostgreSQL 資料庫驗證多租戶邏輯
 3. **生產環境**：使用受保護的生產資料庫，設置強密碼和 SSL 連接
-
