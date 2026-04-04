@@ -368,18 +368,8 @@ def _ensure_account_owner(account_id: str, user_id: str) -> dict:
             "content": {
                 "application/json": {
                     "example": {
-                        "user_id": "CIF000001001",
-                        "accounts": [
-                            {
-                                "account_id": "ACCOD48PUCAEHKH",
-                                "customer_name": "王小明",
-                                "account_display": "ACCOD48PUCAEHKH(真實帳戶)",
-                                "currency": "USD",
-                                "balance": 182700.46,
-                                "status": "ACTIVE",
-                                "created_at": "2021-03-27",
-                            }
-                        ],
+                        "user_id": "CIF*********",
+                        "accounts": [],
                         "notice": "(真實資訊)",
                     }
                 }

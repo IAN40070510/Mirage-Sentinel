@@ -1,9 +1,27 @@
 """Database operations for Banking API"""
 
 from datetime import datetime
+import re
+from faker import Faker
 
 from .models import Account, Transaction, Beneficiary, Idempotency
 from .session import get_db, is_real_db_enabled
+
+
+faker_zh_tw = Faker("zh_TW")
+
+
+def _build_traditional_chinese_name(user_id: str) -> str:
+    digits = "".join(ch for ch in user_id if ch.isdigit())
+    seed_value = int(digits or "1")
+    faker_zh_tw.seed_instance(seed_value)
+    return faker_zh_tw.name()
+
+
+def _is_legacy_numeric_name(name: str | None) -> bool:
+    if not name:
+        return True
+    return bool(re.fullmatch(r"客戶\d+", name.strip()))
 
 
 class DBOperations:
@@ -56,13 +74,15 @@ class DBOperations:
 
             user = db.query(User).filter(User.user_id == user_id).first()
             if not user:
-                suffix = user_id[-4:] if len(user_id) >= 4 else user_id
                 user = User(
                     user_id=user_id,
-                    name=f"客戶{suffix}",
+                    name=_build_traditional_chinese_name(user_id),
                     email=f"{user_id.lower()}@mirage.local",
                 )
                 db.add(user)
+            elif _is_legacy_numeric_name(user.name):
+                # Migrate old placeholder names like 客戶000001112 to faker zh_TW names.
+                user.name = _build_traditional_chinese_name(user_id)
 
             account = db.query(Account).filter(Account.user_id == user_id).first()
             if not account:

@@ -1,9 +1,11 @@
 import argparse
 import csv
 import os
+import re
 import sys
 import zipfile
 from datetime import datetime
+from faker import Faker
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
@@ -11,6 +13,9 @@ if PROJECT_ROOT not in sys.path:
 
 from api.db.models import User, Account
 from api.db.session import init_db, create_tables, get_db, is_real_db_enabled
+
+
+faker_zh_tw = Faker("zh_TW")
 
 
 def parse_args() -> argparse.Namespace:
@@ -37,6 +42,11 @@ def parse_args() -> argparse.Namespace:
         default=os.path.join("scripts", "data", "archive.zip"),
         help="Path to archive.zip used for realistic seed templates",
     )
+    parser.add_argument(
+        "--refresh-existing-names",
+        action="store_true",
+        help="Rewrite legacy names like 客戶123 into faker zh_TW names",
+    )
     return parser.parse_args()
 
 
@@ -46,6 +56,12 @@ def build_user_id(number: int) -> str:
 
 def build_account_id(number: int) -> str:
     return f"ACC{number:012d}"
+
+
+def _build_traditional_chinese_name(number: int) -> str:
+    # 依 CIF 數字做 deterministic seed，避免每次重跑都換名字。
+    faker_zh_tw.seed_instance(number)
+    return faker_zh_tw.name()
 
 
 def _load_archive_templates(archive_zip_path: str) -> tuple[list[dict], list[dict]]:
@@ -116,14 +132,9 @@ def run() -> int:
                 else None
             )
 
-            user_name = f"客戶{number:09d}"
+            user_name = _build_traditional_chinese_name(number)
             user_email = f"{user_id.lower()}@mirage.local"
             if customer_template:
-                first_name = (customer_template.get("first_name") or "").strip()
-                last_name = (customer_template.get("last_name") or "").strip()
-                full_name = f"{first_name} {last_name}".strip()
-                if full_name:
-                    user_name = full_name
                 email_candidate = (customer_template.get("email") or "").strip()
                 if email_candidate:
                     user_email = f"{user_id.lower()}-{email_candidate}"
@@ -154,6 +165,10 @@ def run() -> int:
                 )
                 db.add(user)
                 created_users += 1
+            elif args.refresh_existing_names and re.fullmatch(
+                r"客戶\d+", (user.name or "").strip()
+            ):
+                user.name = user_name
 
             account = db.query(Account).filter(Account.account_id == account_id).first()
             if not account:
