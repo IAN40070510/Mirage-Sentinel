@@ -373,8 +373,19 @@ class DBOperations:
 
             # Get to_account (may belong to another user)
             to_acc = db.query(Account).filter(Account.account_id == to_account).first()
+            is_external_beneficiary = False
             if not to_acc:
-                return None
+                authorized_beneficiary = (
+                    db.query(Beneficiary)
+                    .filter(
+                        Beneficiary.user_id == user_id,
+                        Beneficiary.account_id == to_account,
+                    )
+                    .first()
+                )
+                if not authorized_beneficiary:
+                    return None
+                is_external_beneficiary = True
 
             # Check balance
             total_debit = amount + fee
@@ -383,7 +394,8 @@ class DBOperations:
 
             # Update balances
             from_acc.balance -= total_debit
-            to_acc.balance += amount
+            if not is_external_beneficiary and to_acc is not None:
+                to_acc.balance += amount
 
             # Create transaction record
             import uuid

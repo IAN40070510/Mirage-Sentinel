@@ -56,6 +56,31 @@ jobs:
               sleep 3
             done
 
+            # 強制讓 backend 在 postgres 已健康後重新初始化，避免啟動時短暫失敗而停在 mock mode。
+            $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml restart backend_public backend_soc
+
+            for i in $(seq 1 30); do
+              pub_ok=0
+              soc_ok=0
+              if curl -fsS http://127.0.0.1:8000/healthz >/dev/null 2>&1; then
+                pub_ok=1
+              fi
+              if curl -fsS http://127.0.0.1:8002/healthz >/dev/null 2>&1; then
+                soc_ok=1
+              fi
+              if [ "$pub_ok" -eq 1 ] && [ "$soc_ok" -eq 1 ]; then
+                echo "[deploy] backend restart health checks passed"
+                break
+              fi
+              if [ "$i" -eq 30 ]; then
+                echo "[deploy] ERROR: backend restart health checks failed"
+                $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml ps
+                $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml logs --tail=120 backend_public backend_soc sandbox
+                exit 1
+              fi
+              sleep 3
+            done
+
             # Seed banking users/accounts into PostgreSQL after services are healthy.
             # Default range can be adjusted directly here based on capacity.
             $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml exec -T backend_public \
