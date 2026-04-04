@@ -157,7 +157,6 @@ Mirage-Sentinel/
 ├── Dockerfile
 ├── main.py
 ├── README.md
-├── render.yaml
 ├── requirements.txt
 └── sandbox_service.py
 ```

@@ -253,7 +253,7 @@ async def get_user_data(
     event_payload = {
         "request_at": request_at,
         "client_ip": client_ip,
-        "location": "Cloud/Render",
+        "location": "Cloud",
         "is_proxy": detect_proxy(request),
         "user_agent": user_agent,
         "tls_fingerprint": "N/A",

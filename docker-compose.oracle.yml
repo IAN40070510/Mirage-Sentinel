@@ -12,6 +12,8 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - PORT=8000
+      - ENABLE_DASHBOARD=false
+      - DASHBOARD_INTERNAL_ONLY=true
       - API_KEY=${API_KEY:-dev-local-api-key-change-me}
       - SANDBOX_API_URL=http://sandbox:8001/simulate_attack
     volumes:

@@ -377,7 +377,7 @@ function renderSystemOfflineState() {
 }
 
 // =========================
-// Render
+// UI Rendering
 // =========================
 function renderIpList(list) {
   if (!ipTrafficList) return;

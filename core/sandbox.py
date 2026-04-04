@@ -52,18 +52,15 @@ async def run_attack_in_sandbox(
 
     configured_sandbox_url = os.getenv("SANDBOX_API_URL", "").strip()
     sandbox_api_url = configured_sandbox_url or "http://sandbox:8001/simulate_attack"
-    is_render_env = os.getenv("RENDER", "").lower() == "true"
 
     if strict_isolation and not configured_sandbox_url:
         logger.error("[SANDBOX STRICT] SANDBOX_API_URL 未設定，拒絕本機 fallback。")
         return _strict_unavailable_payload(query_id, "missing_sandbox_api_url")
 
-    # Render 單服務部署通常沒有 sandbox 主機，直接降級可避免無效重試與噪音日誌
-    if (not strict_isolation) and is_render_env and "SANDBOX_API_URL" not in os.environ:
+    # 在非嚴格模式下，若未提供 SANDBOX_API_URL，直接使用本機假資料。
+    if (not strict_isolation) and "SANDBOX_API_URL" not in os.environ:
         fake_data = generate_fake_data(query_id)
-        logger.info(
-            "[SANDBOX] SANDBOX_API_URL 未設定（Render 環境），直接使用本機假資料。"
-        )
+        logger.info("[SANDBOX] SANDBOX_API_URL 未設定，直接使用本機假資料。")
         return fake_data
 
     # 帶有指數退避的重試邏輯
