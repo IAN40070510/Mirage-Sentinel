@@ -8,12 +8,14 @@ app = FastAPI(title="Mirage-Sentinel Sandbox Service", version="1.0")
 
 logger = logging.getLogger(__name__)
 
+
 class AttackRequest(BaseModel):
     client_ip: str
     query_id: str
     raw_payload: str
     attack_vector: str = None
     risk_level: int = 0
+
 
 @app.post("/simulate_attack")
 async def simulate_attack(req: AttackRequest):
@@ -34,7 +36,7 @@ async def simulate_attack(req: AttackRequest):
             "raw_payload": raw_payload,
             "attack_vector": attack_vector,
             "risk_level": risk_level,
-            "action": "simulated_in_sandbox"
+            "action": "simulated_in_sandbox",
         }
         logger.warning(f"[SANDBOX SIMULATION] {sandbox_log}")
 
@@ -44,7 +46,7 @@ async def simulate_attack(req: AttackRequest):
         return {
             "status": "simulated",
             "fake_data": fake_data,
-            "sandbox_log": sandbox_log
+            "sandbox_log": sandbox_log,
         }
 
     except Exception as e:
@@ -53,6 +55,8 @@ async def simulate_attack(req: AttackRequest):
         logger.error(f"Sandbox simulation error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Sandbox error: {str(e)}")
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8001)

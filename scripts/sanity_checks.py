@@ -52,8 +52,12 @@ def run():
         # Case 1: 驗證唯一鍵 + Upsert 不會產生重複列
         client_ip = "10.0.0.10"
         query_id = "u1001"
-        deception_db.save_deception_state(client_ip, query_id, "SQLi", 80, {"token": "fake-a"})
-        deception_db.save_deception_state(client_ip, query_id, "SQLi", 90, {"token": "fake-b"})
+        deception_db.save_deception_state(
+            client_ip, query_id, "SQLi", 80, {"token": "fake-a"}
+        )
+        deception_db.save_deception_state(
+            client_ip, query_id, "SQLi", 90, {"token": "fake-b"}
+        )
 
         with sqlite3.connect(temp_memory_db) as conn:
             cursor = conn.execute(
@@ -63,7 +67,10 @@ def run():
             count_rows, hits, interaction_count = cursor.fetchone()
 
         _assert(count_rows == 1, "Case 1 failed: 重複 key 產生多筆 deception_memory")
-        _assert(hits == 2 and interaction_count == 2, "Case 1 failed: Upsert 累加 hits/interaction_count 不正確")
+        _assert(
+            hits == 2 and interaction_count == 2,
+            "Case 1 failed: Upsert 累加 hits/interaction_count 不正確",
+        )
 
         # Case 2: 驗證 dwell_seconds 為 first->last，不受閒置時間膨脹
         attack_client = "10.0.0.20"
@@ -107,7 +114,10 @@ def run():
             current_payload="../../../../etc/passwd",
             has_memory_hit=True,
         )
-        _assert(metrics["dwell_seconds"] == 3600, f"Case 2 failed: dwell_seconds={metrics['dwell_seconds']}，預期 3600")
+        _assert(
+            metrics["dwell_seconds"] == 3600,
+            f"Case 2 failed: dwell_seconds={metrics['dwell_seconds']}，預期 3600",
+        )
 
         # Case 3: 驗證 has_memory_hit 只看攻擊事件，不受正常流量影響
         normal_client = "10.0.0.30"

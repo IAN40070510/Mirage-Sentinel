@@ -39,4 +39,3 @@ nc , ncat , netcat, bash -i, /bin/bash, /bin/sh, socat, telnet
 
 [path_trick]
 ..%2f, %2e%2e, ..%5c, %2e%2e%2f, ..\, ..%5c%5c, %2e%2e%2f%2e%2e
-

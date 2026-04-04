@@ -12,18 +12,25 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 class MisjudgmentRequest(BaseModel):
     client_ip: str = Field(..., min_length=7, max_length=45, description="IP address")
-    reason: str = Field(..., min_length=3, max_length=500, description="Misjudgment reason")
+    reason: str = Field(
+        ..., min_length=3, max_length=500, description="Misjudgment reason"
+    )
 
 
 class CategoryRequest(BaseModel):
-    category_name: str = Field(..., min_length=1, max_length=100, description="Category name")
+    category_name: str = Field(
+        ..., min_length=1, max_length=100, description="Category name"
+    )
     items: list | None = None
 
 
 class CommandRequest(BaseModel):
-    command_text: str = Field(..., min_length=1, max_length=1000, description="Command text")
-    selected_ip: str | None = Field(default=None, max_length=45, description="Selected IP")
-
+    command_text: str = Field(
+        ..., min_length=1, max_length=1000, description="Command text"
+    )
+    selected_ip: str | None = Field(
+        default=None, max_length=45, description="Selected IP"
+    )
 
 
 def verify_api_key(x_api_key: str | None):
@@ -54,7 +61,9 @@ async def get_hacker_analysis(
     try:
         return ws.get_hacker_dwell_time(client_ip)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"取得駭客滯留時間失敗: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"取得駭客滯留時間失敗: {exc}"
+        ) from exc
 
 
 @router.get("/interaction_depth/{client_ip}", summary="分析誘餌互動深度")
@@ -81,13 +90,17 @@ async def get_attack_timeline(
         return ws.get_attack_timeline(client_ip)
     except Exception as exc:
         logger.error("取得攻擊時間軸失敗: %r", exc)
-        raise HTTPException(status_code=500, detail=f"取得攻擊時間軸失敗: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"取得攻擊時間軸失敗: {exc}"
+        ) from exc
 
 
 @router.get("/recent_traffic", summary="獲取近期流量日誌")
 async def get_recent_traffic(
     limit: int = Query(100, ge=1, le=500, description="筆數上限"),
-    mode: str = Query("all", pattern="^(all|attacks)$", description="all=全流量, attacks=僅攻擊"),
+    mode: str = Query(
+        "all", pattern="^(all|attacks)$", description="all=全流量, attacks=僅攻擊"
+    ),
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ):
     verify_api_key(x_api_key)
@@ -118,7 +131,10 @@ async def log_misjudgment_event(
     verify_api_key(x_api_key)
     try:
         ws.log_misjudgment(req.client_ip, req.reason)
-        return {"status": "success", "message": f"IP {req.client_ip} 已記錄至誤判資料夾"}
+        return {
+            "status": "success",
+            "message": f"IP {req.client_ip} 已記錄至誤判資料夾",
+        }
     except Exception as exc:
         logger.error("記錄誤判失敗: %r", exc)
         raise HTTPException(status_code=500, detail=f"記錄誤判失敗: {exc}") from exc
@@ -133,7 +149,9 @@ async def get_top_commands(
         return ws.get_command_heatmap()["top_commands"]
     except Exception as exc:
         logger.error("取得指令熱區圖資料失敗: %r", exc)
-        raise HTTPException(status_code=500, detail=f"取得指令熱區圖資料失敗: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"取得指令熱區圖資料失敗: {exc}"
+        ) from exc
 
 
 @router.get("/ip_details/{client_ip}", summary="取得特定 IP 詳細資訊")
@@ -151,7 +169,9 @@ async def get_ip_detail(
         raise
     except Exception as exc:
         logger.error("取得 IP 詳細資料失敗: %r", exc)
-        raise HTTPException(status_code=500, detail=f"取得 IP 詳細資料失敗: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"取得 IP 詳細資料失敗: {exc}"
+        ) from exc
 
 
 @router.get("/report/{client_ip}", summary="生成特定駭客行為報告書")
@@ -259,7 +279,9 @@ async def get_ip_bundle(
         raise
     except Exception as exc:
         logger.error("取得 IP 整合資料失敗: %r", exc)
-        raise HTTPException(status_code=500, detail=f"取得 IP 整合資料失敗: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"取得 IP 整合資料失敗: {exc}"
+        ) from exc
 
 
 @router.get("/statistics/country", summary="按國家統計攻擊數與連線")
@@ -284,7 +306,9 @@ async def get_attack_vectors(
         return ws.get_attack_vector_distribution()
     except Exception as exc:
         logger.error("取得攻擊類型分布失敗: %r", exc)
-        raise HTTPException(status_code=500, detail=f"取得攻擊類型分布失敗: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"取得攻擊類型分布失敗: {exc}"
+        ) from exc
 
 
 @router.get("/statistics/top_source_ips", summary="源 IP 熱點分布")
@@ -297,7 +321,9 @@ async def get_source_ips(
         return ws.get_top_source_ips(limit)
     except Exception as exc:
         logger.error("取得源 IP 分布失敗: %r", exc)
-        raise HTTPException(status_code=500, detail=f"取得源 IP 分布失敗: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"取得源 IP 分布失敗: {exc}"
+        ) from exc
 
 
 @router.get("/statistics/time_series", summary="時間序列統計（小時粒度）")
@@ -310,4 +336,6 @@ async def get_time_series(
         return ws.get_time_series_stats(hours)
     except Exception as exc:
         logger.error("取得時間序列統計失敗: %r", exc)
-        raise HTTPException(status_code=500, detail=f"取得時間序列統計失敗: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"取得時間序列統計失敗: {exc}"
+        ) from exc

@@ -11,7 +11,10 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 logger = logging.getLogger(__name__)
 
-async def get_raw_ai_fake_data(attack_vector: str, payload: str, client_ip: str, query_id: str):
+
+async def get_raw_ai_fake_data(
+    attack_vector: str, payload: str, client_ip: str, query_id: str
+):
     """
     高階欺敵引擎邏輯：
     1. 比對記憶：若有舊資料，直接回傳，確保一致性。
@@ -27,7 +30,7 @@ async def get_raw_ai_fake_data(attack_vector: str, payload: str, client_ip: str,
 
     # [步驟 2] 無記憶，準備生成新資料
     final_payload_dict = None
-    
+
     system_prompt = f"""
     你是一個網路安全欺敵系統。駭客正在進行攻擊。
     攻擊類型：{attack_vector}。
@@ -41,22 +44,30 @@ async def get_raw_ai_fake_data(attack_vector: str, payload: str, client_ip: str,
     }}
     注意：只回傳 JSON，不准有任何解釋文字。
     """
-    
-    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json",
+    }
     data = {
         "model": "llama-3.1-8b-instant",
-        "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": payload}],
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": payload},
+        ],
         "temperature": 0.7,
-        "response_format": {"type": "json_object"}
+        "response_format": {"type": "json_object"},
     }
 
     async with httpx.AsyncClient() as client:
         try:
             # 嘗試呼叫 Groq AI
-            response = await client.post(GROQ_URL, headers=headers, json=data, timeout=10.0)
+            response = await client.post(
+                GROQ_URL, headers=headers, json=data, timeout=10.0
+            )
             response.raise_for_status()
-            
-            ai_content = response.json()['choices'][0]['message']['content'].strip()
+
+            ai_content = response.json()["choices"][0]["message"]["content"].strip()
             final_payload_dict = json.loads(ai_content)
             logger.info(f"[AI 生成] 成功產出誘餌：{final_payload_dict.get('name')}")
 
@@ -71,8 +82,8 @@ async def get_raw_ai_fake_data(attack_vector: str, payload: str, client_ip: str,
         client_ip=client_ip,
         query_id=query_id,
         vector=attack_vector,
-        risk=75, # 預設測試風險值
-        payload=final_payload_dict
+        risk=75,  # 預設測試風險值
+        payload=final_payload_dict,
     )
-    
+
     return json.dumps(final_payload_dict, ensure_ascii=False)

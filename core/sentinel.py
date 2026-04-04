@@ -7,22 +7,39 @@ from rbloom import Bloom
 logger = logging.getLogger(__name__)
 
 # 雲端路徑定位
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__)) 
-PROJECT_ROOT = os.path.dirname(CURRENT_DIR)               
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
 SECLISTS_PATH = os.path.join(PROJECT_ROOT, "data", "datasets", "SecLists")
 
 # 雲端最小可用簽名字典：當 SecLists 未部署時，仍可維持基本檢測能力。
 DEFAULT_SIGNATURES = {
     "lfi": [
-        "../../", "..\\..\\", "/etc/passwd", "/etc/shadow", "win.ini", "boot.ini", "php://filter",
+        "../../",
+        "..\\..\\",
+        "/etc/passwd",
+        "/etc/shadow",
+        "win.ini",
+        "boot.ini",
+        "php://filter",
     ],
     "paths": [
-        "/admin", "/administrator", "/wp-admin", "/api/admin", "/api/internal", "/api/salary",
+        "/admin",
+        "/administrator",
+        "/wp-admin",
+        "/api/admin",
+        "/api/internal",
+        "/api/salary",
     ],
     "sqli": [
-        "' or '1'='1", "\" or \"1\"=\"1", "union select", "drop table", "information_schema", "sleep(",
+        "' or '1'='1",
+        '" or "1"="1',
+        "union select",
+        "drop table",
+        "information_schema",
+        "sleep(",
     ],
 }
+
 
 class SentinelEngine:
     def __init__(self, seclists_root: str):
@@ -30,12 +47,12 @@ class SentinelEngine:
         self.automaton = ahocorasick.Automaton()
         self.automaton_ready = False
         self.bloom = Bloom(expected_items=100000, false_positive_rate=0.0001)
-        
+
         # 權重分配：admin (paths) 分數極低，只有真正帶攻擊特徵的才會飆高
         self.configs = {
             "lfi": {"path": "LFI-Jhaddix.txt", "weight": 0.70},
             "paths": {"path": "common.txt", "weight": 0.10},
-            "sqli": {"path": "login_bypass.txt", "weight": 0.85}
+            "sqli": {"path": "login_bypass.txt", "weight": 0.85},
         }
         self._initialize_engine()
 
@@ -57,7 +74,10 @@ class SentinelEngine:
         for category, config in self.configs.items():
             full_path = self._resolve_signature_path(config["path"])
             if not full_path:
-                logger.warning("Sentinel 找不到簽名字典: %s，改用內建 fallback 字典。", config["path"])
+                logger.warning(
+                    "Sentinel 找不到簽名字典: %s，改用內建 fallback 字典。",
+                    config["path"],
+                )
                 candidate_patterns = DEFAULT_SIGNATURES.get(category, [])
             else:
                 with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -84,28 +104,36 @@ class SentinelEngine:
                         self.automaton.add_word(p, (p, category))
                         category_count += 1
                         loaded_count += 1
-            
+
             logger.debug(f"[Sentinel] {category}: 成功載入 {category_count} 個簽名")
-        
+
         if loaded_count > 0:
             self.automaton.make_automaton()
             self.automaton_ready = True
             logger.info(f"✅ Sentinel 核心已武裝！總計載入 {loaded_count} 筆簽名")
         else:
             self.automaton_ready = False
-            logger.error("❌ Sentinel 未載入到任何簽名字典，將以安全降級模式運行（所有請求視為非攻擊）。")
+            logger.error(
+                "❌ Sentinel 未載入到任何簽名字典，將以安全降級模式運行（所有請求視為非攻擊）。"
+            )
 
     def _recursive_url_decode(self, text: str, depth=0) -> str:
-        if depth > 3 or not text: return text
+        if depth > 3 or not text:
+            return text
         decoded = urllib.parse.unquote(text)
-        return self._recursive_url_decode(decoded, depth + 1) if decoded != text else decoded.lower().strip()
+        return (
+            self._recursive_url_decode(decoded, depth + 1)
+            if decoded != text
+            else decoded.lower().strip()
+        )
 
     def analyze(self, raw_input: str):
-        if not raw_input: return False, 0.0, "None"
+        if not raw_input:
+            return False, 0.0, "None"
         if not self.automaton_ready:
             return False, 0.0, "None"
         clean_text = self._recursive_url_decode(raw_input)
-        
+
         matches = list(self.automaton.iter(clean_text))
         if not matches:
             return False, 0.0, "None"
@@ -122,10 +150,13 @@ class SentinelEngine:
 
         confidence = min(round(total_score, 2), 1.0)
         attack_vector = ", ".join(matched_categories)
-        
+
         # 這裡的 True 僅代表「有命中」，最終生死由 main.py 決定
         return (confidence > 0), confidence, attack_vector
 
+
 _detector = SentinelEngine(SECLISTS_PATH)
+
+
 def analyze_intent(text: str):
     return _detector.analyze(text)

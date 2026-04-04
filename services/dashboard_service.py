@@ -40,7 +40,11 @@ def _resolve_ip_region(ip: str, fallback_location: str | None = None) -> str:
     normalized_fallback = (fallback_location or "").strip()
     # 某些舊資料把 endpoint path 寫入 location，例如 /api/v1/user，需忽略後重算。
     fallback_looks_like_endpoint = normalized_fallback.startswith("/")
-    if normalized_fallback and normalized_fallback != "-" and not fallback_looks_like_endpoint:
+    if (
+        normalized_fallback
+        and normalized_fallback != "-"
+        and not fallback_looks_like_endpoint
+    ):
         return normalized_fallback
 
     if not _is_public_ip(ip):
@@ -61,7 +65,11 @@ def _resolve_ip_region(ip: str, fallback_location: str | None = None) -> str:
             payload = json.loads(resp.read().decode("utf-8"))
 
         if payload.get("status") == "success":
-            parts = [payload.get("country"), payload.get("regionName"), payload.get("city")]
+            parts = [
+                payload.get("country"),
+                payload.get("regionName"),
+                payload.get("city"),
+            ]
             region = "/".join([part for part in parts if part]) or "Unknown"
         else:
             region = "Unknown"
@@ -83,7 +91,6 @@ def get_db_connection():
     return conn
 
 
-
 def _parse_ts(ts: str) -> datetime:
     for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
         try:
@@ -93,11 +100,9 @@ def _parse_ts(ts: str) -> datetime:
     raise ValueError(f"Unsupported timestamp format: {ts}")
 
 
-
 def validate_api_key(api_key: str | None) -> bool:
     expected_key = os.getenv("API_KEY", "").strip() or DEFAULT_DEV_API_KEY
     return bool(api_key) and api_key == expected_key
-
 
 
 def get_hacker_dwell_time(client_ip: str) -> dict:
@@ -139,7 +144,6 @@ def get_hacker_dwell_time(client_ip: str) -> dict:
         }
 
 
-
 def analyze_interaction_depth(client_ip: str, query_id: str) -> dict:
     try:
         with get_db_connection() as conn:
@@ -174,7 +178,6 @@ def analyze_interaction_depth(client_ip: str, query_id: str) -> dict:
         }
 
 
-
 def get_attack_timeline(attacker_ip: str) -> dict:
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -199,7 +202,6 @@ def get_attack_timeline(attacker_ip: str) -> dict:
     return {"ip": attacker_ip, "timeline": timeline}
 
 
-
 def log_misjudgment(attacker_ip: str, reason: str) -> None:
     os.makedirs(ERROR_LOG_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -214,7 +216,6 @@ def log_misjudgment(attacker_ip: str, reason: str) -> None:
     }
     with open(filepath, "w", encoding="utf-8") as file:
         json.dump(data, file, ensure_ascii=False, indent=4)
-
 
 
 def get_command_heatmap() -> dict:
@@ -234,7 +235,6 @@ def get_command_heatmap() -> dict:
         rows = cursor.fetchall()
 
     return {"top_commands": [{"cmd": row[0], "count": row[1]} for row in rows]}
-
 
 
 def get_ip_details(ip: str) -> dict:
@@ -273,13 +273,11 @@ def get_ip_details(ip: str) -> dict:
     return result
 
 
-
 def fetch_recent_traffic(limit: int = 100, mode: str = "all") -> dict:
     rows = core_get_recent_traffic(limit)
     if mode == "attacks":
         rows = [row for row in rows if int(row.get("is_attack") or 0) == 1]
     return {"recent_traffic": rows}
-
 
 
 def fetch_all_client_ips(limit: int = 500) -> dict:
@@ -332,7 +330,6 @@ def fetch_all_client_ips(limit: int = 500) -> dict:
     return {"items": items}
 
 
-
 def compare_traffic(limit: int = 1000) -> dict:
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -375,8 +372,12 @@ def compare_traffic(limit: int = 1000) -> dict:
     attack_requests = int((row["attack_requests"] or 0) if row else 0)
     normal_requests = int((row["normal_requests"] or 0) if row else 0)
 
-    attack_ratio = round((attack_requests / total_requests) * 100, 2) if total_requests else 0
-    normal_ratio = round((normal_requests / total_requests) * 100, 2) if total_requests else 0
+    attack_ratio = (
+        round((attack_requests / total_requests) * 100, 2) if total_requests else 0
+    )
+    normal_ratio = (
+        round((normal_requests / total_requests) * 100, 2) if total_requests else 0
+    )
 
     attack_traffic = [
         {
@@ -396,7 +397,6 @@ def compare_traffic(limit: int = 1000) -> dict:
         "normal_ratio": normal_ratio,
         "attack_traffic": attack_traffic,
     }
-
 
 
 def auto_updates() -> dict:
@@ -429,10 +429,8 @@ def auto_updates() -> dict:
     }
 
 
-
 def set_log_category(category_name: str, items: list | None = None) -> dict:
     return {"category_name": category_name, "items": items or [], "status": "ready"}
-
 
 
 def execute_terminal_cmd(command_text: str, selected_ip: str | None = None) -> dict:
@@ -445,7 +443,6 @@ def execute_terminal_cmd(command_text: str, selected_ip: str | None = None) -> d
     }
 
 
-
 def generate_hacker_pdf(client_ip: str) -> dict:
     return {
         "report_type": "hacker_pdf_payload",
@@ -455,7 +452,6 @@ def generate_hacker_pdf(client_ip: str) -> dict:
         "timeline": get_attack_timeline(client_ip),
         "traffic_summary": compare_traffic(),
     }
-
 
 
 def get_dashboard_ip_bundle(client_ip: str) -> dict:
@@ -520,13 +516,19 @@ def get_country_statistics(limit: int = 20) -> dict:
 
     stats = []
     for row in rows:
-        country = _resolve_ip_region("0.0.0.1", row["country"]) if row["country"] != "Unknown" else "Unknown"
-        stats.append({
-            "country": country,
-            "total_requests": int(row["total_requests"] or 0),
-            "attack_count": int(row["attack_count"] or 0),
-            "unique_ips": int(row["unique_ips"] or 0),
-        })
+        country = (
+            _resolve_ip_region("0.0.0.1", row["country"])
+            if row["country"] != "Unknown"
+            else "Unknown"
+        )
+        stats.append(
+            {
+                "country": country,
+                "total_requests": int(row["total_requests"] or 0),
+                "attack_count": int(row["attack_count"] or 0),
+                "unique_ips": int(row["unique_ips"] or 0),
+            }
+        )
 
     return {"statistics": stats, "total_countries": len(stats)}
 
@@ -551,12 +553,14 @@ def get_attack_vector_distribution() -> dict:
 
     distribution = []
     for row in rows:
-        distribution.append({
-            "attack_type": row["attack_type"],
-            "count": int(row["count"] or 0),
-            "avg_risk": round(float(row["avg_risk"] or 0), 2),
-            "max_risk": int(row["max_risk"] or 0),
-        })
+        distribution.append(
+            {
+                "attack_type": row["attack_type"],
+                "count": int(row["count"] or 0),
+                "avg_risk": round(float(row["avg_risk"] or 0), 2),
+                "max_risk": int(row["max_risk"] or 0),
+            }
+        )
 
     return {"distribution": distribution}
 
@@ -587,14 +591,16 @@ def get_top_source_ips(limit: int = 20) -> dict:
 
     ips = []
     for row in rows:
-        ips.append({
-            "ip": row["ip"],
-            "country": _resolve_ip_region(row["ip"], row["location"]),
-            "total_connections": int(row["total_connections"] or 0),
-            "attack_count": int(row["attack_count"] or 0),
-            "max_risk": int(row["max_risk"] or 0),
-            "latest_attack_type": row["latest_attack_type"] or "-",
-        })
+        ips.append(
+            {
+                "ip": row["ip"],
+                "country": _resolve_ip_region(row["ip"], row["location"]),
+                "total_connections": int(row["total_connections"] or 0),
+                "attack_count": int(row["attack_count"] or 0),
+                "max_risk": int(row["max_risk"] or 0),
+                "latest_attack_type": row["latest_attack_type"] or "-",
+            }
+        )
 
     return {"top_ips": ips, "total_unique_ips": len(ips)}
 
@@ -623,13 +629,15 @@ def get_time_series_stats(hours: int = 24) -> dict:
 
     time_series = []
     for row in rows:
-        time_series.append({
-            "hour": row["hour"],
-            "total_count": int(row["total_count"] or 0),
-            "attack_count": int(row["attack_count"] or 0),
-            "normal_count": int(row["normal_count"] or 0),
-            "avg_risk": round(float(row["avg_risk"] or 0), 2),
-        })
+        time_series.append(
+            {
+                "hour": row["hour"],
+                "total_count": int(row["total_count"] or 0),
+                "attack_count": int(row["attack_count"] or 0),
+                "normal_count": int(row["normal_count"] or 0),
+                "avg_risk": round(float(row["avg_risk"] or 0), 2),
+            }
+        )
 
     return {"time_series": time_series, "period_hours": hours}
 

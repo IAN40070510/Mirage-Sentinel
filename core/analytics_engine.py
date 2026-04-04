@@ -20,7 +20,8 @@ def get_attack_summary(limit: int = 100):
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT t.id, t.request_at, t.response_at, c.ip AS client_ip,
                f.user_agent, f.tls_fingerprint, d.attack_vector, d.risk_level,
                d.hits, d.interaction_depth, d.dwell_time, d.mitigation_status
@@ -31,7 +32,9 @@ def get_attack_summary(limit: int = 100):
         WHERE t.is_attack = 1
         ORDER BY t.request_at DESC
         LIMIT ?
-    """, (limit,))
+    """,
+        (limit,),
+    )
 
     rows = cursor.fetchall()
     conn.close()
@@ -56,7 +59,7 @@ def get_traffic_stats():
         "total": total,
         "attacks": attacks,
         "normals": normals,
-        "attack_rate": round(attacks / (total or 1), 4)
+        "attack_rate": round(attacks / (total or 1), 4),
     }
 
 
@@ -64,13 +67,16 @@ def get_client_profile(client_ip: str):
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT id, ip, polluted_status FROM clients WHERE ip = ?", (client_ip,))
+    cursor.execute(
+        "SELECT id, ip, polluted_status FROM clients WHERE ip = ?", (client_ip,)
+    )
     client = cursor.fetchone()
     if not client:
         conn.close()
         return {}
 
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT t.id, t.request_at, t.response_at, t.query_id, t.is_attack,
                d.attack_vector, d.risk_level, d.hits, d.interaction_depth, d.dwell_time
         FROM traffic_logs t
@@ -78,11 +84,10 @@ def get_client_profile(client_ip: str):
         WHERE t.client_id = ?
         ORDER BY t.request_at DESC
         LIMIT 50
-    """, (client["id"],))
+    """,
+        (client["id"],),
+    )
 
     events = [dict(row) for row in cursor.fetchall()]
     conn.close()
-    return {
-        "client": dict(client),
-        "events": events
-    }
+    return {"client": dict(client), "events": events}

@@ -10,7 +10,15 @@ Mirage-Sentinel 主入口（API Gateway）
 4. 協調哨兵偵測、欺敵策略、沙盒回應與日誌落地。
 """
 
-from fastapi import FastAPI, Request, Query, BackgroundTasks, HTTPException, Depends, Header
+from fastapi import (
+    FastAPI,
+    Request,
+    Query,
+    BackgroundTasks,
+    HTTPException,
+    Depends,
+    Header,
+)
 import sys
 import uvicorn
 import time
@@ -21,6 +29,7 @@ import pandas as pd
 from datetime import datetime
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
+
 # 配置日誌（實際輸出格式與 handler 由啟動環境決定）
 logger = logging.getLogger(__name__)
 
@@ -38,9 +47,11 @@ from api import dashboard
 from api import banking
 from api.db.session import init_db, create_tables
 import model.ai_sentinel as model
-sys.modules['__main__'].SentinelModule = model.SentinelModule
-sys.modules['__main__'].SecurityExtractor = model.SecurityExtractor
+
+sys.modules["__main__"].SentinelModule = model.SentinelModule
+sys.modules["__main__"].SecurityExtractor = model.SecurityExtractor
 from fastapi.middleware.cors import CORSMiddleware
+
 # 載入 .env（讓 API_KEY / SANDBOX_API_URL 等配置可由環境管理）
 load_dotenv()
 
@@ -86,7 +97,9 @@ async def verify_dashboard_access(
     if DASHBOARD_ADMIN_KEY and x_dashboard_key == DASHBOARD_ADMIN_KEY:
         return
 
-    raise HTTPException(status_code=403, detail="Dashboard is restricted to internal network")
+    raise HTTPException(
+        status_code=403, detail="Dashboard is restricted to internal network"
+    )
 
 
 def analyze_intent(text: str):
@@ -102,9 +115,7 @@ def analyze_intent(text: str):
         return False, 0.0, "None"
 
     try:
-        df_input = pd.DataFrame({
-            "payload": [str(text).lower().strip()]
-        })
+        df_input = pd.DataFrame({"payload": [str(text).lower().strip()]})
         judgment = ai_sentinel.predict(df_input).iloc[0]
 
         confidence = float(judgment["attack_score"])
@@ -146,9 +157,7 @@ async def lifespan(app: FastAPI):
 
 # ===== FastAPI App 建立 =====
 app = FastAPI(
-    title="Mirage-Sentinel API Gateway",
-    version="1.6-FullSentinel",
-    lifespan=lifespan
+    title="Mirage-Sentinel API Gateway", version="1.6-FullSentinel", lifespan=lifespan
 )
 
 if ENABLE_DASHBOARD:
@@ -196,10 +205,13 @@ async def healthz():
     """容器/平台健康檢查端點。"""
     return {"status": "ok"}
 
+
 @app.get("/api/v1/user/{user_id}")
 async def get_user_data(
     user_id: str,
-    payload: str = Query(None, max_length=2000, description="指令測試區 (最多 2000 字)"),
+    payload: str = Query(
+        None, max_length=2000, description="指令測試區 (最多 2000 字)"
+    ),
     request: Request = None,
     background_tasks: BackgroundTasks = None,
 ):
@@ -220,11 +232,15 @@ async def get_user_data(
 
     # 將 user_id 與 payload 合併成一個偵測字串，提升命中率
     current_payload = payload if payload else ""
-    detection_target = f"{user_id} {current_payload}".strip() if current_payload else str(user_id)
+    detection_target = (
+        f"{user_id} {current_payload}".strip() if current_payload else str(user_id)
+    )
 
     # 哨兵引擎：回傳 (是否命中, 信心分數, 攻擊向量)
     is_attack, confidence, attack_vector = analyze_intent(detection_target)
-    logger.debug(f"請求：{detection_target} | 信心度：{confidence} | 命中：{attack_vector}")
+    logger.debug(
+        f"請求：{detection_target} | 信心度：{confidence} | 命中：{attack_vector}"
+    )
 
     # 只有超過閾值才進入攔截路徑，避免過度誤判
     should_intercept = is_attack and confidence > 0.75
@@ -280,26 +296,30 @@ async def get_user_data(
 
         # 第一次命中才呼叫沙盒；避免重複生成不同假資料
         if fake_data is None:
-            fake_data = await run_attack_in_sandbox({
-                **event_payload,
+            fake_data = await run_attack_in_sandbox(
+                {
+                    **event_payload,
+                    "response_at": response_at,
+                    "process_ms": process_ms,
+                    "hits": hits,
+                    "interaction_depth": interaction_depth,
+                    "dwell_time": dwell_time,
+                }
+            )
+
+        # 回填完整事件，供後續落地與 API 回傳
+        event_payload.update(
+            {
                 "response_at": response_at,
                 "process_ms": process_ms,
+                "response_payload": fake_data,
                 "hits": hits,
                 "interaction_depth": interaction_depth,
                 "dwell_time": dwell_time,
-            })
-
-        # 回填完整事件，供後續落地與 API 回傳
-        event_payload.update({
-            "response_at": response_at,
-            "process_ms": process_ms,
-            "response_payload": fake_data,
-            "hits": hits,
-            "interaction_depth": interaction_depth,
-            "dwell_time": dwell_time,
-            "mitigation_status": "Sandboxed",
-            "risk_level": risk_score,
-        })
+                "mitigation_status": "Sandboxed",
+                "risk_level": risk_score,
+            }
+        )
 
         # 流量寫入可異步（避免延遲主請求）或同步（保持即時一致）
         if background_tasks:
@@ -320,16 +340,18 @@ async def get_user_data(
     process_ms = int((time.perf_counter() - start_perf) * 1000)
     response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
-    event_payload.update({
-        "response_at": response_at,
-        "process_ms": process_ms,
-        "response_payload": None,
-        "hits": 0,
-        "interaction_depth": 0,
-        "dwell_time": 0.0,
-        "mitigation_status": "normal",
-        "risk_level": 0,
-    })
+    event_payload.update(
+        {
+            "response_at": response_at,
+            "process_ms": process_ms,
+            "response_payload": None,
+            "hits": 0,
+            "interaction_depth": 0,
+            "dwell_time": 0.0,
+            "mitigation_status": "normal",
+            "risk_level": 0,
+        }
+    )
 
     if background_tasks:
         background_tasks.add_task(log_traffic_event, event_payload)
@@ -343,7 +365,9 @@ async def get_user_data(
 @app.post("/api/v1/simulate_attack", summary="模擬攻擊請求")
 async def simulate_attack(
     user_id: str = Query(..., description="用戶 ID"),
-    payload: str = Query("", description="""模擬的攻擊指令（選填，留空為正常請求）
+    payload: str = Query(
+        "",
+        description="""模擬的攻擊指令（選填，留空為正常請求）
 
 常見攻擊模板：
   • SQL 注入: ' OR '1'='1 / DROP TABLE users / UNION SELECT * FROM admin
@@ -351,9 +375,10 @@ async def simulate_attack(
   • XSS: <script>alert('xss')</script> / javascript:alert(1)
   • RCE: ; ls -la / $(whoami) / `id`
   • 目錄遍歷: ../../../ / ..\\..\\..\\
-    """),
+    """,
+    ),
     client_ip: str = Query("192.168.0.1", description="攻擊者 IP（可選）"),
-    background_tasks: BackgroundTasks = None
+    background_tasks: BackgroundTasks = None,
 ):
     """
     模擬攻擊專用：方便在測試環境快速重現攻擊流程。
@@ -407,16 +432,18 @@ async def simulate_attack(
         process_ms = int((time.perf_counter() - start_perf) * 1000)
         response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
-        event_payload.update({
-            "response_at": response_at,
-            "process_ms": process_ms,
-            "response_payload": fake_data,
-            "mitigation_status": "Sandboxed",
-            "hits": hits,
-            "interaction_depth": interaction_depth,
-            "dwell_time": dwell_time,
-            "risk_level": risk_score,
-        })
+        event_payload.update(
+            {
+                "response_at": response_at,
+                "process_ms": process_ms,
+                "response_payload": fake_data,
+                "mitigation_status": "Sandboxed",
+                "hits": hits,
+                "interaction_depth": interaction_depth,
+                "dwell_time": dwell_time,
+                "risk_level": risk_score,
+            }
+        )
 
         if background_tasks:
             background_tasks.add_task(log_traffic_event, event_payload)
@@ -445,7 +472,7 @@ async def simulate_attack(
     return {
         "status": "normal_request",
         "message": "未檢測到攻擊行為",
-        "event_log": event_payload
+        "event_log": event_payload,
     }
 
 
@@ -457,7 +484,11 @@ def detect_proxy(request: Request) -> int:
     3) 最後看 User-Agent 是否帶 proxy/crawler 關鍵字。
     """
     proxy_headers = [
-        "X-Forwarded-For", "Via", "Forwarded", "Client-IP", "True-Client-IP"
+        "X-Forwarded-For",
+        "Via",
+        "Forwarded",
+        "Client-IP",
+        "True-Client-IP",
     ]
     for header in proxy_headers:
         if header in request.headers:

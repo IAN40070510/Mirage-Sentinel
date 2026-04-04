@@ -21,11 +21,25 @@ USER_AGENTS = [
     "sqlmap/1.8.1",
 ]
 
-LOCATIONS = ["/api/v1/user", "/api/v1/login", "/api/v1/orders", "/api/v1/admin", "/api/v1/search"]
+LOCATIONS = [
+    "/api/v1/user",
+    "/api/v1/login",
+    "/api/v1/orders",
+    "/api/v1/admin",
+    "/api/v1/search",
+]
 ATTACK_VECTORS = ["SQLi", "XSS", "LFI", "CMD Injection"]
 ATTACK_PAYLOADS = {
-    "SQLi": ["' OR 1=1 --", "admin' UNION SELECT * FROM users --", "1; DROP TABLE users; --"],
-    "XSS": ["<script>alert(1)</script>", "<img src=x onerror=alert(1)>", "\"><svg/onload=confirm(1)>"],
+    "SQLi": [
+        "' OR 1=1 --",
+        "admin' UNION SELECT * FROM users --",
+        "1; DROP TABLE users; --",
+    ],
+    "XSS": [
+        "<script>alert(1)</script>",
+        "<img src=x onerror=alert(1)>",
+        '"><svg/onload=confirm(1)>',
+    ],
     "LFI": ["../../../../etc/passwd", "..\\..\\..\\..\\windows\\win.ini"],
     "CMD Injection": ["; cat /etc/passwd", "&& whoami", "| powershell -c Get-Process"],
 }
@@ -79,7 +93,9 @@ def build_event(base_time: datetime, idx: int) -> dict:
                 "hits": hits,
                 "interaction_depth": interaction_depth,
                 "dwell_time": float(random.randint(10, 600)),
-                "mitigation_status": random.choice(["Sandboxed", "Blocked", "Monitored"]),
+                "mitigation_status": random.choice(
+                    ["Sandboxed", "Blocked", "Monitored"]
+                ),
             }
         )
 
@@ -109,9 +125,18 @@ def generate_sample_data(db_path: str, sql_path: str, rows: int, seed: int):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate sample traffic_logs DB and SQL dump.")
-    parser.add_argument("--rows", type=int, default=180, help="Number of traffic rows to generate")
-    parser.add_argument("--seed", type=int, default=20260325, help="Random seed for deterministic output")
+    parser = argparse.ArgumentParser(
+        description="Generate sample traffic_logs DB and SQL dump."
+    )
+    parser.add_argument(
+        "--rows", type=int, default=180, help="Number of traffic rows to generate"
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=20260325,
+        help="Random seed for deterministic output",
+    )
     parser.add_argument(
         "--db-path",
         default=os.path.join(PROJECT_ROOT, "data", "traffic_logs_sample.db"),

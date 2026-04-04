@@ -1,4 +1,3 @@
-
 import uuid
 from datetime import datetime
 
@@ -7,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from .db.session import is_real_db_enabled
 from .db.operations import DBOperations
+
 
 # Response Models
 class Account(BaseModel):
@@ -192,9 +192,6 @@ DEMO_BENEFICIARIES = [
 DEMO_IDEMPOTENCY: dict[tuple[str, str], dict] = {}
 
 
-
-
-
 def _real_account_label(account_id: str) -> str:
     return f"{account_id}(真實帳戶)"
 
@@ -205,13 +202,13 @@ def _account_display(account_id: str) -> str:
     return account_id
 
 
-
 def _real_query_meta() -> dict:
     """Return metadata based on whether real DB is being used"""
     if is_real_db_enabled():
         return {"notice": "(真實資料庫查詢)"}
     else:
         return {"notice": "(Demo 資料)"}
+
 
 def _get_customer_name_by_account(account_id: str) -> str:
     """根據帳戶 ID 查詢客戶名稱。如果不在受款人清單中，返回 'Unknown'。"""
@@ -229,8 +226,11 @@ def _transaction_with_display(tx: dict) -> dict:
     tx_item["to_account_display"] = _account_display(tx["to_account"])
     tx_item["from_customer_name"] = DEMO_CUSTOMER_NAME
     # 收款人名稱從交易記錄中取得，若有則用；否則從帳戶 ID 查詢
-    tx_item["to_customer_name"] = tx.get("to_customer_name", _get_customer_name_by_account(tx["to_account"]))
+    tx_item["to_customer_name"] = tx.get(
+        "to_customer_name", _get_customer_name_by_account(tx["to_account"])
+    )
     return tx_item
+
 
 def _resolve_real_account_id(account_id: str, is_destination: bool = False) -> str:
     if is_real_db_enabled():
@@ -290,7 +290,9 @@ def _ensure_account_owner(account_id: str, user_id: str) -> dict:
     if not row:
         raise HTTPException(status_code=404, detail="Account not found")
     if user_id != DEMO_USER_ID:
-        raise HTTPException(status_code=403, detail="Forbidden by object-level authorization")
+        raise HTTPException(
+            status_code=403, detail="Forbidden by object-level authorization"
+        )
     return row
 
 
@@ -300,12 +302,11 @@ def _ensure_account_owner(account_id: str, user_id: str) -> dict:
     description="取得目前使用者可存取的帳戶清單；請在 Header 帶入 `X-User-Id`。",
     response_model=ListAccountsResponse,
 )
-
 async def list_accounts(
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ):
     user_id = _require_user(x_user_id)
-    
+
     # Try real database first
     if is_real_db_enabled():
         db_items = DBOperations.get_user_accounts(user_id)
@@ -324,7 +325,7 @@ async def list_accounts(
             for item in db_items
         ]
         return {"user_id": user_id, "accounts": items, **_real_query_meta()}
-    
+
     # Fallback to mock data
     items = [
         {
@@ -339,6 +340,7 @@ async def list_accounts(
         for v in DEMO_ACCOUNTS.values()
     ]
     return {"user_id": user_id, "accounts": items, **_real_query_meta()}
+
 
 @router.get(
     "/accounts/{account_id}/balance",
@@ -392,7 +394,12 @@ async def get_transactions(
 
     resolved_account_id = _resolve_real_account_id(account_id)
     _ensure_account_owner(resolved_account_id, user_id)
-    raw_items = [x for x in DEMO_TRANSACTIONS if x["from_account"] == resolved_account_id or x["to_account"] == resolved_account_id][:limit]
+    raw_items = [
+        x
+        for x in DEMO_TRANSACTIONS
+        if x["from_account"] == resolved_account_id
+        or x["to_account"] == resolved_account_id
+    ][:limit]
     items = [_transaction_with_display(tx) for tx in raw_items]
     return {
         "account_id": resolved_account_id,
@@ -451,7 +458,9 @@ async def create_beneficiary(
 
     if is_real_db_enabled():
         if req.account_id == DEMO_ACCOUNT_ID:
-            raise HTTPException(status_code=400, detail="Cannot add your own account as beneficiary")
+            raise HTTPException(
+                status_code=400, detail="Cannot add your own account as beneficiary"
+            )
         created = DBOperations.create_beneficiary(
             user_id=user_id,
             nickname=req.nickname,
@@ -460,7 +469,9 @@ async def create_beneficiary(
             beneficiary_name=DEMO_BENEFICIARY_NAME,
         )
         if not created:
-            raise HTTPException(status_code=409, detail="Beneficiary already exists for this account")
+            raise HTTPException(
+                status_code=409, detail="Beneficiary already exists for this account"
+            )
         return {
             "status": "created",
             "beneficiary_id": created["id"],
@@ -471,18 +482,27 @@ async def create_beneficiary(
         }
 
     resolved_account_id = _resolve_real_account_id(req.account_id, is_destination=True)
-    
+
     # 驗證：不允許添加自己帳戶作為受款人
     if resolved_account_id == DEMO_ACCOUNT_ID:
-        raise HTTPException(status_code=400, detail="Cannot add your own account as beneficiary")
-    
+        raise HTTPException(
+            status_code=400, detail="Cannot add your own account as beneficiary"
+        )
+
     # 驗證：檢查是否已存在相同的受款人
     for existing in DEMO_BENEFICIARIES:
-        if existing["user_id"] == user_id and existing["account_id"] == resolved_account_id:
-            raise HTTPException(status_code=409, detail="Beneficiary already exists for this account")
-    
+        if (
+            existing["user_id"] == user_id
+            and existing["account_id"] == resolved_account_id
+        ):
+            raise HTTPException(
+                status_code=409, detail="Beneficiary already exists for this account"
+            )
+
     now = datetime.utcnow().isoformat(timespec="seconds")
-    created_id = (max([x["id"] for x in DEMO_BENEFICIARIES]) + 1) if DEMO_BENEFICIARIES else 1
+    created_id = (
+        (max([x["id"] for x in DEMO_BENEFICIARIES]) + 1) if DEMO_BENEFICIARIES else 1
+    )
     DEMO_BENEFICIARIES.append(
         {
             "id": created_id,
@@ -521,24 +541,34 @@ async def transfer_money(
     key = (user_id, idempotency_key.strip())
 
     if is_real_db_enabled():
-        existing_tx_id = DBOperations.get_idempotent_transaction(user_id, idempotency_key.strip())
+        existing_tx_id = DBOperations.get_idempotent_transaction(
+            user_id, idempotency_key.strip()
+        )
         if existing_tx_id:
             cached_tx = DBOperations.get_transaction_by_id(existing_tx_id)
             if not cached_tx:
-                raise HTTPException(status_code=404, detail="Idempotent transaction not found")
+                raise HTTPException(
+                    status_code=404, detail="Idempotent transaction not found"
+                )
             owner = _ensure_account_owner(cached_tx["from_account"], user_id)
             return {
                 "status": "already_processed",
                 "transaction": _transaction_with_display(cached_tx),
                 "source_account_after_balance": round(float(owner["balance"]), 2),
                 "source_account_display": _account_display(cached_tx["from_account"]),
-                "source_customer_name": _get_customer_name_by_account(cached_tx["from_account"]),
-                "destination_customer_name": _get_customer_name_by_account(cached_tx["to_account"]),
+                "source_customer_name": _get_customer_name_by_account(
+                    cached_tx["from_account"]
+                ),
+                "destination_customer_name": _get_customer_name_by_account(
+                    cached_tx["to_account"]
+                ),
                 **_real_query_meta(),
             }
 
         if req.from_account == req.to_account:
-            raise HTTPException(status_code=400, detail="Cannot transfer to the same account")
+            raise HTTPException(
+                status_code=400, detail="Cannot transfer to the same account"
+            )
 
         from_owner = _ensure_account_owner(req.from_account, user_id)
         fee = 15.0 if req.amount >= 10000 else 5.0
@@ -565,7 +595,9 @@ async def transfer_money(
             "source_account_after_balance": round(float(tx["new_balance"]), 2),
             "source_account_display": _account_display(tx["from_account"]),
             "source_customer_name": _get_customer_name_by_account(tx["from_account"]),
-            "destination_customer_name": _get_customer_name_by_account(tx["to_account"]),
+            "destination_customer_name": _get_customer_name_by_account(
+                tx["to_account"]
+            ),
             **_real_query_meta(),
         }
 
@@ -576,14 +608,16 @@ async def transfer_money(
         from_account_id = cached_tx["from_account"]
         from_account = DEMO_ACCOUNTS.get(from_account_id)
         cached_balance = from_account["balance"] if from_account else 0.0
-        
+
         return {
             "status": "already_processed",
             "transaction": _transaction_with_display(cached_tx),
             "source_account_after_balance": round(cached_balance, 2),
             "source_account_display": _account_display(from_account_id),
             "source_customer_name": DEMO_CUSTOMER_NAME,
-            "destination_customer_name": _get_customer_name_by_account(cached_tx["to_account"]),
+            "destination_customer_name": _get_customer_name_by_account(
+                cached_tx["to_account"]
+            ),
             **_real_query_meta(),
         }
 
@@ -592,7 +626,9 @@ async def transfer_money(
 
     # 防止轉帳給自己
     if from_account_id == to_account_id:
-        raise HTTPException(status_code=400, detail="Cannot transfer to the same account")
+        raise HTTPException(
+            status_code=400, detail="Cannot transfer to the same account"
+        )
 
     from_account = _ensure_account_owner(from_account_id, user_id)
 
@@ -600,7 +636,9 @@ async def transfer_money(
     to_account = DEMO_ACCOUNTS.get(to_account_id)
     if not to_account:
         # 檢查是否是受款人帳戶
-        is_beneficiary = any(b["account_id"] == to_account_id for b in DEMO_BENEFICIARIES)
+        is_beneficiary = any(
+            b["account_id"] == to_account_id for b in DEMO_BENEFICIARIES
+        )
         if not is_beneficiary:
             raise HTTPException(status_code=404, detail="Destination account not found")
         # 建立外部受款帳戶的臨時檢核資料（不落地）
@@ -610,7 +648,7 @@ async def transfer_money(
             "currency": "USD",
             "balance": 999999999.99,  # 無限餘額
         }
-    
+
     if to_account["status"] != "ACTIVE":
         raise HTTPException(status_code=400, detail="Destination account is not active")
 
@@ -628,14 +666,18 @@ async def transfer_money(
     tx_id = f"TX-{uuid.uuid4().hex[:12].upper()}"
     now = datetime.utcnow().isoformat(timespec="seconds")
 
-    DEMO_ACCOUNTS[from_account_id]["balance"] = round(float(from_account["balance"]) - total_debit, 2)
+    DEMO_ACCOUNTS[from_account_id]["balance"] = round(
+        float(from_account["balance"]) - total_debit, 2
+    )
     # 仅當目標帳戶存在於 DEMO_ACCOUNTS 中時，才更新其餘額
     if to_account_id in DEMO_ACCOUNTS:
-        DEMO_ACCOUNTS[to_account_id]["balance"] = round(float(to_account["balance"]) + req.amount, 2)
+        DEMO_ACCOUNTS[to_account_id]["balance"] = round(
+            float(to_account["balance"]) + req.amount, 2
+        )
 
     # 取得收款人名稱
     to_customer_name = _get_customer_name_by_account(to_account_id)
-    
+
     tx = {
         "tx_id": tx_id,
         "from_account": from_account_id,

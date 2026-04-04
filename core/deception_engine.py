@@ -52,10 +52,10 @@ def _merge_signatures(base: dict[str, Any], incoming: dict[str, Any]) -> dict[st
 def _load_attack_signatures() -> dict[str, Any]:
     """載入並合併多來源簽名，避免單一來源覆蓋造成資料遺失。"""
     global _SIGNATURES_CACHE
-    
+
     if _SIGNATURES_CACHE is not None:
         return _SIGNATURES_CACHE
-    
+
     repo_root = Path(__file__).parent.parent
     # 單一可信來源：僅讀取 data/，避免 scripts/data 舊檔污染評分。
     candidate_files = [
@@ -86,22 +86,27 @@ def _load_attack_signatures() -> dict[str, Any]:
 
 def _parse_signature_txt(filepath: Path) -> dict[str, Any]:
     """解析 attack_signatures.txt（INI-like 格式）
-    
+
     格式：
     [分類名]
     簽名1, 簽名2, 簽名3, ...
-    
+
     # 這是註解
     """
     signatures = {"deep_markers": {}, "tool_signatures": {}}
     current_category = None
     current_section = "deep_markers"
-    deep_categories = {"admin_endpoints", "auth_theft", "file_operations", "rce_general"}
-    
+    deep_categories = {
+        "admin_endpoints",
+        "auth_theft",
+        "file_operations",
+        "rce_general",
+    }
+
     with open(filepath, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
-            
+
             # 略過空行和註解
             if not line:
                 continue
@@ -110,7 +115,7 @@ def _parse_signature_txt(filepath: Path) -> dict[str, Any]:
                 if "工具簽名庫" in line:
                     current_section = "tool_signatures"
                 continue
-            
+
             # 檢測分類標籤 [category_name]
             if line.startswith("[") and line.endswith("]"):
                 current_category = line[1:-1]
@@ -124,18 +129,22 @@ def _parse_signature_txt(filepath: Path) -> dict[str, Any]:
                         current_category = category
                 else:
                     # 無前綴時，依已知 deep 類別自動判斷，避免依賴註解文字。
-                    current_section = "deep_markers" if current_category in deep_categories else "tool_signatures"
+                    current_section = (
+                        "deep_markers"
+                        if current_category in deep_categories
+                        else "tool_signatures"
+                    )
                 continue
-            
+
             # 解析簽名
             if current_category:
                 # 分割並去除空白
                 items = [item.strip() for item in line.split(",")]
                 items = [item for item in items if item]  # 移除空白項
-                
+
                 if items:
                     signatures[current_section][current_category] = items
-    
+
     return signatures
 
 
@@ -154,7 +163,7 @@ def parse_db_timestamp(ts: str | None) -> datetime | None:
 
 def _normalize_payload(payload: str) -> str:
     """多層消毒：URL 解碼 → 移除路徑冗余 → 小寫化
-    
+
     防禦方法：
     - 迭代 URL 解碼（防止雙重編碼如 %252f）
     - 移除路徑遍歷（../、/./ 等）
@@ -164,44 +173,46 @@ def _normalize_payload(payload: str) -> str:
     prev = payload
     for _ in range(3):
         try:
-            decoded = urllib.parse.unquote(prev, errors='replace')
+            decoded = urllib.parse.unquote(prev, errors="replace")
             if decoded == prev:
                 break
             prev = decoded
         except Exception:
             break
-    
+
     normalized = prev
-    
+
     # 移除路徑冗余
-    normalized = re.sub(r'/+', '/', normalized)  # //// → /
-    normalized = re.sub(r'/\./+', '//', normalized)  # /./ → //
-    normalized = re.sub(r'/[^/]+/\.\./+', '/', normalized)  # /a/.. → /
-    
+    normalized = re.sub(r"/+", "/", normalized)  # //// → /
+    normalized = re.sub(r"/\./+", "//", normalized)  # /./ → //
+    normalized = re.sub(r"/[^/]+/\.\./+", "/", normalized)  # /a/.. → /
+
     # 統一空白符（多空格、Tab、換行 → 單空格）
-    normalized = re.sub(r'\s+', ' ', normalized)
-    
+    normalized = re.sub(r"\s+", " ", normalized)
+
     # 十六進制解碼（如 \x2f = /）
     try:
-        normalized = normalized.encode('utf-8').decode('unicode_escape', errors='replace')
+        normalized = normalized.encode("utf-8").decode(
+            "unicode_escape", errors="replace"
+        )
     except Exception:
         pass
-    
+
     return normalized.lower()
 
 
 def _detect_attack_pattern(payload: str, tool_signatures: dict) -> tuple[bool, str]:
     """檢測是否包含已知攻擊工具或模式簽名
-    
+
     返回：(是否匹配, 匹配的簽名類別)
     """
     normalized = _normalize_payload(payload)
-    
+
     for category, signatures in tool_signatures.items():
         for sig in signatures:
             if sig in normalized:
                 return True, category
-    
+
     return False, ""
 
 
@@ -213,60 +224,65 @@ def _payload_complexity(payload: str) -> float:
     return specials / max(len(payload), 1)
 
 
-def _funnel_level(payload: str, endpoint_coverage: int, has_memory_hit: bool, attack_times: list | None = None) -> int:
+def _funnel_level(
+    payload: str,
+    endpoint_coverage: int,
+    has_memory_hit: bool,
+    attack_times: list | None = None,
+) -> int:
     """漏斗層級判定（L1~L3），加強防禦編碼/工具化攻擊
-    
+
     L3 觸發條件：
     - 已探索 ≥2 端點 OR
     - 包含深層攻擊標記 OR
     - 偵測到已知工具簽名 OR
     - 快速掃描紋樣（<1秒間隔 >50%）
-    
+
     L2 觸發條件：
     - 有記憶命中（該 IP 曾進行過攻擊）
-    
+
     L1：新手初次探測
     """
-    
+
     # 從檔案讀取工具簽名與深層標記
     signatures = _load_attack_signatures()
     tool_signatures = signatures.get("tool_signatures", {})
-    
+
     # 抽取所有深層標記（展平所有類別）
     deep_markers_by_category = signatures.get("deep_markers", {})
     deep_markers = set()
     for category_marks in deep_markers_by_category.values():
         deep_markers.update(category_marks)
-    
+
     normalized = _normalize_payload(payload or "")
-    
+
     # 條件 1：端點廣度 ≥2 → L3
     if endpoint_coverage >= 2:
         return 3
-    
+
     # 條件 2：包含深層標記 → L3
     if any(marker in normalized for marker in deep_markers):
         return 3
-    
+
     # 條件 3：工具簽名偵測 → L3
     is_tool_detected, category = _detect_attack_pattern(payload or "", tool_signatures)
     if is_tool_detected:
         return 3
-    
+
     # 條件 4：快速掃描紋樣（頻率分析）→ L3
     if attack_times and len(attack_times) >= 3:
         intervals = [
-            (attack_times[i+1] - attack_times[i]).total_seconds()
+            (attack_times[i + 1] - attack_times[i]).total_seconds()
             for i in range(len(attack_times) - 1)
         ]
         rapid_fire_ratio = sum(1 for i in intervals if 0 < i < 1) / len(intervals)
         if rapid_fire_ratio > 0.5:  # >50% 攻擊間隔 < 1 秒 = 工具化掃描
             return 3
-    
+
     # 條件 5：記憶命中 → L2
     if has_memory_hit:
         return 2
-    
+
     # 預設：L1 初次探測
     return 1
 
@@ -330,7 +346,9 @@ def compute_interaction_metrics(
         min_len = min(lengths)
         max_len = max(lengths)
         length_growth = max_len - min_len
-        complexity_growth = max(_payload_complexity(p) for p in payloads) - min(_payload_complexity(p) for p in payloads)
+        complexity_growth = max(_payload_complexity(p) for p in payloads) - min(
+            _payload_complexity(p) for p in payloads
+        )
     else:
         length_growth = 0
         complexity_growth = 0.0
@@ -340,7 +358,7 @@ def compute_interaction_metrics(
         current_payload or "",
         endpoint_coverage,
         has_memory_hit,
-        attack_times=attack_times  # 用於檢測快速掃描紋樣
+        attack_times=attack_times,  # 用於檢測快速掃描紋樣
     )
 
     # 四維度分項分數（0~100）

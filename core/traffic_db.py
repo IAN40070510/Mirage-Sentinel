@@ -26,24 +26,29 @@ def setup_traffic_db():
 
     cursor.execute("PRAGMA journal_mode=WAL;")
 
-    cursor.execute("""
+    cursor.execute(
+        """
     CREATE TABLE IF NOT EXISTS clients (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         ip TEXT UNIQUE NOT NULL,
         polluted_status INTEGER DEFAULT 0
     )
-    """)
+    """
+    )
 
-    cursor.execute("""
+    cursor.execute(
+        """
     CREATE TABLE IF NOT EXISTS fingerprints (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_agent TEXT,
         tls_fingerprint TEXT,
         UNIQUE(user_agent, tls_fingerprint)
     )
-    """)
+    """
+    )
 
-    cursor.execute("""
+    cursor.execute(
+        """
     CREATE TABLE IF NOT EXISTS traffic_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         request_at TEXT NOT NULL,
@@ -58,9 +63,11 @@ def setup_traffic_db():
         FOREIGN KEY(client_id) REFERENCES clients(id),
         FOREIGN KEY(fingerprint_id) REFERENCES fingerprints(id)
     )
-    """)
+    """
+    )
 
-    cursor.execute("""
+    cursor.execute(
+        """
     CREATE TABLE IF NOT EXISTS attack_details (
         traffic_log_id INTEGER PRIMARY KEY,
         raw_payload TEXT,
@@ -73,10 +80,15 @@ def setup_traffic_db():
         mitigation_status TEXT,
         FOREIGN KEY(traffic_log_id) REFERENCES traffic_logs(id)
     )
-    """)
+    """
+    )
 
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_traffic_logs_is_attack ON traffic_logs(is_attack)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_traffic_logs_request_at ON traffic_logs(request_at)")
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_traffic_logs_is_attack ON traffic_logs(is_attack)"
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_traffic_logs_request_at ON traffic_logs(request_at)"
+    )
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_clients_ip ON clients(ip)")
 
     conn.commit()
@@ -101,12 +113,21 @@ def log_traffic_event(data: dict):
     is_proxy = 1 if data.get("is_proxy") else 0
     is_attack = 1 if data.get("is_attack") else 0
 
-    cursor.execute("INSERT OR IGNORE INTO clients (ip, polluted_status) VALUES (?, ?)", (client_ip, is_proxy))
+    cursor.execute(
+        "INSERT OR IGNORE INTO clients (ip, polluted_status) VALUES (?, ?)",
+        (client_ip, is_proxy),
+    )
     cursor.execute("SELECT id FROM clients WHERE ip = ?", (client_ip,))
     client_id = cursor.fetchone()["id"]
 
-    cursor.execute("INSERT OR IGNORE INTO fingerprints (user_agent, tls_fingerprint) VALUES (?, ?)", (user_agent, tls_fingerprint))
-    cursor.execute("SELECT id FROM fingerprints WHERE user_agent = ? AND tls_fingerprint = ?", (user_agent, tls_fingerprint))
+    cursor.execute(
+        "INSERT OR IGNORE INTO fingerprints (user_agent, tls_fingerprint) VALUES (?, ?)",
+        (user_agent, tls_fingerprint),
+    )
+    cursor.execute(
+        "SELECT id FROM fingerprints WHERE user_agent = ? AND tls_fingerprint = ?",
+        (user_agent, tls_fingerprint),
+    )
     fingerprint_id = cursor.fetchone()["id"]
 
     cursor.execute(
@@ -142,7 +163,11 @@ def log_traffic_event(data: dict):
             (
                 traffic_log_id,
                 data.get("raw_payload"),
-                json.dumps(data.get("response_payload"), ensure_ascii=False) if data.get("response_payload") is not None else None,
+                (
+                    json.dumps(data.get("response_payload"), ensure_ascii=False)
+                    if data.get("response_payload") is not None
+                    else None
+                ),
                 data.get("attack_vector"),
                 data.get("risk_level"),
                 data.get("hits"),
@@ -159,7 +184,8 @@ def log_traffic_event(data: dict):
 def get_recent_traffic(limit: int = 100):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT t.*, c.ip AS client_ip, f.user_agent, f.tls_fingerprint, d.attack_vector,
                d.risk_level, d.hits, d.interaction_depth, d.dwell_time, d.mitigation_status
         FROM traffic_logs t
@@ -168,7 +194,9 @@ def get_recent_traffic(limit: int = 100):
         LEFT JOIN attack_details d ON d.traffic_log_id = t.id
         ORDER BY t.request_at DESC
         LIMIT ?
-    """, (limit,))
+    """,
+        (limit,),
+    )
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
