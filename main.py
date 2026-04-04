@@ -46,7 +46,7 @@ from core.traffic_db import setup_traffic_db, log_traffic_event
 from core.sandbox import run_attack_in_sandbox
 from api import dashboard
 from api import banking
-from api.db.session import init_db, create_tables
+from api.db.session import init_db, create_tables, seed_banking_demo_data
 import model.ai_sentinel as model
 
 from model.llama import generate_fake_data_llama
@@ -159,6 +159,7 @@ async def lifespan(app: FastAPI):
     # Initialize PostgreSQL database if DATABASE_URL is set
     if init_db():
         create_tables()
+        seed_banking_demo_data()
         logger.info("[DB] PostgreSQL database initialized successfully.")
     else:
         logger.warning("[DB] PostgreSQL not connected - using mock data mode.")
