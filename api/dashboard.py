@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 
 from services import dashboard_service as ws
@@ -390,7 +390,7 @@ async def get_events_by_risk_score(
     description="按 query_id 回放完整的一條攻擊鏈，包含時間軸、每步決策理由、風險評分。",
 )
 async def get_deception_chain_replay(
-    query_id: str = Query(
+    query_id: str = Path(
         ..., min_length=1, max_length=100, description="用戶識別碼或查詢 ID"
     ),
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
