@@ -28,11 +28,9 @@ from core.api_mirage import harden_deception_response
 from model.llama import generate_fake_data_llama
 
 
-USER_ID_HEADER_DESCRIPTION = (
-    "使用者識別碼 Header，格式為 `X-User-Id: CIF*********`；實際值為 `CIF` + 9 碼數字。"
-)
+USER_ID_HEADER_DESCRIPTION = "使用者識別碼 Header，格式為 `X-User-Id: CIF*********`；實際值為 `CIF` + 9 碼數字。範例：`CIF000000001`。"
 ACCOUNT_ID_DESCRIPTION = (
-    "帳戶識別碼，格式為英數字 12-20 碼；常見範例：`ACCOD48PUCAEHKH`。"
+    "帳戶識別碼，格式為英數字 12-20 碼；常見範例：`ACC000000000001`。"
 )
 LIMIT_DESCRIPTION = "查詢筆數上限，整數 1-100。"
 IDEMPOTENCY_KEY_DESCRIPTION = (
@@ -610,6 +608,7 @@ async def start_deceptive_login(
         default=None,
         alias="X-User-Id",
         description=USER_ID_HEADER_DESCRIPTION,
+        example="CIF000000001",
     ),
 ):
     risk_score, deception_reason, _ = _compute_risk_score(x_user_id, request)
@@ -654,6 +653,7 @@ async def verify_deceptive_login(
         default=None,
         alias="X-User-Id",
         description=USER_ID_HEADER_DESCRIPTION,
+        example="CIF000000001",
     ),
 ):
     risk_score, deception_reason, _ = _compute_risk_score(x_user_id, request)
@@ -872,13 +872,25 @@ def _resolve_real_user_id(_user_id: str | None) -> str:
 
 class BeneficiaryCreateRequest(BaseModel):
     nickname: str = Field(
-        ..., min_length=1, max_length=80, description=NICKNAME_DESCRIPTION
+        ...,
+        min_length=1,
+        max_length=80,
+        description=NICKNAME_DESCRIPTION,
+        json_schema_extra={"example": "公司帳戶"},
     )
     bank_code: str = Field(
-        ..., min_length=3, max_length=10, description=BANK_CODE_DESCRIPTION
+        ...,
+        min_length=3,
+        max_length=10,
+        description=BANK_CODE_DESCRIPTION,
+        json_schema_extra={"example": "812"},
     )
     account_id: str = Field(
-        ..., min_length=6, max_length=40, description=ACCOUNT_ID_DESCRIPTION
+        ...,
+        min_length=6,
+        max_length=40,
+        description=ACCOUNT_ID_DESCRIPTION,
+        json_schema_extra={"example": "ACC000000000001"},
     )
 
 
@@ -888,15 +900,27 @@ class TransferRequest(BaseModel):
         min_length=6,
         max_length=40,
         description="扣款帳戶識別碼，格式同 `ACC**********KH`。",
+        json_schema_extra={"example": "ACC000000000001"},
     )
     to_account: str = Field(
         ...,
         min_length=6,
         max_length=40,
         description="收款帳戶識別碼，格式同 `ACC**********KH`。",
+        json_schema_extra={"example": "MERNGTU3WAVTQJF"},
     )
-    amount: int = Field(..., gt=0, description="轉帳金額（整數），必須大於 0。")
-    note: str | None = Field(default=None, max_length=200, description=NOTE_DESCRIPTION)
+    amount: int = Field(
+        ...,
+        gt=0,
+        description="轉帳金額（整數），必須大於 0。",
+        json_schema_extra={"example": 1000},
+    )
+    note: str | None = Field(
+        default=None,
+        max_length=200,
+        description=NOTE_DESCRIPTION,
+        json_schema_extra={"example": "內部測試轉帳"},
+    )
 
 
 def _require_user(x_user_id: str | None) -> str:
@@ -998,6 +1022,7 @@ async def list_accounts(
         default=None,
         alias="X-User-Id",
         description=USER_ID_HEADER_DESCRIPTION,
+        example="CIF000000001",
     ),
 ):
     risk_score, deception_reason, route = _compute_risk_score(x_user_id, request)
@@ -1221,11 +1246,13 @@ async def list_beneficiaries(
         default=None,
         alias="X-User-Id",
         description=USER_ID_HEADER_DESCRIPTION,
+        example="CIF000000001",
     ),
     x_actor_role: str | None = Header(
         default=None,
         alias="X-Actor-Role",
         description=ACTOR_ROLE_DESCRIPTION,
+        example="customer",
     ),
 ):
     risk_score, deception_reason, route = _compute_risk_score(x_user_id, request)
@@ -1301,11 +1328,13 @@ async def create_beneficiary(
         default=None,
         alias="X-User-Id",
         description=USER_ID_HEADER_DESCRIPTION,
+        example="CIF000000001",
     ),
     x_actor_role: str | None = Header(
         default=None,
         alias="X-Actor-Role",
         description=ACTOR_ROLE_DESCRIPTION,
+        example="customer",
     ),
 ):
     risk_score, deception_reason, route = _compute_risk_score(x_user_id, request)
@@ -1434,16 +1463,19 @@ async def transfer_money(
         default=None,
         alias="X-User-Id",
         description=USER_ID_HEADER_DESCRIPTION,
+        example="CIF000000001",
     ),
     x_actor_role: str | None = Header(
         default=None,
         alias="X-Actor-Role",
         description=ACTOR_ROLE_DESCRIPTION,
+        example="customer",
     ),
     idempotency_key: str | None = Header(
         default=None,
         alias="Idempotency-Key",
         description=IDEMPOTENCY_KEY_DESCRIPTION,
+        example="transfer-001",
     ),
 ):
     risk_score, deception_reason, route = _compute_transfer_risk_score(
