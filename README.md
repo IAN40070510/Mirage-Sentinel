@@ -318,14 +318,18 @@ pip install -r requirements.txt
 # 3. 啟動後端
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-# 4. 在另一個終端啟動前端
-npm --prefix frontend start
+# 4. 在另一個終端啟動 SOC 前端（Port 3000）
+npm --prefix frontend run start:soc
+
+# 5. 在第三個終端啟動客戶前端（Port 3001）
+npm --prefix frontend run start:customer
 ```
 
 開啟位置：
 
 - 後端 API 文件：http://127.0.0.1:8000/docs
-- 前端儀表板：http://127.0.0.1:3000
+- SOC 前端儀表板：http://127.0.0.1:3000
+- 客戶前端介面：http://127.0.0.1:3001
 
 OCI 線上環境：
 
@@ -347,7 +351,8 @@ docker compose --profile db up --build
 服務清單：
 
 - API Gateway：http://127.0.0.1:8000
-- Frontend Dashboard：http://127.0.0.1:3000
+- SOC Frontend Dashboard：http://127.0.0.1:3000
+- Customer Frontend：http://127.0.0.1:3001
 - Sandbox Service：http://127.0.0.1:8001
 - PostgreSQL（可選）：localhost:5432
 

@@ -1,7 +1,9 @@
 {
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
+    "start": "node soc-server.js",
+    "dev": "node soc-server.js",
+    "start:soc": "node soc-server.js",
+    "start:customer": "node customer-server.js"
   },
   "dependencies": {
     "express": "^5.2.1"
