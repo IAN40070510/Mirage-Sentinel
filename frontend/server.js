@@ -8,6 +8,10 @@ const PORT = Number(process.env.PORT || 3000);
 const DASHBOARD_BASE_URL =
   process.env.BACKEND_API_BASE_URL || "http://localhost:8000/api/v1/dashboard";
 
+// 正常用戶 Banking API（展示用）
+const BANKING_BASE_URL =
+  process.env.BANKING_API_BASE_URL || "http://backend_public:8000/api/v1/banking";
+
 // API Key 只存在 server 端，不暴露給前端
 const DASHBOARD_API_KEY =
   process.env.API_KEY || "dev-local-api-key-change-me";
@@ -25,6 +29,16 @@ app.get("/api/config", (req, res) => {
   res.json({
     proxyBase: "/api/dashboard",
     backendBase: DASHBOARD_BASE_URL,
+  });
+});
+
+app.get("/api/banking/config", (req, res) => {
+  res.json({
+    proxyBase: "/api/banking",
+    defaultUserId: "CIF000000001",
+    defaultRole: "customer",
+    defaultFromAccount: "ACC000000000001",
+    defaultToAccount: "ACC000000000002",
   });
 });
 
@@ -51,6 +65,29 @@ async function fetchDashboardJson(apiPath, options = {}) {
   }
 
   return response.text();
+}
+
+async function fetchBankingJson(apiPath, options = {}) {
+  const mergedOptions = {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+    },
+  };
+
+  const response = await fetch(`${BANKING_BASE_URL}${apiPath}`, mergedOptions);
+  const contentType = response.headers.get("content-type") || "";
+  const raw = await response.text();
+
+  if (!response.ok) {
+    throw new Error(`Banking API ${response.status}: ${raw}`);
+  }
+
+  if (contentType.includes("application/json")) {
+    return raw ? JSON.parse(raw) : {};
+  }
+
+  return raw;
 }
 
 // 統一 async error handler
@@ -157,6 +194,65 @@ app.post("/api/dashboard/terminal_cmd", asyncRoute(async (req) => {
     body: JSON.stringify({
       command_text: req.body?.command_text || "",
       selected_ip: req.body?.selected_ip || null,
+    }),
+  });
+}));
+
+function buildBankingHeaders(req, extraHeaders = {}) {
+  const userId = (req.get("x-user-id") || "").trim();
+  const actorRole = (req.get("x-actor-role") || "").trim();
+  const idempotencyKey = (req.get("idempotency-key") || "").trim();
+
+  const headers = {
+    ...extraHeaders,
+  };
+
+  if (userId) headers["X-User-Id"] = userId;
+  if (actorRole) headers["X-Actor-Role"] = actorRole;
+  if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
+
+  return headers;
+}
+
+app.get("/api/banking/accounts", asyncRoute(async (req) => {
+  const headers = buildBankingHeaders(req);
+  return fetchBankingJson("/accounts", { headers });
+}));
+
+app.get("/api/banking/beneficiaries", asyncRoute(async (req) => {
+  const headers = buildBankingHeaders(req);
+  return fetchBankingJson("/beneficiaries", { headers });
+}));
+
+app.post("/api/banking/beneficiaries", asyncRoute(async (req) => {
+  const headers = buildBankingHeaders(req, {
+    "Content-Type": "application/json",
+  });
+
+  return fetchBankingJson("/beneficiaries", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      nickname: req.body?.nickname,
+      bank_code: req.body?.bank_code,
+      account_id: req.body?.account_id,
+    }),
+  });
+}));
+
+app.post("/api/banking/transfers", asyncRoute(async (req) => {
+  const headers = buildBankingHeaders(req, {
+    "Content-Type": "application/json",
+  });
+
+  return fetchBankingJson("/transfers", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      from_account: req.body?.from_account,
+      to_account: req.body?.to_account,
+      amount: req.body?.amount,
+      note: req.body?.note,
     }),
   });
 }));

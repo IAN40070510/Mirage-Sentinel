@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mirage Sentinel | Normal User Demo</title>
+  <link rel="stylesheet" href="./banking_demo.css" />
+  <script src="./banking_demo.js" defer></script>
+</head>
+<body>
+  <main class="container">
+    <header class="hero">
+      <h1>Normal User Banking Demo</h1>
+      <p>展示模式：外部頁面直接操作，不需進伺服器使用 curl。</p>
+    </header>
+
+    <section class="panel">
+      <h2>請求身份</h2>
+      <div class="grid two">
+        <label>
+          X-User-Id
+          <input id="userId" type="text" value="CIF000000001" />
+        </label>
+        <label>
+          X-Actor-Role
+          <select id="actorRole">
+            <option value="customer" selected>customer</option>
+            <option value="admin">admin</option>
+          </select>
+        </label>
+      </div>
+      <button id="saveIdentity" type="button">套用身份</button>
+      <p class="hint">目前身份只作用於本頁操作。</p>
+    </section>
+
+    <section class="panel">
+      <h2>1) 查詢帳戶與受款人</h2>
+      <div class="actions">
+        <button id="loadAccounts" type="button">查詢帳戶</button>
+        <button id="loadBeneficiaries" type="button">查詢受款人</button>
+      </div>
+      <pre id="queryResult" class="output"></pre>
+    </section>
+
+    <section class="panel">
+      <h2>2) 新增受款人</h2>
+      <div class="grid three">
+        <label>
+          nickname
+          <input id="beneficiaryNickname" type="text" value="內測受款人" />
+        </label>
+        <label>
+          bank_code
+          <input id="beneficiaryBankCode" type="text" value="812" />
+        </label>
+        <label>
+          account_id
+          <input id="beneficiaryAccountId" type="text" value="MERNGTU3WAVTQJF" />
+        </label>
+      </div>
+      <button id="createBeneficiary" type="button">新增受款人</button>
+      <pre id="beneficiaryResult" class="output"></pre>
+    </section>
+
+    <section class="panel">
+      <h2>3) 執行轉帳</h2>
+      <div class="grid three">
+        <label>
+          from_account
+          <input id="fromAccount" type="text" value="ACC000000000001" />
+        </label>
+        <label>
+          to_account
+          <input id="toAccount" type="text" value="ACC000000000002" />
+        </label>
+        <label>
+          amount
+          <input id="amount" type="number" value="1000" min="1" />
+        </label>
+      </div>
+      <div class="grid two">
+        <label>
+          note
+          <input id="transferNote" type="text" value="內部展示轉帳" />
+        </label>
+        <label>
+          Idempotency-Key
+          <input id="idempotencyKey" type="text" value="transfer-001" />
+        </label>
+      </div>
+      <button id="transfer" type="button">執行轉帳</button>
+      <pre id="transferResult" class="output"></pre>
+    </section>
+
+    <footer class="footer">
+      <a href="/">回到 SOC Dashboard</a>
+    </footer>
+  </main>
+</body>
+</html>
