@@ -10,7 +10,7 @@ from sqlalchemy.pool import NullPool
 _engine = None
 _SessionLocal = None
 _is_real_db_enabled = False
-DEFAULT_CURRENCY = "USD"
+DEFAULT_CURRENCY = "TWD"
 
 
 def init_db():
@@ -137,12 +137,17 @@ def seed_banking_demo_data() -> bool:
                 account_id=demo_account_id,
                 user_id=demo_user_id,
                 account_type="Checking",
-                currency="USD",
-                balance=182700.46,
+                currency=DEFAULT_CURRENCY,
+                balance=5680000,
                 status="ACTIVE",
                 open_date="2021-03-27",
             )
             db.add(account)
+        elif (account.currency or "").upper() == "USD" and abs(
+            float(account.balance) - 182700.46
+        ) < 0.0001:
+            account.currency = DEFAULT_CURRENCY
+            account.balance = 5680000
 
         beneficiary_user = (
             db.query(User).filter(User.user_id == demo_beneficiary_user_id).first()

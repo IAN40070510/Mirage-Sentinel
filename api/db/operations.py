@@ -156,6 +156,24 @@ class DBOperations:
             db.close()
 
     @staticmethod
+    def get_account_customer_name(account_id: str) -> str:
+        """Get the account owner's display name for a real account."""
+        if not is_real_db_enabled():
+            return "Unknown"
+
+        db = get_db()
+        if not db:
+            return "Unknown"
+
+        try:
+            account = db.query(Account).filter(Account.account_id == account_id).first()
+            if not account or not account.user:
+                return "Unknown"
+            return account.user.name or "Unknown"
+        finally:
+            db.close()
+
+    @staticmethod
     def get_account_transactions(
         account_id: str, user_id: str, limit: int = 20
     ) -> list[dict] | None:
@@ -181,6 +199,28 @@ class DBOperations:
 
             result = []
             for tx in transactions:
+                from_account = (
+                    db.query(Account)
+                    .filter(Account.account_id == tx.from_account)
+                    .first()
+                )
+                to_account = (
+                    db.query(Account)
+                    .filter(Account.account_id == tx.to_account)
+                    .first()
+                )
+                beneficiary = (
+                    None
+                    if to_account
+                    else (
+                        db.query(Beneficiary)
+                        .filter(
+                            Beneficiary.user_id == user_id,
+                            Beneficiary.account_id == tx.to_account,
+                        )
+                        .first()
+                    )
+                )
                 result.append(
                     {
                         "tx_id": tx.tx_id,
@@ -193,6 +233,20 @@ class DBOperations:
                         "note": tx.note,
                         "created_at": (
                             tx.created_at.isoformat() if tx.created_at else None
+                        ),
+                        "from_customer_name": (
+                            from_account.user.name
+                            if from_account and from_account.user
+                            else "Unknown"
+                        ),
+                        "to_customer_name": (
+                            to_account.user.name
+                            if to_account and to_account.user
+                            else (
+                                beneficiary.beneficiary_name
+                                if beneficiary
+                                else "Unknown"
+                            )
                         ),
                     }
                 )
@@ -371,6 +425,9 @@ class DBOperations:
             if not from_acc:
                 return None
 
+            if (from_acc.status or "").upper() != "ACTIVE":
+                return None
+
             # Get to_account (may belong to another user)
             to_acc = db.query(Account).filter(Account.account_id == to_account).first()
             is_external_beneficiary = False
@@ -386,6 +443,11 @@ class DBOperations:
                 if not authorized_beneficiary:
                     return None
                 is_external_beneficiary = True
+            else:
+                if (to_acc.status or "").upper() != "ACTIVE":
+                    return None
+                if (from_acc.currency or "").upper() != (to_acc.currency or "").upper():
+                    return None
 
             # Check balance
             total_debit = amount + fee
@@ -425,6 +487,22 @@ class DBOperations:
                 "status": tx.status,
                 "created_at": tx.created_at.isoformat() if tx.created_at else None,
                 "new_balance": int(from_acc.balance),
+                "from_customer_name": (
+                    from_acc.user.name if from_acc.user else "Unknown"
+                ),
+                "to_customer_name": (
+                    (
+                        to_acc.user.name
+                        if to_acc and to_acc.user
+                        else (
+                            authorized_beneficiary.beneficiary_name
+                            if is_external_beneficiary
+                            else "Unknown"
+                        )
+                    )
+                    if "authorized_beneficiary" in locals()
+                    else (to_acc.user.name if to_acc and to_acc.user else "Unknown")
+                ),
             }
         except Exception:
             db.rollback()

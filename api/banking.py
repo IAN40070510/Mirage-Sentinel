@@ -819,6 +819,10 @@ def _real_query_meta() -> dict:
 
 def _get_customer_name_by_account(account_id: str) -> str:
     """根據帳戶 ID 查詢客戶名稱。如果不在受款人清單中，返回 'Unknown'。"""
+    if is_real_db_enabled():
+        real_name = DBOperations.get_account_customer_name(account_id)
+        if real_name != "Unknown":
+            return real_name
     if account_id == DEMO_ACCOUNT_ID:
         return DEMO_CUSTOMER_NAME
     for beneficiary in DEMO_BENEFICIARIES:
@@ -831,8 +835,9 @@ def _transaction_with_display(tx: dict) -> dict:
     tx_item = dict(tx)
     tx_item["from_account_display"] = _account_display(tx["from_account"])
     tx_item["to_account_display"] = _account_display(tx["to_account"])
-    tx_item["from_customer_name"] = DEMO_CUSTOMER_NAME
-    # 收款人名稱從交易記錄中取得，若有則用；否則從帳戶 ID 查詢
+    tx_item["from_customer_name"] = tx.get(
+        "from_customer_name", _get_customer_name_by_account(tx["from_account"])
+    )
     tx_item["to_customer_name"] = tx.get(
         "to_customer_name", _get_customer_name_by_account(tx["to_account"])
     )
@@ -1114,7 +1119,7 @@ async def get_balance(
     row = _ensure_account_owner(account_id, user_id)
     return {
         "account_id": row["account_id"],
-        "customer_name": DEMO_CUSTOMER_NAME,
+        "customer_name": row.get("customer_name", DEMO_CUSTOMER_NAME),
         "account_display": _real_account_label(row["account_id"]),
         "currency": row["currency"],
         "balance": int(row["balance"]),
@@ -1356,7 +1361,7 @@ async def create_beneficiary(
             nickname=req.nickname,
             bank_code=req.bank_code,
             account_id=req.account_id,
-            beneficiary_name=DEMO_BENEFICIARY_NAME,
+            beneficiary_name=_get_customer_name_by_account(req.account_id),
         )
         if not created:
             raise HTTPException(
@@ -1366,7 +1371,8 @@ async def create_beneficiary(
             "status": "created",
             "beneficiary_id": created["id"],
             "account_id": created["account_id"],
-            "beneficiary_name": created["beneficiary_name"] or DEMO_BENEFICIARY_NAME,
+            "beneficiary_name": created["beneficiary_name"]
+            or _get_customer_name_by_account(created["account_id"]),
             "account_display": _account_display(created["account_id"]),
             **_real_query_meta(),
         }
@@ -1511,6 +1517,25 @@ async def transfer_money(
 
         from_owner = _ensure_account_owner(req.from_account, user_id)
         _ensure_transfer_destination_authorized(user_id, req.to_account)
+
+        to_owner = DBOperations.get_account_balance(req.to_account, user_id)
+        if to_owner is None:
+            # 若不是本人帳戶，至少仍需確認其為有效的受款人目標；若查不到就交由 DB 層判斷。
+            to_owner = None
+        else:
+            if (from_owner.get("status") or "").upper() != "ACTIVE":
+                raise HTTPException(
+                    status_code=400, detail="Source account is not active"
+                )
+            if (to_owner.get("status") or "").upper() != "ACTIVE":
+                raise HTTPException(
+                    status_code=400, detail="Destination account is not active"
+                )
+            if (from_owner.get("currency") or "").upper() != (
+                to_owner.get("currency") or ""
+            ).upper():
+                raise HTTPException(status_code=400, detail="Currency mismatch")
+
         fee = 15 if req.amount >= 10000 else 5
         total_debit = req.amount + fee
         if int(from_owner["balance"]) < total_debit:
@@ -1534,9 +1559,11 @@ async def transfer_money(
             "transaction": _transaction_with_display(tx),
             "source_account_after_balance": int(tx["new_balance"]),
             "source_account_display": _account_display(tx["from_account"]),
-            "source_customer_name": _get_customer_name_by_account(tx["from_account"]),
-            "destination_customer_name": _get_customer_name_by_account(
-                tx["to_account"]
+            "source_customer_name": tx.get(
+                "from_customer_name", _get_customer_name_by_account(tx["from_account"])
+            ),
+            "destination_customer_name": tx.get(
+                "to_customer_name", _get_customer_name_by_account(tx["to_account"])
             ),
             **_real_query_meta(),
         }
