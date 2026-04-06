@@ -103,6 +103,11 @@ if [ "${#health_urls[@]}" -eq 0 ] || [ -z "${openapi_url}" ] || [ -z "${banking_
   fail "missing required arguments"
 fi
 
+if ! [[ "${user_id}" =~ ^CIF[0-9]{9}$ ]]; then
+  echo "[smoke] WARN: --user-id '${user_id}' is not in CIF format (expected CIF + 9 digits)."
+  echo "[smoke] WARN: Banking endpoint may auto-divert to deception_auth and skew smoke expectations."
+fi
+
 for i in $(seq 1 "${retries}"); do
   all_ok=1
   for health_url in "${health_urls[@]}"; do
