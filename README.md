@@ -127,11 +127,27 @@ AI 掃描器對抗： 利用動態變異的 API 結構與錯誤回應，破壞 A
 - 目標：未授權/可疑用戶不直接拒絕，改導入擬真登入流程。
 - 落點：`api/banking.py`、`core/mirage.py`。
 - 完成條件：可維持多步互動一致性，延長攻擊停留時間。
+- 目前進度（2026-04）：已實裝多步欺敵登入流程
+  - 新增 API：
+    - `POST /banking/auth/login` - 啟動欺敵登入流程
+    - `POST /banking/auth/login/{flow_id}/verify` - 推進 credential → OTP → security_question → manual_review
+  - 狀態機資料寫入 `mirage_memory.db`，同一 `flow_id` 可維持互動一致性
+  - 既有業務端點（accounts/balance/transactions/beneficiaries/transfers）新增「自動導向」：
+    - 當請求同時滿足「未授權（缺少或非法 `X-User-Id`）」與「可疑（高風險/可疑 UA/Sentinel 命中）」時
+    - 不再回一般欺敵業務資料，改回 `deception_auth` challenge（自動啟動登入狀態機）
+  - CI 迴歸新增 `scripts/ci/deception-auth-smoke.sh`
 
 2. AI 掃描器對抗策略（P1）
 - 目標：加入回應擾動、Tarpitting、語義噪音注入。
 - 落點：`core/api_mirage.py`、`model/llama.py`。
 - 完成條件：高頻自動化探測命中率下降且 token 消耗上升。
+- 目前進度（2026-04）：已將 counter-AI 策略套用至 Banking 欺敵回應
+  - 新增 `core/api_mirage.py::harden_deception_response()`
+  - 自動化探測（如 `sqlmap/curl/python-requests` 或高風險）觸發：
+    - Tarpitting（可控延遲）
+    - Semantic noise (`consistency_hints`)
+    - Reverse prompt 欄位 (`error_context.llm_guardrail`)
+  - 非自動化流量套用輕量回應擾動
 
 3. 部署與回歸安全閘門（P1）
 - 目標：部署後自動跑健康檢查 + 風險路由 smoke test。

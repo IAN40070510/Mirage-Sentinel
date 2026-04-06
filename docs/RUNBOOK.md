@@ -125,3 +125,52 @@ psql "$DATABASE_URL" -f scripts/postgres/migrate_money_to_integer.sql
 3. Banking 真實路徑可查詢且資料正確。
 4. 可疑請求可導入 deception path 且事件有完整欄位。
 5. CI 失敗時可直接從 log 定位問題。
+
+## 8) P1 欺敵登入手動驗證
+
+1. 啟動欺敵登入流程（建議使用可疑 User-Agent）
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/api/v1/banking/auth/login" \
+	-H "Content-Type: application/json" \
+	-H "X-User-Id: CIF000000001" \
+	-A "sqlmap/1.8" \
+	-d '{"username":"audit-user","device_id":"manual-check"}' | jq
+```
+
+驗收重點：
+- `auth_flow_id` 存在。
+- `stage=credential_challenge`。
+- `deception_meta.strategy=counter_ai_tarpit`。
+
+2. 依序推進狀態機
+
+```bash
+# 1) credential -> otp
+curl -s -X POST "http://127.0.0.1:8000/api/v1/banking/auth/login/<FLOW_ID>/verify" \
+	-H "Content-Type: application/json" \
+	-H "X-User-Id: CIF000000001" \
+	-A "sqlmap/1.8" \
+	-d '{"password":"ignored"}' | jq
+
+# 2) otp -> security_question
+curl -s -X POST "http://127.0.0.1:8000/api/v1/banking/auth/login/<FLOW_ID>/verify" \
+	-H "Content-Type: application/json" \
+	-H "X-User-Id: CIF000000001" \
+	-A "sqlmap/1.8" \
+	-d '{"otp":"123456"}' | jq
+
+# 3) security_question -> manual_review
+curl -s -X POST "http://127.0.0.1:8000/api/v1/banking/auth/login/<FLOW_ID>/verify" \
+	-H "Content-Type: application/json" \
+	-H "X-User-Id: CIF000000001" \
+	-A "sqlmap/1.8" \
+	-d '{"security_answer":"mock-answer"}' | jq
+```
+
+驗收重點：
+- 階段轉換順序正確：`credential_challenge -> otp_challenge -> security_question -> manual_review`。
+- 最終狀態為 `status=queued_review`。
+
+補充：
+- 對 `accounts/balance/transactions/beneficiaries/transfers` 等業務端點，若請求為「未授權 + 可疑」，系統會自動導向同一套欺敵登入狀態機（回 `route=deception_auth`），不再回傳一般業務欺敵資料。

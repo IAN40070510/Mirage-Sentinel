@@ -45,6 +45,11 @@ jobs:
           set -euo pipefail
           bash scripts/ci/transaction-risk-smoke.sh http://127.0.0.1:8000
 
+      - name: Run deceptive auth state machine checks
+        run: |
+          set -euo pipefail
+          bash scripts/ci/deception-auth-smoke.sh http://127.0.0.1:8000
+
       - name: Run event query and replay checks
         run: |
           set -euo pipefail

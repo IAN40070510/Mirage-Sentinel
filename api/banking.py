@@ -22,6 +22,8 @@ from core.sentinel import (
     detect_rate_limiting_risk,
     detect_anomalous_amount_risk,
 )
+from core.mirage import start_deceptive_login_flow, advance_deceptive_login_flow
+from core.api_mirage import harden_deception_response
 from model.llama import generate_fake_data_llama
 
 
@@ -146,6 +148,22 @@ class TransferResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: str
+
+
+class DeceptiveLoginStartRequest(BaseModel):
+    username: str | None = Field(
+        default=None, min_length=3, max_length=64, description="登入識別值（可選）。"
+    )
+    device_id: str | None = Field(
+        default=None, min_length=6, max_length=128, description="裝置識別碼（可選）。"
+    )
+
+
+class DeceptiveLoginVerifyRequest(BaseModel):
+    password: str | None = Field(default=None, max_length=128)
+    otp: str | None = Field(default=None, max_length=12)
+    security_answer: str | None = Field(default=None, max_length=120)
+    device_fingerprint: str | None = Field(default=None, max_length=256)
 
 
 router = APIRouter(
@@ -392,6 +410,106 @@ def _log_banking_route_event(
     )
 
 
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+async def _apply_counter_ai_on_deception(
+    request: Request,
+    payload: dict,
+    risk_score: int,
+    deception_reason: str,
+) -> dict:
+    return await harden_deception_response(
+        payload,
+        user_agent=request.headers.get("user-agent", "Unknown"),
+        raw_payload=f"path={request.url.path};query={request.url.query}",
+        risk_score=risk_score,
+        deception_reason=deception_reason,
+    )
+
+
+def _extract_login_user_ref(
+    x_user_id: str | None,
+    req_username: str | None,
+    client_ip: str,
+) -> str:
+    if x_user_id and x_user_id.strip():
+        return x_user_id.strip()
+    if req_username and req_username.strip():
+        return req_username.strip()
+    return f"anonymous:{client_ip}"
+
+
+def _is_unauthorized_suspicious(
+    x_user_id: str | None,
+    risk_score: int,
+    deception_reason: str,
+) -> bool:
+    """Detect requests that should be diverted to deceptive auth flow.
+
+    條件：
+    1) 未授權（缺少或格式不合法 user id）
+    2) 可疑（高風險或命中可疑指標）
+    """
+    raw_user_id = (x_user_id or "").strip()
+    unauthorized = (not raw_user_id) or (not re.fullmatch(r"CIF\d{8,9}", raw_user_id))
+    if not unauthorized:
+        return False
+
+    reasons = set(filter(None, (deception_reason or "").split(",")))
+    suspicious_markers = {
+        "suspicious_user_agent",
+        "missing_user_id",
+        "invalid_user_id_format",
+    }
+    has_sentinel_signal = any(r.startswith("sentinel:") for r in reasons)
+    has_marker = bool(reasons.intersection(suspicious_markers))
+
+    return risk_score >= 60 or has_sentinel_signal or has_marker
+
+
+async def _auto_divert_to_deceptive_auth_if_needed(
+    *,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    x_user_id: str | None,
+    risk_score: int,
+    deception_reason: str,
+    source_endpoint: str,
+) -> dict | None:
+    """Return deceptive auth challenge when request is unauthorized and suspicious."""
+    if not _is_unauthorized_suspicious(x_user_id, risk_score, deception_reason):
+        return None
+
+    client_ip = _client_ip(request)
+    user_ref = _extract_login_user_ref(x_user_id, None, client_ip)
+    auth_challenge = start_deceptive_login_flow(
+        client_ip=client_ip,
+        user_ref=user_ref,
+        reason=f"auto_divert:{source_endpoint}:{deception_reason}",
+    )
+    auth_challenge["source_endpoint"] = source_endpoint
+
+    hardened = await _apply_counter_ai_on_deception(
+        request,
+        auth_challenge,
+        max(risk_score, 72),
+        deception_reason,
+    )
+
+    background_tasks.add_task(
+        _log_banking_route_event,
+        request,
+        user_ref,
+        f"{source_endpoint}:auto_deceptive_auth",
+        "deception",
+        max(risk_score, 72),
+        deception_reason,
+    )
+    return hardened
+
+
 def _log_banking_transfer_event(
     request: Request,
     user_id: str | None,
@@ -437,6 +555,97 @@ def _log_banking_transfer_event(
             "mitigation_status": route,
         }
     )
+
+
+@router.post(
+    "/auth/login",
+    summary="啟動欺敵登入流程",
+    description="針對未授權或可疑來源啟動多步擬真登入狀態機。",
+)
+async def start_deceptive_login(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    req: DeceptiveLoginStartRequest,
+    x_user_id: str | None = Header(
+        default=None,
+        alias="X-User-Id",
+        description=USER_ID_HEADER_DESCRIPTION,
+    ),
+):
+    risk_score, deception_reason, _ = _compute_risk_score(x_user_id, request)
+    client_ip = _client_ip(request)
+    user_ref = _extract_login_user_ref(x_user_id, req.username, client_ip)
+
+    response = start_deceptive_login_flow(
+        client_ip=client_ip,
+        user_ref=user_ref,
+        reason=deception_reason,
+    )
+    hardened = await _apply_counter_ai_on_deception(
+        request,
+        response,
+        max(risk_score, 70),
+        deception_reason,
+    )
+
+    background_tasks.add_task(
+        _log_banking_route_event,
+        request,
+        user_ref,
+        "auth/login",
+        "deception",
+        max(risk_score, 70),
+        deception_reason,
+    )
+    return hardened
+
+
+@router.post(
+    "/auth/login/{flow_id}/verify",
+    summary="推進欺敵登入流程",
+    description="提交密碼/OTP/安全問題答案，推進擬真登入狀態機。",
+)
+async def verify_deceptive_login(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    req: DeceptiveLoginVerifyRequest,
+    flow_id: str = Path(..., min_length=8, max_length=40),
+    x_user_id: str | None = Header(
+        default=None,
+        alias="X-User-Id",
+        description=USER_ID_HEADER_DESCRIPTION,
+    ),
+):
+    risk_score, deception_reason, _ = _compute_risk_score(x_user_id, request)
+    client_ip = _client_ip(request)
+    user_ref = _extract_login_user_ref(x_user_id, None, client_ip)
+
+    response = advance_deceptive_login_flow(
+        client_ip=client_ip,
+        flow_id=flow_id,
+        user_ref=user_ref,
+        reason=deception_reason,
+        password=req.password,
+        otp=req.otp,
+        security_answer=req.security_answer,
+    )
+    hardened = await _apply_counter_ai_on_deception(
+        request,
+        response,
+        max(risk_score, 72),
+        deception_reason,
+    )
+
+    background_tasks.add_task(
+        _log_banking_route_event,
+        request,
+        user_ref,
+        "auth/login/verify",
+        "deception",
+        max(risk_score, 72),
+        deception_reason,
+    )
+    return hardened
 
 
 def _deception_accounts_response(user_id: str | None, reason: str) -> dict:
@@ -758,7 +967,23 @@ async def list_accounts(
     )
 
     if route == "deception":
-        return _deception_accounts_response(x_user_id, deception_reason)
+        diverted = await _auto_divert_to_deceptive_auth_if_needed(
+            request=request,
+            background_tasks=background_tasks,
+            x_user_id=x_user_id,
+            risk_score=risk_score,
+            deception_reason=deception_reason,
+            source_endpoint="accounts",
+        )
+        if diverted is not None:
+            return diverted
+
+        return await _apply_counter_ai_on_deception(
+            request,
+            _deception_accounts_response(x_user_id, deception_reason),
+            risk_score,
+            deception_reason,
+        )
 
     user_id = _require_user(x_user_id)
 
@@ -827,7 +1052,23 @@ async def get_balance(
         deception_reason,
     )
     if route == "deception":
-        return _deception_balance_response(account_id, deception_reason)
+        diverted = await _auto_divert_to_deceptive_auth_if_needed(
+            request=request,
+            background_tasks=background_tasks,
+            x_user_id=x_user_id,
+            risk_score=risk_score,
+            deception_reason=deception_reason,
+            source_endpoint="balance",
+        )
+        if diverted is not None:
+            return diverted
+
+        return await _apply_counter_ai_on_deception(
+            request,
+            _deception_balance_response(account_id, deception_reason),
+            risk_score,
+            deception_reason,
+        )
 
     user_id = _require_user(x_user_id)
     row = _ensure_account_owner(account_id, user_id)
@@ -870,7 +1111,23 @@ async def get_transactions(
         deception_reason,
     )
     if route == "deception":
-        return _deception_transactions_response(account_id, deception_reason)
+        diverted = await _auto_divert_to_deceptive_auth_if_needed(
+            request=request,
+            background_tasks=background_tasks,
+            x_user_id=x_user_id,
+            risk_score=risk_score,
+            deception_reason=deception_reason,
+            source_endpoint="transactions",
+        )
+        if diverted is not None:
+            return diverted
+
+        return await _apply_counter_ai_on_deception(
+            request,
+            _deception_transactions_response(account_id, deception_reason),
+            risk_score,
+            deception_reason,
+        )
 
     user_id = _require_user(x_user_id)
 
@@ -937,11 +1194,27 @@ async def list_beneficiaries(
         deception_reason,
     )
     if route == "deception":
-        return {
-            "user_id": _mask_user_id(x_user_id),
-            "beneficiaries": [],
-            "notice": f"(欺敵回應: {deception_reason})",
-        }
+        diverted = await _auto_divert_to_deceptive_auth_if_needed(
+            request=request,
+            background_tasks=background_tasks,
+            x_user_id=x_user_id,
+            risk_score=risk_score,
+            deception_reason=deception_reason,
+            source_endpoint="beneficiaries",
+        )
+        if diverted is not None:
+            return diverted
+
+        return await _apply_counter_ai_on_deception(
+            request,
+            {
+                "user_id": _mask_user_id(x_user_id),
+                "beneficiaries": [],
+                "notice": f"(欺敵回應: {deception_reason})",
+            },
+            risk_score,
+            deception_reason,
+        )
 
     user_id = _require_user(x_user_id)
     _require_actor_role(x_actor_role, {"customer", "admin"})
@@ -1001,16 +1274,32 @@ async def create_beneficiary(
         deception_reason,
     )
     if route == "deception":
-        return {
-            "status": "queued_review",
-            "beneficiary_id": 0,
-            "account_id": _mask_account_id(req.account_id),
-            "beneficiary_name": _llama_deception_seed(
-                req.account_id, deception_reason
-            ).get("name", "系統校驗中"),
-            "account_display": f"{_mask_account_id(req.account_id)}(校驗中)",
-            "notice": f"(欺敵回應: {deception_reason})",
-        }
+        diverted = await _auto_divert_to_deceptive_auth_if_needed(
+            request=request,
+            background_tasks=background_tasks,
+            x_user_id=x_user_id,
+            risk_score=risk_score,
+            deception_reason=deception_reason,
+            source_endpoint="beneficiaries:create",
+        )
+        if diverted is not None:
+            return diverted
+
+        return await _apply_counter_ai_on_deception(
+            request,
+            {
+                "status": "queued_review",
+                "beneficiary_id": 0,
+                "account_id": _mask_account_id(req.account_id),
+                "beneficiary_name": _llama_deception_seed(
+                    req.account_id, deception_reason
+                ).get("name", "系統校驗中"),
+                "account_display": f"{_mask_account_id(req.account_id)}(校驗中)",
+                "notice": f"(欺敵回應: {deception_reason})",
+            },
+            risk_score,
+            deception_reason,
+        )
 
     user_id = _require_user(x_user_id)
     _require_actor_role(x_actor_role, {"customer", "admin"})
@@ -1126,7 +1415,23 @@ async def transfer_money(
         deception_reason,
     )
     if route == "deception":
-        return _deception_transfer_response(req, deception_reason)
+        diverted = await _auto_divert_to_deceptive_auth_if_needed(
+            request=request,
+            background_tasks=background_tasks,
+            x_user_id=x_user_id,
+            risk_score=risk_score,
+            deception_reason=deception_reason,
+            source_endpoint="transfers",
+        )
+        if diverted is not None:
+            return diverted
+
+        return await _apply_counter_ai_on_deception(
+            request,
+            _deception_transfer_response(req, deception_reason),
+            risk_score,
+            deception_reason,
+        )
 
     user_id = _require_user(x_user_id)
     _require_actor_role(x_actor_role, {"customer", "admin"})
