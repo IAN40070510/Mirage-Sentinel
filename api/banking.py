@@ -1,6 +1,7 @@
 import uuid
 import re
 from datetime import datetime
+from typing import Union
 
 from fastapi import (
     APIRouter,
@@ -148,6 +149,45 @@ class TransferResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: str
+
+
+class DeceptionMeta(BaseModel):
+    strategy: str
+    issued_at: str
+    risk_score: int
+    reason: str | None = None
+
+
+class ConsistencyHint(BaseModel):
+    trace_id: str
+    reconcile_step: str
+    checkpoint_at: str
+
+
+class DeceptionErrorContext(BaseModel):
+    code: str
+    message: str
+    llm_guardrail: str
+
+
+class DeceptiveAuthChallengeResponse(BaseModel):
+    status: str
+    route: str
+    auth_flow_id: str
+    user_ref: str
+    stage: str
+    challenge_hint: str
+    issued_at: str
+    expires_at: str
+    notice: str
+    next_action: str | None = None
+    otp_delivery: str | None = None
+    masked_contact: str | None = None
+    review_eta_sec: int | None = None
+    source_endpoint: str | None = None
+    deception_meta: DeceptionMeta | None = None
+    consistency_hints: list[ConsistencyHint] | None = None
+    error_context: DeceptionErrorContext | None = None
 
 
 class DeceptiveLoginStartRequest(BaseModel):
@@ -930,7 +970,7 @@ def _ensure_account_owner(account_id: str, user_id: str) -> dict:
     "/accounts",
     summary="查詢帳戶清單",
     description="取得目前使用者可存取的帳戶清單；請在 Header 帶入 `X-User-Id`。",
-    response_model=ListAccountsResponse,
+    response_model=Union[ListAccountsResponse, DeceptiveAuthChallengeResponse],
     responses={
         200: {
             "description": "成功回傳帳戶清單",
@@ -1029,7 +1069,7 @@ async def list_accounts(
     "/accounts/{account_id}/balance",
     summary="查詢帳戶餘額",
     description="查詢單一帳戶餘額；請提供 `X-User-Id: CIF*********`，且路徑上的 `account_id` 格式為 `ACC**********KH`。",
-    response_model=BalanceResponse,
+    response_model=Union[BalanceResponse, DeceptiveAuthChallengeResponse],
 )
 async def get_balance(
     request: Request,
@@ -1087,7 +1127,7 @@ async def get_balance(
     "/accounts/{account_id}/transactions",
     summary="查詢帳戶交易明細",
     description="查詢該帳戶最近交易；請提供 `X-User-Id: CIF*********`，`account_id` 格式為 `ACC**********KH`，`limit` 為 1-100 的整數。",
-    response_model=ListTransactionsResponse,
+    response_model=Union[ListTransactionsResponse, DeceptiveAuthChallengeResponse],
 )
 async def get_transactions(
     request: Request,
@@ -1167,7 +1207,7 @@ async def get_transactions(
     "/beneficiaries",
     summary="查詢受款人清單",
     description="列出目前使用者的受款人清單；請在 Header 帶入 `X-User-Id`。",
-    response_model=ListBeneficiariesResponse,
+    response_model=Union[ListBeneficiariesResponse, DeceptiveAuthChallengeResponse],
 )
 async def list_beneficiaries(
     request: Request,
@@ -1246,7 +1286,7 @@ async def list_beneficiaries(
     "/beneficiaries",
     summary="新增受款人",
     description="建立新的受款人資料；請在 Header 帶入 `X-User-Id: CIF*********`，並在 Body 填入 `nickname`、`bank_code`、`account_id(ACC**********KH)`。",
-    response_model=CreateBeneficiaryResponse,
+    response_model=Union[CreateBeneficiaryResponse, DeceptiveAuthChallengeResponse],
 )
 async def create_beneficiary(
     request: Request,
@@ -1378,7 +1418,7 @@ async def create_beneficiary(
     "/transfers",
     summary="執行轉帳",
     description="執行轉帳；請帶 `X-User-Id: CIF*********` 與 `Idempotency-Key`，並在 Body 提供 `from_account(ACC**********KH)`、`to_account(ACC**********KH)`、`amount(>0)` 與可選 `note`。",
-    response_model=TransferResponse,
+    response_model=Union[TransferResponse, DeceptiveAuthChallengeResponse],
 )
 async def transfer_money(
     request: Request,
