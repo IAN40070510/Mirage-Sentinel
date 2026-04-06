@@ -54,7 +54,8 @@ from model.llama import generate_fake_data_llama
 sys.modules["__main__"].SentinelModule = model.SentinelModule
 sys.modules["__main__"].SecurityExtractor = model.SecurityExtractor
 from fastapi.middleware.cors import CORSMiddleware
-
+from model.distilbert import load_bert_sentinel
+distilbert_model = load_bert_sentinel()
 # 載入 .env（讓 API_KEY / SANDBOX_API_URL 等配置可由環境管理）
 load_dotenv()
 
@@ -565,6 +566,177 @@ async def get_user_data(
 
     return {"user_id": user_id, "name": "真實用戶", "status": "Normal"}
 
+@app.get("/api/v1/test_distilbert/{user_id}")
+async def test_distilbert_endpoint(
+    user_id: str,
+    payload: str = Query(
+        None, max_length=2000, description="指令測試區 (最多 2000 字)"
+    ),
+    request: Request = None,
+    background_tasks: BackgroundTasks = None,
+):
+    """
+    DistilBERT 真實流程入口：
+    完全比照真實入口流程，但推論引擎替換為 DistilBERT 模型。
+    包含：記憶提取 -> 沙盒 (Sandbox) 生成 -> 流量落地。
+    """
+    if request is None:
+        raise HTTPException(status_code=400, detail="Request context is required")
+
+    # 入口起始時間（毫秒）與基礎請求資訊
+    start_perf = time.perf_counter()
+    request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    client_ip = request.client.host
+    user_agent = request.headers.get("user-agent", "Unknown")
+
+    # 將 user_id 與 payload 合併成一個偵測字串，提升命中率
+    current_payload = payload if payload else ""
+    detection_target = (
+        f"{user_id} {current_payload}".strip() if current_payload else str(user_id)
+    )
+
+    # ==========================================
+    # 1. 意圖分析 (替換為 DistilBERT)
+    # ==========================================
+    confidence = 0.0
+    attack_vector = "None"
+    is_attack = False
+
+    # 確保 bert_model (BertSentinelModule) 已在上方初始化
+    if 'distilbert_model' in globals() and distilbert_model:
+        try:
+            df_input = pd.DataFrame({"payload": [detection_target]})
+            bert_result = distilbert_model.predict(df_input).iloc[0]
+            confidence = float(bert_result["attack_score"])
+            attack_vector = str(bert_result["top_attack_type"])
+            is_attack = confidence > 0.3 # 大於 0.3 視為有攻擊意圖 (後續還會用 0.75 把關)
+        except Exception as exc:
+            logger.error(f"[BERT] 推論失敗: {exc}")
+    else:
+        logger.warning("DistilBERT 模型未載入，降級為正常連線。")
+
+    logger.debug(
+        f"[BERT哨兵] 請求：{detection_target} | 信心度：{confidence} | 命中：{attack_vector}"
+    )
+
+    # 只有超過閾值才進入攔截路徑，避免過度誤判
+    should_intercept = is_attack and confidence > 0.75
+
+    # event_payload 是跨模組共享資料：
+    process_ms = None
+    response_at = None
+    event_payload = {
+        "request_at": request_at,
+        "client_ip": client_ip,
+        "location": "Cloud/DistilBERT", # 標記來源為 BERT
+        "is_proxy": detect_proxy(request),
+        "user_agent": user_agent,
+        "tls_fingerprint": "N/A",
+        "raw_payload": detection_target,
+        "query_id": user_id,
+        "attack_vector": attack_vector if is_attack else None,
+        "risk_level": int(confidence * 100) if is_attack else 0,
+        "is_attack": 1 if should_intercept else 0,
+    }
+
+    if should_intercept:
+        # ===== 惡意請求路徑 =====
+        risk_score = int(confidence * 100)
+
+        # 先查記憶：同一攻擊者可維持一致假資料，避免露餡
+        mem = get_memory(client_ip, user_id)
+
+        # 計算互動指標（停留時間、漏斗層級、演化分數等）
+        metrics = compute_interaction_metrics(
+            client_ip=client_ip,
+            query_id=user_id,
+            current_payload=detection_target,
+            has_memory_hit=bool(mem),
+        )
+
+        dwell_time = float(metrics["dwell_seconds"])
+        interaction_depth = int(metrics["depth_score"])
+        hits = 1
+
+        if mem:
+            # 已有記憶：沿用舊假資料，提升欺敵連續性
+            hits = mem["hits"] + 1
+            fake_data = mem["payload"]
+        else:
+            # 無記憶：稍後進沙盒生成
+            fake_data = None
+
+        process_ms = int((time.perf_counter() - start_perf) * 1000)
+        response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+
+        # 第一次命中才呼叫沙盒；避免重複生成不同假資料
+        if fake_data is None:
+            fake_data = await run_attack_in_sandbox(
+                {
+                    **event_payload,
+                    "response_at": response_at,
+                    "process_ms": process_ms,
+                    "hits": hits,
+                    "interaction_depth": interaction_depth,
+                    "dwell_time": dwell_time,
+                }
+            )
+
+        # 回填完整事件，供後續落地與 API 回傳
+        event_payload.update(
+            {
+                "response_at": response_at,
+                "process_ms": process_ms,
+                "response_payload": fake_data,
+                "hits": hits,
+                "interaction_depth": interaction_depth,
+                "dwell_time": dwell_time,
+                "mitigation_status": "Sandboxed",
+                "risk_level": risk_score,
+            }
+        )
+
+        # 流量寫入可異步（避免延遲主請求）或同步（保持即時一致）
+        if background_tasks:
+            background_tasks.add_task(log_traffic_event, event_payload)
+        else:
+            log_traffic_event(event_payload)
+
+        # 寫入欺敵記憶，供下一次相同攻擊者沿用
+        save_deception_state(client_ip, user_id, attack_vector, risk_score, fake_data)
+
+        logger.info(
+            f"[BERT哨兵攔截] {attack_vector} (信心: {confidence}) | "
+            f"深度: {interaction_depth} | 漏斗: {metrics['funnel_level']} | 隔離: Docker沙盒"
+        )
+        if isinstance(fake_data, dict):
+            fake_data["_debug_score"] = round(confidence, 4)
+            fake_data["_debug_vector"] = attack_vector
+        return fake_data
+
+    # ===== 正常請求路徑 =====
+    process_ms = int((time.perf_counter() - start_perf) * 1000)
+    response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+
+    event_payload.update(
+        {
+            "response_at": response_at,
+            "process_ms": process_ms,
+            "response_payload": None,
+            "hits": 0,
+            "interaction_depth": 0,
+            "dwell_time": 0.0,
+            "mitigation_status": "normal",
+            "risk_level": 0,
+        }
+    )
+
+    if background_tasks:
+        background_tasks.add_task(log_traffic_event, event_payload)
+    else:
+        log_traffic_event(event_payload)
+
+    return {"user_id": user_id, "name": "真實用戶", "status": "Normal"}
 
 # 攻擊模擬端點：功能與 /user 類似，但來源資訊固定為測試情境
 @app.post("/api/v1/simulate_attack", summary="模擬攻擊請求")
