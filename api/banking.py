@@ -890,7 +890,7 @@ class BeneficiaryCreateRequest(BaseModel):
         min_length=6,
         max_length=40,
         description=ACCOUNT_ID_DESCRIPTION,
-        json_schema_extra={"example": "ACC000000000001"},
+        json_schema_extra={"example": "MERNGTU3WAVTQJF"},
     )
 
 
@@ -907,7 +907,7 @@ class TransferRequest(BaseModel):
         min_length=6,
         max_length=40,
         description="收款帳戶識別碼，格式同 `ACC**********KH`。",
-        json_schema_extra={"example": "MERNGTU3WAVTQJF"},
+        json_schema_extra={"example": "ACC000000000002"},
     )
     amount: int = Field(
         ...,
