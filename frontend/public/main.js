@@ -4,6 +4,12 @@ const AUTO_REFRESH_MS = 5000;
 let selectedIp = null;
 let latestIpList = [];
 let refreshTimer = null;
+let dashboardReady = false;
+let refreshInFlight = false;
+let lastIpListSignature = "";
+let lastAttackSignature = "";
+let lastTrafficSignature = "";
+let lastDetailSignature = "";
 
 // 拖曳狀態
 let activeWindow = null;
@@ -816,6 +822,13 @@ function loadIpList() {
   return apiFetchAllIps()
     .then((data) => {
       latestIpList = normalizeLiveIpsResponse(data);
+      const signature = JSON.stringify(latestIpList);
+
+      if (signature === lastIpListSignature) {
+        return latestIpList;
+      }
+
+      lastIpListSignature = signature;
 
       if (!selectedIp && latestIpList.length > 0) {
         selectedIp = latestIpList[0].client_ip || latestIpList[0].ip;
@@ -828,11 +841,16 @@ function loadIpList() {
 
       renderIpList(latestIpList);
       renderGroupMaliciousAnalysis();
+
+      return latestIpList;
     })
     .catch((error) => {
       console.error("IP list error:", error);
-      latestIpList = [];
-      renderSystemOfflineState();
+      if (!dashboardReady) {
+        latestIpList = [];
+        renderSystemOfflineState();
+      }
+      return latestIpList;
     });
 }
 
@@ -844,35 +862,65 @@ function loadIpDetail() {
 
   return apiFetchIpDetails(selectedIp)
     .then((data) => {
+      const signature = JSON.stringify(data || {});
+      if (signature === lastDetailSignature && dashboardReady) {
+        return data;
+      }
+
+      lastDetailSignature = signature;
       renderDetail(data);
+      return data;
     })
     .catch((error) => {
       console.error("IP detail error:", error);
-      renderSystemOfflineState();
+      if (!dashboardReady) {
+        renderSystemOfflineState();
+      }
+      return null;
     });
 }
 
 function loadAttacks() {
   return apiFetchTopAttackMethods()
     .then((data) => {
+      const signature = JSON.stringify(data || {});
+      if (signature === lastAttackSignature && dashboardReady) {
+        return data;
+      }
+
+      lastAttackSignature = signature;
       renderAttacks(data);
       renderGroupMaliciousAnalysis();
+      return data;
     })
     .catch((error) => {
       console.error("Attack ranking error:", error);
-      renderSystemOfflineState();
+      if (!dashboardReady) {
+        renderSystemOfflineState();
+      }
+      return null;
     });
 }
 
 function loadTrafficOverview() {
   return apiFetchTrafficCompare()
     .then((data) => {
+      const signature = JSON.stringify(data || {});
+      if (signature === lastTrafficSignature && dashboardReady) {
+        return data;
+      }
+
+      lastTrafficSignature = signature;
       renderTrafficOverview(data);
       renderGroupMaliciousAnalysis();
+      return data;
     })
     .catch((error) => {
       console.error("Traffic overview error:", error);
-      renderSystemOfflineState();
+      if (!dashboardReady) {
+        renderSystemOfflineState();
+      }
+      return null;
     });
 }
 
@@ -1182,20 +1230,30 @@ function animateRows() {
 // 自動刷新
 // =========================
 function refreshDashboard(manual = false) {
+  if (refreshInFlight) return null;
+  refreshInFlight = true;
+
   if (manual) setStatusTime(new Date());
 
-  return apiAutoUpdateCheck()
-    .catch((error) => {
+  try {
+    await apiAutoUpdateCheck().catch((error) => {
       console.warn("auto_updates error:", error);
       return null;
-    })
-    .then(() => Promise.all([
+    });
+
+    await Promise.allSettled([
       loadIpList(),
       loadAttacks(),
       loadTrafficOverview(),
-    ]))
-    .then(() => loadIpDetail())
-    .then(() => setStatusTime(new Date()));
+    ]);
+
+    await loadIpDetail();
+    dashboardReady = true;
+    setStatusTime(new Date());
+    return true;
+  } finally {
+    refreshInFlight = false;
+  }
 }
 
 function startAutoRefresh() {
