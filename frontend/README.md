@@ -1,6 +1,9 @@
 # Mirage-Sentinel | 視覺化監控儀表板 (Frontend)
 
-這是 **Mirage-Sentinel** 網路安全監控系統的視覺化前端模組。本模組負責將後端「全時哨兵」偵測到的惡意流量與欺敵紀錄，轉化為直觀的分析圖表與攻擊時間軸。
+這是 **Mirage-Sentinel** 網路安全監控系統的前端模組。本模組已拆分成兩個入口：
+
+- **SOC 前端**：`http://127.0.0.1:3000`，負責監看惡意流量、欺敵紀錄與攻擊時間軸。
+- **客戶前端**：`http://127.0.0.1:3001`，負責正常銀行操作展示。
 
 ## 資料夾結構說明
 
@@ -24,7 +27,8 @@ Mirage-Sentinel/
 │   │   ├── main.js        # 調用 API (fetch) 與渲染數據
 │   │   └── style.css      # 介面視覺樣式
 │   ├── package.json       # 前端環境設定
-│   └── server.js          # 前端託管伺服器
+│   ├── soc-server.js      # SOC 前端託管伺服器
+│   └── customer-server.js  # 客戶前端託管伺服器
 │
 └── main.py                # [系統總入口] 啟動後端並掛載所有 API 路由
 ```
@@ -38,6 +42,16 @@ Mirage-Sentinel/
 | 功能項目         | API 路徑 (GET)                    | 數據來源          | 說明                                 |
 | :--------------- | :-------------------------------- | :---------------- | :----------------------------------- |
 | **停留時間分析** | `/api/v1/dashboard/analysis/{ip}` | `traffic_nexus.db`| 獲取特定攻擊者的活動時長、總擊中筆數 |
+
+## 啟動方式
+
+```bash
+# SOC 前端
+npm --prefix frontend run start:soc
+
+# 客戶前端
+npm --prefix frontend run start:customer
+```
 
 ---
 

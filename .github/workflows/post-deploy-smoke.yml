@@ -34,6 +34,7 @@ jobs:
             fi
 
             $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml restart backend_public backend_soc
+            $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml restart frontend_soc frontend_customer
 
             bash scripts/ci/smoke.sh \
               --health-url http://127.0.0.1:8000/healthz \
@@ -46,7 +47,11 @@ jobs:
               --sleep 3 \
               --compose-cmd "$COMPOSE_CMD" \
               --compose-file docker-compose.oracle.dual-demo.yml \
-              --log-services "backend_public backend_soc sandbox postgres"
+              --log-services "backend_public backend_soc frontend_soc frontend_customer sandbox postgres"
+
+            # Frontend reachability checks for both public pages.
+            curl -fsS http://127.0.0.1:3000/ >/dev/null
+            curl -fsS http://127.0.0.1:3001/banking_demo.html >/dev/null
 
             # Authorization regression checks on live deployment.
             bash scripts/ci/authz-smoke.sh http://127.0.0.1:8000

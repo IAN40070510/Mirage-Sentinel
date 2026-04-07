@@ -56,8 +56,32 @@ jobs:
               sleep 3
             done
 
+            # Frontend services must also be reachable after the compose update.
+            for i in $(seq 1 30); do
+              soc_frontend_ok=0
+              customer_frontend_ok=0
+              if curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then
+                soc_frontend_ok=1
+              fi
+              if curl -fsS http://127.0.0.1:3001/banking_demo.html >/dev/null 2>&1; then
+                customer_frontend_ok=1
+              fi
+              if [ "$soc_frontend_ok" -eq 1 ] && [ "$customer_frontend_ok" -eq 1 ]; then
+                echo "[deploy] frontend checks passed"
+                break
+              fi
+              if [ "$i" -eq 30 ]; then
+                echo "[deploy] ERROR: frontend checks failed"
+                $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml ps
+                $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml logs --tail=120 backend_public backend_soc frontend_soc frontend_customer sandbox
+                exit 1
+              fi
+              sleep 3
+            done
+
             # 強制讓 backend 在 postgres 已健康後重新初始化，避免啟動時短暫失敗而停在 mock mode。
             $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml restart backend_public backend_soc
+            $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml restart frontend_soc frontend_customer
 
             for i in $(seq 1 30); do
               pub_ok=0
@@ -76,6 +100,28 @@ jobs:
                 echo "[deploy] ERROR: backend restart health checks failed"
                 $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml ps
                 $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml logs --tail=120 backend_public backend_soc sandbox
+                exit 1
+              fi
+              sleep 3
+            done
+
+            for i in $(seq 1 30); do
+              soc_frontend_ok=0
+              customer_frontend_ok=0
+              if curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then
+                soc_frontend_ok=1
+              fi
+              if curl -fsS http://127.0.0.1:3001/banking_demo.html >/dev/null 2>&1; then
+                customer_frontend_ok=1
+              fi
+              if [ "$soc_frontend_ok" -eq 1 ] && [ "$customer_frontend_ok" -eq 1 ]; then
+                echo "[deploy] frontend restart checks passed"
+                break
+              fi
+              if [ "$i" -eq 30 ]; then
+                echo "[deploy] ERROR: frontend restart checks failed"
+                $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml ps
+                $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml logs --tail=120 frontend_soc frontend_customer
                 exit 1
               fi
               sleep 3

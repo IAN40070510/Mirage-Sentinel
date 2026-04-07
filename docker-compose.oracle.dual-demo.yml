@@ -97,8 +97,27 @@ services:
     environment:
       - PORT=3000
       - BACKEND_API_BASE_URL=http://backend_soc:8000/api/v1/dashboard
+    command: ["node", "soc-server.js"]
     depends_on:
       backend_soc:
+        condition: service_started
+
+  frontend_customer:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mirage_sentinel_frontend_customer
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env.oracle.public
+    environment:
+      - PORT=3001
+      - BANKING_API_BASE_URL=http://backend_public:8000/api/v1/banking
+    command: ["node", "customer-server.js"]
+    depends_on:
+      backend_public:
         condition: service_started
 
 volumes:

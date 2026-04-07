@@ -334,6 +334,8 @@ npm --prefix frontend run start:customer
 OCI 線上環境：
 
 - 服務網址：http://161.33.154.211
+- SOC 前端：http://161.33.154.211:3000
+- 客戶前端：http://161.33.154.211:3001/banking_demo.html
 
 ### Docker 部署（本地）
 
