@@ -1,4 +1,90 @@
 from typing import Any
+from fastapi import FastAPI, Request, HTTPException, status
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI()
+
+# 允許前端跨域請求
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# API_KEY 驗證
+def require_api_key(request: Request):
+    api_key = request.headers.get("X-API-KEY")
+    if not validate_api_key(api_key):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API Key"
+        )
+
+
+# 健康檢查
+@app.get("/healthz")
+def health_check():
+    return {"status": "ok"}
+
+
+# SOC Dashboard API 路由
+@app.get("/api/v1/dashboard/ips")
+async def dashboard_ips(request: Request):
+    require_api_key(request)
+    return fetch_all_client_ips()
+
+
+@app.get("/api/v1/dashboard/ip/{client_ip}")
+async def dashboard_ip_detail(client_ip: str, request: Request):
+    require_api_key(request)
+    return get_dashboard_ip_bundle(client_ip)
+
+
+@app.get("/api/v1/dashboard/compare")
+async def dashboard_compare(request: Request):
+    require_api_key(request)
+    return compare_traffic()
+
+
+@app.get("/api/v1/dashboard/heatmap")
+async def dashboard_heatmap(request: Request):
+    require_api_key(request)
+    return get_command_heatmap()
+
+
+@app.get("/api/v1/dashboard/auto_updates")
+async def dashboard_auto_updates(request: Request):
+    require_api_key(request)
+    return auto_updates()
+
+
+@app.get("/api/v1/dashboard/country_stats")
+async def dashboard_country_stats(request: Request):
+    require_api_key(request)
+    return get_country_statistics()
+
+
+@app.get("/api/v1/dashboard/attack_vector")
+async def dashboard_attack_vector(request: Request):
+    require_api_key(request)
+    return get_attack_vector_distribution()
+
+
+@app.get("/api/v1/dashboard/top_ips")
+async def dashboard_top_ips(request: Request):
+    require_api_key(request)
+    return get_top_source_ips()
+
+
+@app.get("/api/v1/dashboard/time_series")
+async def dashboard_time_series(request: Request):
+    require_api_key(request)
+    return get_time_series_stats()
+
+
 import json
 import logging
 import os
