@@ -2,7 +2,8 @@ import sqlite3
 import os
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,15 @@ def get_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column_sql: str):
+    """當資料庫升級時，為既有表補上缺少欄位。"""
+    column_name = column_sql.strip().split()[0]
+    cursor = conn.execute(f"PRAGMA table_info({table})")
+    existing = {row[1] for row in cursor.fetchall()}
+    if column_name not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column_sql}")
 
 
 def setup_traffic_db():
@@ -54,9 +64,22 @@ def setup_traffic_db():
         request_at TEXT NOT NULL,
         response_at TEXT,
         process_ms INTEGER,
+        method TEXT,
+        endpoint TEXT,
         client_id INTEGER NOT NULL,
         fingerprint_id INTEGER,
         query_id TEXT,
+        device_id TEXT,
+        referer TEXT,
+        header_entropy REAL,
+        req_interval_ms REAL,
+        req_time_var REAL,
+        user_device_ratio REAL,
+        device_user_ratio REAL,
+        req_rate_5m REAL,
+        graph_feature_source TEXT,
+        amount_value REAL,
+        amount_deviation REAL,
         is_attack INTEGER DEFAULT 0,
         location TEXT,
         is_proxy INTEGER DEFAULT 0,
@@ -91,12 +114,27 @@ def setup_traffic_db():
     )
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_clients_ip ON clients(ip)")
 
+    # 兼容既有 DB：若 traffic_logs 為舊 schema，補齊新特徵欄位。
+    _ensure_column(conn, "traffic_logs", "method TEXT")
+    _ensure_column(conn, "traffic_logs", "endpoint TEXT")
+    _ensure_column(conn, "traffic_logs", "device_id TEXT")
+    _ensure_column(conn, "traffic_logs", "referer TEXT")
+    _ensure_column(conn, "traffic_logs", "header_entropy REAL")
+    _ensure_column(conn, "traffic_logs", "req_interval_ms REAL")
+    _ensure_column(conn, "traffic_logs", "req_time_var REAL")
+    _ensure_column(conn, "traffic_logs", "user_device_ratio REAL")
+    _ensure_column(conn, "traffic_logs", "device_user_ratio REAL")
+    _ensure_column(conn, "traffic_logs", "req_rate_5m REAL")
+    _ensure_column(conn, "traffic_logs", "graph_feature_source TEXT")
+    _ensure_column(conn, "traffic_logs", "amount_value REAL")
+    _ensure_column(conn, "traffic_logs", "amount_deviation REAL")
+
     conn.commit()
     conn.close()
     logger.info(f"Traffic Log Engine Ready: {DB_PATH}")
 
 
-def log_traffic_event(data: dict):
+def log_traffic_event(data: dict[str, Any]):
     """寫入全流量紀錄（包含正常 / 攻擊），攻擊進一步寫入 attack_details"""
     conn = get_connection()
     cursor = conn.cursor()
@@ -133,17 +171,32 @@ def log_traffic_event(data: dict):
     cursor.execute(
         """
         INSERT INTO traffic_logs (
-            request_at, response_at, process_ms, client_id, fingerprint_id,
-            query_id, is_attack, location, is_proxy
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            request_at, response_at, process_ms, method, endpoint, client_id, fingerprint_id,
+            query_id, device_id, referer, header_entropy, req_interval_ms, req_time_var,
+            user_device_ratio, device_user_ratio, req_rate_5m, graph_feature_source,
+            amount_value, amount_deviation, is_attack, location, is_proxy
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             data.get("request_at"),
             data.get("response_at"),
             data.get("process_ms"),
+            data.get("method"),
+            data.get("endpoint"),
             client_id,
             fingerprint_id,
             data.get("query_id"),
+            data.get("device_id"),
+            data.get("referer"),
+            data.get("header_entropy"),
+            data.get("req_interval_ms"),
+            data.get("req_time_var"),
+            data.get("user_device_ratio"),
+            data.get("device_user_ratio"),
+            data.get("req_rate_5m"),
+            data.get("graph_feature_source"),
+            data.get("amount_value"),
+            data.get("amount_deviation"),
             is_attack,
             data.get("location"),
             is_proxy,
@@ -204,7 +257,7 @@ def get_recent_traffic(limit: int = 100):
 
 def get_recent_transactions_by_user(
     user_id: str, limit_seconds: int = 300, max_results: int = 50
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """查詢使用者最近 X 秒內的交易。用於檢測重放與高頻規則。"""
     from datetime import datetime, timedelta
 
@@ -212,9 +265,9 @@ def get_recent_transactions_by_user(
     cursor = conn.cursor()
 
     # 計算時間下限（UTC）
-    cutoff_time = (datetime.utcnow() - timedelta(seconds=limit_seconds)).strftime(
-        "%Y-%m-%d %H:%M:%S.%f"
-    )[:-3]
+    cutoff_time = (
+        datetime.now(timezone.utc) - timedelta(seconds=limit_seconds)
+    ).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
     cursor.execute(
         """
@@ -235,16 +288,16 @@ def get_recent_transactions_by_user(
 
 def get_recent_transactions_by_ip(
     client_ip: str, limit_seconds: int = 60, max_results: int = 100
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """查詢 IP 最近 X 秒內的 API 呼叫。用於檢測速率限制 (DDoS/Rate-limit) 規則。"""
     from datetime import datetime, timedelta
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    cutoff_time = (datetime.utcnow() - timedelta(seconds=limit_seconds)).strftime(
-        "%Y-%m-%d %H:%M:%S.%f"
-    )[:-3]
+    cutoff_time = (
+        datetime.now(timezone.utc) - timedelta(seconds=limit_seconds)
+    ).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
     cursor.execute(
         """
@@ -273,7 +326,7 @@ def get_transaction_amounts_by_user(
     conn = get_connection()
     cursor = conn.cursor()
 
-    cutoff_time = (datetime.utcnow() - timedelta(hours=limit_hours)).strftime(
+    cutoff_time = (datetime.now(timezone.utc) - timedelta(hours=limit_hours)).strftime(
         "%Y-%m-%d %H:%M:%S.%f"
     )[:-3]
 
@@ -294,13 +347,18 @@ def get_transaction_amounts_by_user(
     rows = cursor.fetchall()
     conn.close()
 
-    amounts = []
+    amounts: list[int] = []
     for row in rows:
         try:
             payload = json.loads(row[0]) if isinstance(row[0], str) else row[0]
-            if isinstance(payload, dict) and "transaction" in payload:
-                amount = payload["transaction"].get("amount")
-                if amount and isinstance(amount, (int, float)):
+            if isinstance(payload, dict):
+                payload_dict = cast(dict[str, Any], payload)
+                transaction_value = payload_dict.get("transaction")
+                if not isinstance(transaction_value, dict):
+                    continue
+                transaction_data = cast(dict[str, Any], transaction_value)
+                amount = transaction_data.get("amount")
+                if amount is not None and isinstance(amount, (int, float)):
                     amounts.append(int(amount))
         except (json.JSONDecodeError, TypeError, KeyError):
             pass

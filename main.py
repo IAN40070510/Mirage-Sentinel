@@ -20,13 +20,19 @@ from fastapi import (
     Header,
 )
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import Response
 import sys
 import uvicorn
 import time
 import os
 import logging
 import ipaddress
+import math
+import statistics
+import re
+import hashlib
 import pandas as pd
+import httpx
 from types import SimpleNamespace
 from datetime import datetime
 from contextlib import asynccontextmanager
@@ -43,8 +49,20 @@ logger = logging.getLogger(__name__)
 # sandbox：惡意流量導向沙盒/降級假資料
 from core.deception_db import setup_deception_db, get_memory, save_deception_state
 from core.deception_engine import compute_interaction_metrics
-from core.traffic_db import setup_traffic_db, log_traffic_event
+from core.traffic_db import (
+    setup_traffic_db,
+    log_traffic_event,
+    get_recent_transactions_by_user,
+    get_transaction_amounts_by_user,
+)
 from core.sandbox import run_attack_in_sandbox
+from core.feature_store import get_feature_store
+from core.sentinel import (
+    analyze_intent as signature_analyze_intent,
+    detect_replication_risk,
+    detect_rate_limiting_risk,
+    detect_anomalous_amount_risk,
+)
 from api import dashboard
 from api.db.session import init_db, create_tables, seed_banking_demo_data
 
@@ -60,6 +78,7 @@ from fastapi.middleware.cors import CORSMiddleware
 distilbert_model = None
 # 載入 .env（讓 API_KEY / SANDBOX_API_URL 等配置可由環境管理）
 load_dotenv()
+feature_store = get_feature_store()
 
 # ===== API Key 設定 =====
 # API_KEY 主要用於 Dashboard 驗證；當 Dashboard 關閉時，允許以警告模式啟動。
@@ -83,6 +102,9 @@ def _env_flag(name: str, default: str = "true") -> bool:
 ENABLE_DASHBOARD = _env_flag("ENABLE_DASHBOARD", "false")
 DASHBOARD_INTERNAL_ONLY = _env_flag("DASHBOARD_INTERNAL_ONLY", "true")
 DASHBOARD_ADMIN_KEY = os.getenv("DASHBOARD_ADMIN_KEY", "").strip()
+VULN_BANK_BASE_URL = os.getenv("VULN_BANK_BASE_URL", "http://vuln_bank:5000").rstrip(
+    "/"
+)
 
 
 def _is_private_or_loopback_ip(ip_text: str) -> bool:
@@ -133,8 +155,8 @@ def analyze_intent(text: str):
         return False, 0.0, "None"
 
     if not ai_sentinel:
-        logger.warning("AI Sentinel 未載入，降級為非攻擊判定。")
-        return False, 0.0, "None"
+        # 模型未載入時回退到簽名規則引擎，避免入口完全失明。
+        return signature_analyze_intent(text)
 
     try:
         df_input = pd.DataFrame({"payload": [str(text).lower().strip()]})
@@ -265,6 +287,97 @@ def custom_openapi():
 app.openapi = custom_openapi
 
 
+def _compute_header_entropy(request: Request) -> float:
+    """以請求 Header 名稱字元分布近似熵值，用於維度 2 的結構特徵。"""
+    header_names = "".join(sorted(k.lower() for k in request.headers.keys()))
+    if not header_names:
+        return 0.0
+
+    counts: dict[str, int] = {}
+    total = len(header_names)
+    for ch in header_names:
+        counts[ch] = counts.get(ch, 0) + 1
+
+    entropy = 0.0
+    for value in counts.values():
+        p = value / total
+        entropy -= p * math.log2(p)
+
+    return round(entropy, 6)
+
+
+def _parse_request_at(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S.%f")
+    except Exception:
+        return None
+
+
+def _compute_timing_features(user_id: str) -> tuple[float, float]:
+    """從近期請求推估間隔與節奏變異。"""
+    recent = get_recent_transactions_by_user(user_id, limit_seconds=900, max_results=25)
+    timestamps = []
+    for record in recent:
+        parsed = _parse_request_at(record.get("request_at"))
+        if parsed:
+            timestamps.append(parsed)
+
+    if len(timestamps) < 2:
+        return 0.0, 0.0
+
+    timestamps.sort()
+    intervals_ms = []
+    for i in range(1, len(timestamps)):
+        delta_ms = (timestamps[i] - timestamps[i - 1]).total_seconds() * 1000.0
+        intervals_ms.append(delta_ms)
+
+    last_interval = round(intervals_ms[-1], 3)
+    if len(intervals_ms) > 1:
+        req_time_var = round(statistics.pvariance(intervals_ms), 6)
+    else:
+        req_time_var = 0.0
+
+    return last_interval, req_time_var
+
+
+def _extract_amount_value(
+    payload: str | None, explicit_amount: float | None
+) -> float | None:
+    if explicit_amount is not None:
+        return float(explicit_amount)
+    if not payload:
+        return None
+
+    # 取 payload 第一個數值作為近似金額訊號（非交易場景可能為 None）。
+    matched = re.search(r"-?\d+(?:\.\d+)?", str(payload))
+    if not matched:
+        return None
+    try:
+        return float(matched.group(0))
+    except Exception:
+        return None
+
+
+def _compute_amount_deviation(user_id: str, amount_value: float | None) -> float:
+    if amount_value is None:
+        return 0.0
+    history = get_transaction_amounts_by_user(user_id, limit_hours=24, max_results=100)
+    if not history:
+        return 0.0
+    avg_amount = statistics.mean(history)
+    if avg_amount <= 0:
+        return 0.0
+    return round(amount_value / avg_amount, 6)
+
+
+def _derive_device_id(client_ip: str, user_agent: str, tls_fingerprint: str) -> str:
+    """以穩定字串組合近似設備識別，不存放原始敏感資料。"""
+    raw = f"{client_ip}|{user_agent}|{tls_fingerprint}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
+
+
 @app.get("/")
 async def root():
     """服務根節點：提供健康入口與文件連結。"""
@@ -306,6 +419,9 @@ async def get_user_data(
     payload: str = Query(
         None, max_length=2000, description="指令測試區 (最多 2000 字)"
     ),
+    amount: float | None = Query(
+        None, description="可選金額欄位，用於異常金額偏離分析"
+    ),
     request: Request = None,
     background_tasks: BackgroundTasks = None,
 ):
@@ -323,14 +439,45 @@ async def get_user_data(
     request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     client_ip = request.client.host
     user_agent = request.headers.get("user-agent", "Unknown")
+    referer = request.headers.get("referer")
+    tls_fingerprint = request.headers.get("X-JA3-Fingerprint", "N/A")
+    device_id = _derive_device_id(client_ip, user_agent, tls_fingerprint)
+    header_entropy = _compute_header_entropy(request)
     current_payload = payload if payload else ""
     detection_target = (
         f"{user_id} {current_payload}".strip() if current_payload else str(user_id)
     )
     confidence = 0.0
     attack_vector = "None"
-    # is_attack = False
-    should_intercept = False
+    is_attack, confidence, attack_vector = analyze_intent(detection_target)
+
+    req_interval_ms, req_time_var = _compute_timing_features(user_id)
+    amount_value = _extract_amount_value(current_payload, amount)
+    amount_deviation = _compute_amount_deviation(user_id, amount_value)
+
+    feature_store.record_observation(user_id=user_id, device_id=device_id)
+    graph_metrics = feature_store.get_metrics(user_id=user_id, device_id=device_id)
+
+    risk_reasons = []
+    replication_risk, replication_reason = detect_replication_risk(
+        user_id, detection_target
+    )
+    if replication_risk:
+        risk_reasons.append(replication_reason)
+
+    rate_risk, rate_reason = detect_rate_limiting_risk(client_ip)
+    if rate_risk:
+        risk_reasons.append(rate_reason)
+
+    amount_risk, amount_reason = detect_anomalous_amount_risk(
+        user_id, int(amount_value) if amount_value is not None else None
+    )
+    if amount_risk:
+        risk_reasons.append(amount_reason)
+
+    should_intercept = (is_attack and confidence > 0.75) or bool(risk_reasons)
+    if risk_reasons:
+        attack_vector = ", ".join(filter(None, [attack_vector, *risk_reasons]))
 
     process_ms = None
     response_at = None
@@ -340,8 +487,21 @@ async def get_user_data(
         "location": "Cloud",
         "is_proxy": detect_proxy(request),
         "user_agent": user_agent,
-        "tls_fingerprint": "N/A",
+        "tls_fingerprint": tls_fingerprint,
         "raw_payload": detection_target,
+        "endpoint": request.url.path,
+        "method": request.method,
+        "referer": referer,
+        "header_entropy": header_entropy,
+        "req_interval_ms": req_interval_ms,
+        "req_time_var": req_time_var,
+        "device_id": device_id,
+        "user_device_ratio": graph_metrics.user_device_ratio,
+        "device_user_ratio": graph_metrics.device_user_ratio,
+        "req_rate_5m": graph_metrics.req_rate_5m,
+        "graph_feature_source": graph_metrics.source,
+        "amount_value": amount_value,
+        "amount_deviation": amount_deviation,
         "query_id": user_id,
         "attack_vector": None,
         "risk_level": 0,
@@ -493,6 +653,19 @@ async def simulate_attack(
         "attack_vector": attack_vector if is_attack else None,
         "risk_level": int(confidence * 100) if is_attack else 0,
         "is_attack": 1 if should_intercept else 0,
+        "header_entropy": 0.0,
+        "req_interval_ms": 0.0,
+        "req_time_var": 0.0,
+        "device_id": "simulated-device",
+        "user_device_ratio": 0.0,
+        "device_user_ratio": 0.0,
+        "req_rate_5m": 0.0,
+        "graph_feature_source": "simulated",
+        "amount_value": _extract_amount_value(payload, None),
+        "amount_deviation": 0.0,
+        "referer": None,
+        "endpoint": "/api/v1/simulate_attack",
+        "method": "POST",
     }
 
     if should_intercept:
@@ -595,6 +768,201 @@ def detect_proxy(request: Request) -> int:
 def is_known_proxy_ip(ip: str) -> bool:
     """已知代理 IP 檢測占位函式（後續可接外部黑名單/資料源）。"""
     return False
+
+
+def _is_internal_sentinel_path(path: str) -> bool:
+    internal_prefixes = (
+        "/api/v1/",
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+        "/healthz",
+    )
+    return path.startswith(internal_prefixes)
+
+
+def _build_upstream_headers(request: Request) -> dict[str, str]:
+    drop_headers = {
+        "host",
+        "content-length",
+        "connection",
+        "accept-encoding",
+        "transfer-encoding",
+    }
+    headers = {
+        k: v for k, v in request.headers.items() if k.lower() not in drop_headers
+    }
+    headers["x-forwarded-proto"] = request.headers.get("x-forwarded-proto", "http")
+    headers["x-real-ip"] = request.client.host if request.client else ""
+    return headers
+
+
+async def _proxy_banking_request(
+    upstream_path: str,
+    request: Request,
+    background_tasks: BackgroundTasks | None,
+):
+    start_perf = time.perf_counter()
+    request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    client_ip = request.client.host if request.client else ""
+    user_agent = request.headers.get("user-agent", "Unknown")
+    referer = request.headers.get("referer")
+    tls_fingerprint = request.headers.get("X-JA3-Fingerprint", "N/A")
+    header_entropy = _compute_header_entropy(request)
+    device_id = _derive_device_id(client_ip, user_agent, tls_fingerprint)
+
+    body_bytes = await request.body()
+    body_text = body_bytes.decode("utf-8", errors="ignore") if body_bytes else ""
+    query_text = request.url.query or ""
+    query_id = request.headers.get("X-User-Id", f"proxy:{client_ip}")
+    detection_target = f"{upstream_path} {query_text} {body_text}".strip()[:2000]
+
+    req_interval_ms, req_time_var = _compute_timing_features(query_id)
+    amount_value = _extract_amount_value(body_text, None)
+    amount_deviation = _compute_amount_deviation(query_id, amount_value)
+
+    feature_store.record_observation(user_id=query_id, device_id=device_id)
+    graph_metrics = feature_store.get_metrics(user_id=query_id, device_id=device_id)
+
+    is_attack, confidence, attack_vector = analyze_intent(detection_target)
+    risk_reasons = []
+
+    replication_risk, replication_reason = detect_replication_risk(
+        query_id, detection_target
+    )
+    if replication_risk:
+        risk_reasons.append(replication_reason)
+
+    rate_risk, rate_reason = detect_rate_limiting_risk(client_ip)
+    if rate_risk:
+        risk_reasons.append(rate_reason)
+
+    amount_risk, amount_reason = detect_anomalous_amount_risk(
+        query_id, int(amount_value) if amount_value is not None else None
+    )
+    if amount_risk:
+        risk_reasons.append(amount_reason)
+
+    if risk_reasons:
+        attack_vector = ", ".join(filter(None, [attack_vector, *risk_reasons]))
+
+    upstream_url = f"{VULN_BANK_BASE_URL}/{upstream_path.lstrip('/')}"
+    if query_text:
+        upstream_url = f"{upstream_url}?{query_text}"
+
+    status_code = 502
+    response_content = b""
+    response_headers: dict[str, str] = {}
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=False) as client:
+            upstream_response = await client.request(
+                method=request.method,
+                url=upstream_url,
+                content=body_bytes if body_bytes else None,
+                headers=_build_upstream_headers(request),
+            )
+        status_code = upstream_response.status_code
+        response_content = upstream_response.content
+        response_headers = {
+            k: v
+            for k, v in upstream_response.headers.items()
+            if k.lower()
+            not in {
+                "content-length",
+                "transfer-encoding",
+                "connection",
+            }
+        }
+    except Exception as exc:
+        logger.error("banking proxy upstream failed: %s", exc)
+        response_content = b'{"detail":"upstream unavailable"}'
+        response_headers = {"content-type": "application/json"}
+
+    process_ms = int((time.perf_counter() - start_perf) * 1000)
+    response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+
+    should_intercept = (is_attack and confidence > 0.75) or bool(risk_reasons)
+    event_payload = {
+        "request_at": request_at,
+        "response_at": response_at,
+        "process_ms": process_ms,
+        "client_ip": client_ip,
+        "location": "banking:proxy",
+        "is_proxy": detect_proxy(request),
+        "user_agent": user_agent,
+        "tls_fingerprint": tls_fingerprint,
+        "raw_payload": detection_target,
+        "query_id": query_id,
+        "method": request.method,
+        "endpoint": f"/{upstream_path.lstrip('/')}",
+        "referer": referer,
+        "header_entropy": header_entropy,
+        "req_interval_ms": req_interval_ms,
+        "req_time_var": req_time_var,
+        "device_id": device_id,
+        "user_device_ratio": graph_metrics.user_device_ratio,
+        "device_user_ratio": graph_metrics.device_user_ratio,
+        "req_rate_5m": graph_metrics.req_rate_5m,
+        "graph_feature_source": graph_metrics.source,
+        "amount_value": amount_value,
+        "amount_deviation": amount_deviation,
+        "attack_vector": attack_vector if should_intercept else None,
+        "risk_level": int(confidence * 100) if is_attack else 0,
+        "is_attack": 1 if should_intercept else 0,
+        "response_payload": None,
+        "hits": 0,
+        "interaction_depth": 0,
+        "dwell_time": 0.0,
+        "mitigation_status": "normal" if not should_intercept else "observed",
+    }
+
+    if background_tasks:
+        background_tasks.add_task(log_traffic_event, event_payload)
+    else:
+        log_traffic_event(event_payload)
+
+    return Response(
+        content=response_content,
+        status_code=status_code,
+        headers=response_headers,
+    )
+
+
+@app.api_route(
+    "/banking/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+)
+async def proxy_banking_prefixed(
+    path: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
+    return await _proxy_banking_request(
+        upstream_path=path,
+        request=request,
+        background_tasks=background_tasks,
+    )
+
+
+@app.api_route(
+    "/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+)
+async def proxy_banking_root(
+    path: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
+    req_path = "/" + path.lstrip("/") if path else "/"
+    if _is_internal_sentinel_path(req_path):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    return await _proxy_banking_request(
+        upstream_path=path,
+        request=request,
+        background_tasks=background_tasks,
+    )
 
 
 if __name__ == "__main__":
