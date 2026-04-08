@@ -145,5 +145,5 @@ app.use((req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Customer frontend running at http://localhost:${PORT}`);
+  console.log(`Customer frontend running at http://0.0.0.0:${PORT}`);
 });

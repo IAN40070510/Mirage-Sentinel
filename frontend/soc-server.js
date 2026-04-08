@@ -248,5 +248,5 @@ app.use((req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`SOC frontend running at http://localhost:${PORT}`);
+  console.log(`SOC frontend running at http://0.0.0.0:${PORT}`);
 });

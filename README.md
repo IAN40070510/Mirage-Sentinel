@@ -276,6 +276,7 @@ npm --prefix frontend run start:customer
 
 - 後端 API 文件：http://127.0.0.1:8000/docs
 - SOC 前端儀表板：http://127.0.0.1:3000
+- 若部署到 OCI，需同時在安全清單 / 防火牆放行 3000/TCP，否則即使 compose 已 publish 3000 也無法從外網存取。
 - 客戶前端介面：http://127.0.0.1:3001
 
 OCI 線上環境：
