@@ -88,8 +88,15 @@ def get_memory(client_ip: str, query_id: str):
     return None
 
 
+from typing import Any
+
+
 def save_deception_state(
-    client_ip: str, query_id: str, vector: str, risk: int, payload: dict = None
+    client_ip: str,
+    query_id: str,
+    vector: str,
+    risk: int,
+    payload: dict[str, Any] | None = None,
 ):
     """
     儲存或更新記憶：確保資料一致性 (Upsert 邏輯)

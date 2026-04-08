@@ -1,3 +1,4 @@
+from typing import Any
 import json
 import logging
 import os
@@ -106,7 +107,7 @@ def validate_api_key(api_key: str | None) -> bool:
     return bool(api_key) and api_key == expected_key
 
 
-def get_hacker_dwell_time(client_ip: str) -> dict:
+def get_hacker_dwell_time(client_ip: str) -> dict[str, Any]:
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
@@ -145,7 +146,7 @@ def get_hacker_dwell_time(client_ip: str) -> dict:
         }
 
 
-def analyze_interaction_depth(client_ip: str, query_id: str) -> dict:
+def analyze_interaction_depth(client_ip: str, query_id: str) -> dict[str, Any]:
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
@@ -179,7 +180,7 @@ def analyze_interaction_depth(client_ip: str, query_id: str) -> dict:
         }
 
 
-def get_attack_timeline(attacker_ip: str) -> dict:
+def get_attack_timeline(attacker_ip: str) -> dict[str, Any]:
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -219,7 +220,7 @@ def log_misjudgment(attacker_ip: str, reason: str) -> None:
         json.dump(data, file, ensure_ascii=False, indent=4)
 
 
-def get_command_heatmap() -> dict:
+def get_command_heatmap() -> dict[str, Any]:
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -238,7 +239,7 @@ def get_command_heatmap() -> dict:
     return {"top_commands": [{"cmd": row[0], "count": row[1]} for row in rows]}
 
 
-def get_ip_details(ip: str) -> dict:
+def get_ip_details(ip: str) -> dict[str, Any]:
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -278,14 +279,14 @@ def get_ip_details(ip: str) -> dict:
     return result
 
 
-def fetch_recent_traffic(limit: int = 100, mode: str = "all") -> dict:
+def fetch_recent_traffic(limit: int = 100, mode: str = "all") -> dict[str, Any]:
     rows = core_get_recent_traffic(limit)
     if mode == "attacks":
         rows = [row for row in rows if int(row.get("is_attack") or 0) == 1]
     return {"recent_traffic": rows}
 
 
-def fetch_all_client_ips(limit: int = 500) -> dict:
+def fetch_all_client_ips(limit: int = 500) -> dict[str, Any]:
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -335,7 +336,7 @@ def fetch_all_client_ips(limit: int = 500) -> dict:
     return {"items": items}
 
 
-def compare_traffic(limit: int = 1000) -> dict:
+def compare_traffic(limit: int = 1000) -> dict[str, Any]:
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -407,7 +408,9 @@ def compare_traffic(limit: int = 1000) -> dict:
 # ========== 鑑識事件標準化查詢層 (Forensic Event Standardized Query Layer) ==========
 
 
-def get_events_by_route(route: str, limit: int = 100, offset: int = 0) -> dict:
+def get_events_by_route(
+    route: str, limit: int = 100, offset: int = 0
+) -> dict[str, Any]:
     """按路由分類查詢事件 (real 或 deception)."""
     if route not in ("real", "deception"):
         return {"error": "Invalid route. Must be 'real' or 'deception'", "events": []}
@@ -479,7 +482,7 @@ def get_events_by_route(route: str, limit: int = 100, offset: int = 0) -> dict:
 
 def get_events_by_risk_score(
     min_score: int = 0, max_score: int = 100, limit: int = 100
-) -> dict:
+) -> dict[str, Any]:
     """按風險分數範圍查詢事件."""
     if not (0 <= min_score <= 100 and 0 <= max_score <= 100 and min_score <= max_score):
         return {
@@ -555,7 +558,7 @@ def get_events_by_risk_score(
         return {"error": str(exc), "events": []}
 
 
-def get_deception_chain(query_id: str) -> dict:
+def get_deception_chain(query_id: str) -> dict[str, Any]:
     """回放攻擊鏈：按 query_id 聚合相關事件，重現完整攻擊路徑"""
     try:
         with get_db_connection() as conn:
@@ -656,7 +659,7 @@ def get_deception_chain(query_id: str) -> dict:
         return {"query_id": query_id, "error": str(exc), "events": []}
 
 
-def auto_updates() -> dict:
+def auto_updates() -> dict[str, Any]:
     """提供前端輪詢用的輕量更新資訊。"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -686,11 +689,13 @@ def auto_updates() -> dict:
     }
 
 
-def set_log_category(category_name: str, items: list | None = None) -> dict:
+def set_log_category(category_name: str, items: list | None = None) -> dict[str, Any]:
     return {"category_name": category_name, "items": items or [], "status": "ready"}
 
 
-def execute_terminal_cmd(command_text: str, selected_ip: str | None = None) -> dict:
+def execute_terminal_cmd(
+    command_text: str, selected_ip: str | None = None
+) -> dict[str, Any]:
     normalized = (command_text or "").strip()
     return {
         "status": "accepted" if normalized else "empty",
@@ -700,7 +705,7 @@ def execute_terminal_cmd(command_text: str, selected_ip: str | None = None) -> d
     }
 
 
-def generate_hacker_pdf(client_ip: str) -> dict:
+def generate_hacker_pdf(client_ip: str) -> dict[str, Any]:
     return {
         "report_type": "hacker_pdf_payload",
         "client_ip": client_ip,
@@ -711,7 +716,7 @@ def generate_hacker_pdf(client_ip: str) -> dict:
     }
 
 
-def get_dashboard_ip_bundle(client_ip: str) -> dict:
+def get_dashboard_ip_bundle(client_ip: str) -> dict[str, Any]:
     dwell = get_hacker_dwell_time(client_ip)
     timeline_data = get_attack_timeline(client_ip)
     details = get_ip_details(client_ip)
@@ -752,7 +757,7 @@ def get_dashboard_ip_bundle(client_ip: str) -> dict:
     }
 
 
-def get_country_statistics(limit: int = 20) -> dict:
+def get_country_statistics(limit: int = 20) -> dict[str, Any]:
     """按國家/地區統計攻擊數與連線數（用於趨勢呈現）"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -792,7 +797,7 @@ def get_country_statistics(limit: int = 20) -> dict:
     return {"statistics": stats, "total_countries": len(stats)}
 
 
-def get_attack_vector_distribution() -> dict:
+def get_attack_vector_distribution() -> dict[str, Any]:
     """按攻擊類型統計分布（SQLi、LFI、XSS、RCE 等）"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -824,7 +829,7 @@ def get_attack_vector_distribution() -> dict:
     return {"distribution": distribution}
 
 
-def get_top_source_ips(limit: int = 20) -> dict:
+def get_top_source_ips(limit: int = 20) -> dict[str, Any]:
     """源 IP 熱點分布（連線數、攻擊數、風險等級）"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -864,7 +869,7 @@ def get_top_source_ips(limit: int = 20) -> dict:
     return {"top_ips": ips, "total_unique_ips": len(ips)}
 
 
-def get_time_series_stats(hours: int = 24) -> dict:
+def get_time_series_stats(hours: int = 24) -> dict[str, Any]:
     """按時間段統計（小時粒度，用於趨勢圖）"""
     with get_db_connection() as conn:
         cursor = conn.cursor()

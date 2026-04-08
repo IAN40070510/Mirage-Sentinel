@@ -138,7 +138,7 @@ def setup_traffic_db():
     logger.info(f"Traffic Log Engine Ready: {DB_PATH}")
 
 
-def log_traffic_event(data: dict[str, Any]):
+def log_traffic_event(data: dict[str, Any]) -> None:
     """寫入全流量紀錄（包含正常 / 攻擊），攻擊進一步寫入 attack_details"""
     conn = get_connection()
     cursor = conn.cursor()
@@ -240,7 +240,7 @@ def log_traffic_event(data: dict[str, Any]):
     conn.close()
 
 
-def get_recent_traffic(limit: int = 100):
+def get_recent_traffic(limit: int = 100) -> list[dict[str, Any]]:
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
