@@ -8,6 +8,81 @@ const DASHBOARD_BASE_URL =
   process.env.BACKEND_API_BASE_URL || "http://localhost:8000/api/v1/dashboard";
 const DASHBOARD_API_KEY = process.env.API_KEY || "dev-local-api-key-change-me";
 
+const BASE_URL_CANDIDATES = Array.from(
+  new Set(
+    [
+      DASHBOARD_BASE_URL,
+      "http://localhost:8002/api/v1/dashboard",
+      "http://localhost:8000/api/v1/dashboard",
+      "http://127.0.0.1:8002/api/v1/dashboard",
+      "http://127.0.0.1:8000/api/v1/dashboard",
+    ].filter(Boolean)
+  )
+);
+
+const API_KEY_CANDIDATES = Array.from(
+  new Set(
+    [
+      DASHBOARD_API_KEY,
+      process.env.DASHBOARD_API_KEY,
+      "CHANGE_ME_REQUIRED",
+      "dev-local-api-key-change-me",
+    ].filter((x) => typeof x === "string" && x.trim())
+  )
+);
+
+let resolvedConnection = null;
+
+async function probeDashboard(baseUrl, apiKey) {
+  try {
+    const response = await fetch(`${baseUrl}/recent_traffic?limit=1&mode=all`, {
+      headers: {
+        "X-API-Key": apiKey,
+      },
+    });
+
+    if (!response.ok) {
+      return { ok: false };
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      return { ok: false };
+    }
+
+    await response.json();
+    return { ok: true };
+  } catch (_err) {
+    return { ok: false };
+  }
+}
+
+async function resolveDashboardConnection() {
+  if (resolvedConnection) {
+    return resolvedConnection;
+  }
+
+  for (const baseUrl of BASE_URL_CANDIDATES) {
+    for (const apiKey of API_KEY_CANDIDATES) {
+      const probed = await probeDashboard(baseUrl, apiKey);
+      if (probed.ok) {
+        resolvedConnection = { baseUrl, apiKey };
+        console.log(`[SOC] Connected dashboard backend: ${baseUrl}`);
+        return resolvedConnection;
+      }
+    }
+  }
+
+  resolvedConnection = {
+    baseUrl: DASHBOARD_BASE_URL,
+    apiKey: DASHBOARD_API_KEY,
+  };
+  console.warn(
+    "[SOC] Unable to auto-detect backend/key; using configured defaults."
+  );
+  return resolvedConnection;
+}
+
 app.use(express.json());
 
 function sendPublicFile(res, fileName) {
@@ -28,27 +103,34 @@ app.get(["/banking_demo.html", "/banking_demo.js", "/banking_demo.css"], (req, r
 });
 
 app.get("/api/config", (req, res) => {
+  const current = resolvedConnection || {
+    baseUrl: DASHBOARD_BASE_URL,
+    apiKey: DASHBOARD_API_KEY,
+  };
   res.json({
     proxyBase: "/api/dashboard",
-    backendBase: DASHBOARD_BASE_URL,
+    backendBase: current.baseUrl,
   });
 });
 
 async function fetchDashboardJson(apiPath, options = {}) {
+  const current = await resolveDashboardConnection();
   const mergedOptions = {
     ...options,
     headers: {
-      "X-API-Key": DASHBOARD_API_KEY,
+      "X-API-Key": current.apiKey,
       ...(options.headers || {}),
     },
   };
 
-  const response = await fetch(`${DASHBOARD_BASE_URL}${apiPath}`, mergedOptions);
+  const response = await fetch(`${current.baseUrl}${apiPath}`, mergedOptions);
   const contentType = response.headers.get("content-type") || "";
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Dashboard API ${response.status}: ${errorText}`);
+    throw new Error(
+      `Dashboard API ${response.status}: ${errorText} (base=${current.baseUrl})`
+    );
   }
 
   if (contentType.includes("application/json")) {
@@ -57,6 +139,10 @@ async function fetchDashboardJson(apiPath, options = {}) {
 
   return response.text();
 }
+
+resolveDashboardConnection().catch((err) => {
+  console.warn("[SOC] Initial connection probe failed:", err?.message || err);
+});
 
 function asyncRoute(handler) {
   return async (req, res) => {
