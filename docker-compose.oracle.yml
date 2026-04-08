@@ -161,15 +161,12 @@ services:
       redis:
         condition: service_started
 
-  # Demo-only UI entrypoint: SOC frontend is exposed only through the demo-ui profile.
   frontend_soc:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: mirage_sentinel_frontend_soc
     restart: unless-stopped
-    profiles:
-      - demo-ui
     ports:
       - "3000:3000"
     env_file:
