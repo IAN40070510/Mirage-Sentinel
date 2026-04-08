@@ -14,6 +14,8 @@ services:
         condition: service_started
       backend_soc:
         condition: service_started
+      vuln_bank:
+        condition: service_started
 
   postgres:
     image: postgres:16-alpine
@@ -54,6 +56,41 @@ services:
     volumes:
       - ./data:/app/data
 
+  vuln_bank_db:
+    image: postgres:16-alpine
+    container_name: mirage_sentinel_vuln_bank_db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=vulnerable_bank
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - vuln_bank_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d vulnerable_bank"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  vuln_bank:
+    build:
+      context: ./external/vuln-bank
+      dockerfile: Dockerfile
+    container_name: mirage_sentinel_vuln_bank
+    restart: unless-stopped
+    environment:
+      - DB_NAME=vulnerable_bank
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_HOST=vuln_bank_db
+      - DB_PORT=5432
+      - DEEPSEEK_API_KEY=
+    volumes:
+      - ./external/vuln-bank/static/uploads:/app/static/uploads
+    depends_on:
+      vuln_bank_db:
+        condition: service_healthy
+
   backend_public:
     build:
       context: .
@@ -68,7 +105,6 @@ services:
       - PYTHONUNBUFFERED=1
       - PORT=8000
       - API_KEY=${API_KEY}
-      - BANKING_MODE=vuln-bank
       - ENABLE_DASHBOARD=false
       - DASHBOARD_INTERNAL_ONLY=true
       - SANDBOX_API_URL=http://sandbox:8001/simulate_attack
@@ -79,6 +115,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      vuln_bank:
+        condition: service_started
       sandbox:
         condition: service_started
 
@@ -96,7 +134,6 @@ services:
       - PYTHONUNBUFFERED=1
       - PORT=8000
       - API_KEY=${API_KEY}
-      - BANKING_MODE=vuln-bank
       - ENABLE_DASHBOARD=true
       - DASHBOARD_INTERNAL_ONLY=true
       - SANDBOX_API_URL=http://sandbox:8001/simulate_attack
@@ -107,6 +144,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      vuln_bank:
+        condition: service_started
       sandbox:
         condition: service_started
 
@@ -156,3 +195,4 @@ services:
 
 volumes:
   pgdata:
+  vuln_bank_pgdata:

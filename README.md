@@ -79,60 +79,7 @@ AI 掃描器對抗： 利用動態變異的 API 結構與錯誤回應，破壞 A
 
 ### 兩週實作 Backlog (Actionable Backlog)
 
-第 1 週（先建立可運行防禦閉環）
-
-1. 身分分流骨架（P0）
-- 目標：真實使用者走 real path，可疑請求走 deception path。
-- 落點：`main.py`、`api/banking.py`。
-- 完成條件：同一 API 可根據風險分數回傳不同路徑，且有事件紀錄。
-- 目前進度（2026-04）：`/banking/accounts`、`/banking/accounts/{account_id}/balance`、`/banking/accounts/{account_id}/transactions`、`/banking/transfers` 已完成分流骨架與事件紀錄欄位（`route/risk_score/deception_reason`）。
-
-2. 權限模型與最小授權（P0）
-- 目標：補齊 object-level authorization 與角色控制。
-- 落點：`api/banking.py`、`api/db/operations.py`。
-- 完成條件：越權查詢必定被攔截並記錄（不可直接讀取他人資源）。
-- 目前進度（2026-04）：新增 `X-Actor-Role`（customer/admin/soc）角色閘門；`/banking/beneficiaries` 與 `/banking/transfers` 已補齊 object-level authorization（目的帳戶需為本人帳戶或已授權受款人），且越權回應 403。
-
-3. 交易風險規則第一版（P0）
-- 目標：建立重放、短時間高頻、異常金額序列的規則偵測。
-- 落點：`api/banking.py`、`core/sentinel.py`。
-- 完成條件：可觸發 deception 分流，SOC 能看到觸發原因。
-- 目前進度（2026-04）：已實裝三大規則引擎
-  - 重放檢測（Replication Detection）：30 秒內偵測相同 payload
-  - 高頻檢測（Rate-limiting Detection）：10 秒內 >20 個請求觸發
-  - 異常金額檢測（Anomalous Amount Detection）：超過過往 24 小時平均 3 倍或最大 2 倍
-  - 集成 `_compute_transfer_risk_score()`，轉帳端點優先套用
-  - CI 迴歸新增 `scripts/ci/transaction-risk-smoke.sh` (3 個測試用例)
-
-
-4. 鑑識事件欄位標準化（P0）
-- 目標：事件結構統一，包含 `route`, `risk_score`, `deception_reason`。
-- 落點：`core/traffic_db.py`、`services/dashboard_service.py`、`api/dashboard.py`。
-- 完成條件：Dashboard 可按欄位篩選並回放攻擊鏈。
-- 目前進度（2026-04）：已實裝查詢層與 API 端點
-  - 查詢函數新增：
-    - `get_events_by_route(route)` - 按 real/deception 路由篩選
-    - `get_events_by_risk_score(min_score, max_score)` - 按風險分數範圍篩選
-    - `get_deception_chain(query_id)` - 回放完整攻擊鏈（含時間軸、決策理由、風險評分）
-  - API 端點新增：
-    - `GET /dashboard/events/by_route/{route}` - 路由查詢
-    - `GET /dashboard/events/by_risk_score` - 風險分數查詢
-    - `GET /dashboard/replay/{query_id}` - 攻擊鏈回放
-  - CI 迴歸新增 `scripts/ci/event-query-smoke.sh` (6 個測試用例：路由篩選、風險分數篩選、攻擊鏈回放、參數驗證、API Key 驗證)
-
-
-第 2 週（提升欺敵深度與可運營性）
-
-1. 欺敵登入狀態機（P1）
-- 目標：未授權/可疑用戶不直接拒絕，改導入擬真登入流程。
-- 落點：`api/banking.py`、`core/mirage.py`。
-- 完成條件：可維持多步互動一致性，延長攻擊停留時間。
-- 目前進度（2026-04）：已實裝多步欺敵登入流程
-  - 新增 API：
-    - `POST /banking/auth/login` - 啟動欺敵登入流程
-    - `POST /banking/auth/login/{flow_id}/verify` - 推進 credential → OTP → security_question → manual_review
-  - 狀態機資料寫入 `mirage_memory.db`，同一 `flow_id` 可維持互動一致性
-  - 既有業務端點（accounts/balance/transactions/beneficiaries/transfers）新增「自動導向」：
+第 1 週到第 2 週的舊銀行 backlog 已移除。銀行入口目前由 `Commando-X/vuln-bank` 直接承接，Mirage 不再維護自己的銀行模組與回歸清單。
     - 當請求同時滿足「未授權（缺少或非法 `X-User-Id`）」與「可疑（高風險/可疑 UA/Sentinel 命中）」時
     - 不再回一般欺敵業務資料，改回 `deception_auth` challenge（自動啟動登入狀態機）
   - CI 迴歸新增 `scripts/ci/deception-auth-smoke.sh`
@@ -325,34 +272,6 @@ npm --prefix frontend run start:soc
 npm --prefix frontend run start:customer
 ```
 
-銀行模組策略（目前預設 vuln-bank-first）：
-
-- `api/banking.py` 目前預設 `BANKING_MODE=vuln-bank`，優先使用 `Commando-X/vuln-bank` 作為銀行資料來源。
-- 若需回切 Mirage DB，請將 `BANKING_MODE` 設為 `real` / `real-first` / `mirage-db`。
-- 沙盒幻象使用 `Commando-X/vuln-bank`，可透過環境變數調整：
-  - `VULN_BANK_BASE_URL`（預設 `http://127.0.0.1:5000`）
-  - `VULN_BANK_USERNAME`
-  - `VULN_BANK_PASSWORD`
-  - `VULN_BANK_TIMEOUT`
-
-抓取銀行幻象到固定路徑（建議）：
-
-```powershell
-# Windows: 下載或更新到 external/vuln-bank
-./scripts/setup_vuln_bank.ps1
-```
-
-```bash
-# Linux/Mac: 下載或更新到 external/vuln-bank
-bash scripts/setup_vuln_bank.sh
-```
-
-防禦層外掛方式：
-
-1. 啟動真實銀行服務（`api/banking.py` 與其資料庫）。
-2. 若要啟用欺敵沙盒，再啟動 `external/vuln-bank` 作為幻象目標。
-3. 進入 `/api/v1/banking/*` 的請求會先經過 Sentinel 偵測；正常流量走真實服務，異常流量改由 Mirage 與沙盒幻象回應。
-
 開啟位置：
 
 - 後端 API 文件：http://127.0.0.1:8000/docs
@@ -361,7 +280,7 @@ bash scripts/setup_vuln_bank.sh
 
 OCI 線上環境：
 
-- 銀行入口：http://161.33.154.211/banking/
+- 銀行入口：http://161.33.154.211/banking/（OCI 80 目前直接轉發到 `Commando-X/vuln-bank`）
 - 資安戰情室入口：http://161.33.154.211:3000/
 
 ### Docker 部署（本地）

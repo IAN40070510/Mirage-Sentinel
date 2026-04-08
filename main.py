@@ -46,7 +46,6 @@ from core.deception_engine import compute_interaction_metrics
 from core.traffic_db import setup_traffic_db, log_traffic_event
 from core.sandbox import run_attack_in_sandbox
 from api import dashboard
-from api import banking
 from api.db.session import init_db, create_tables, seed_banking_demo_data
 
 # 暫時停用模型載入，保留啟動流程。
@@ -82,7 +81,6 @@ def _env_flag(name: str, default: str = "true") -> bool:
 
 
 ENABLE_DASHBOARD = _env_flag("ENABLE_DASHBOARD", "false")
-ENABLE_BANKING_API = _env_flag("ENABLE_BANKING_API", "true")
 DASHBOARD_INTERNAL_ONLY = _env_flag("DASHBOARD_INTERNAL_ONLY", "true")
 DASHBOARD_ADMIN_KEY = os.getenv("DASHBOARD_ADMIN_KEY", "").strip()
 
@@ -208,13 +206,6 @@ app.include_router(
     dependencies=[Depends(verify_dashboard_access)],
 )
 
-if ENABLE_BANKING_API:
-    app.include_router(
-        banking.router,
-        prefix="/api/v1",
-        tags=["Banking API"],
-    )
-
 # CORS：目前開發期全面放行，正式環境可改為白名單。
 app.add_middleware(
     CORSMiddleware,
@@ -285,7 +276,6 @@ async def root():
         "simulate_entry": "/api/v1/simulate_attack",
         "dashboard_enabled": ENABLE_DASHBOARD,
         "dashboard_internal_only": DASHBOARD_INTERNAL_ONLY,
-        "banking_enabled": ENABLE_BANKING_API,
     }
 
 
