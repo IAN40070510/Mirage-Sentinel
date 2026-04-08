@@ -21,6 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           export DATABASE_URL="postgresql+psycopg2://mirage_user:mirage_password@postgres:5432/mirage_sentinel"
+          export API_KEY="ci-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           docker compose --profile db up -d --build
 
       - name: Run shared smoke checks
@@ -30,7 +31,7 @@ jobs:
             --health-url http://127.0.0.1:8000/healthz \
             --openapi-url http://127.0.0.1:8000/openapi.json \
             --banking-url http://127.0.0.1:8000/api/v1/banking/accounts \
-            --user-id 000000001 \
+            --user-id CIF000000001 \
             --banking-allow 200,401,403,503 \
             --retries 60 \
             --sleep 2

@@ -41,9 +41,7 @@ jobs:
                 ;;
             esac
             umask 077
-            cat > "$runtime_env_file" <<EOF
-            API_KEY=$runtime_api_key
-            EOF
+            printf 'API_KEY=%s\n' "$runtime_api_key" > "$runtime_env_file"
             export API_KEY="$runtime_api_key"
             export COMPOSE_PROFILES=demo-ui
             $COMPOSE_CMD --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml down
