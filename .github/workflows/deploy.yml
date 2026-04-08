@@ -30,7 +30,10 @@ jobs:
             fi
 
             git pull --ff-only origin main
-            bash scripts/setup_vuln_bank.sh
+            if [ ! -f "vuln-bank-main/vuln-bank-main/Dockerfile" ]; then
+              echo "[deploy] ERROR: vuln-bank source not found at vuln-bank-main/vuln-bank-main"
+              exit 1
+            fi
             runtime_env_file=".env.runtime"
             runtime_api_key=""
             if [ -f "$runtime_env_file" ]; then

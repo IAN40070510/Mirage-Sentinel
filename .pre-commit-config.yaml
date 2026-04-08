@@ -4,6 +4,8 @@
 default_language_version:
   python: python3.13
 
+exclude: ^vuln-bank-main/vuln-bank-main/
+
 repos:
 
   # 基礎檔案格式檢查

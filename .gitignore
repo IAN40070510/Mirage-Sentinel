@@ -221,6 +221,7 @@ data/*.db
 
 # External upstream target source
 external/vuln-bank/
+vuln-bank-main/
 
 # Mirage-Sentinel generated datasets / artifacts
 data/datasets/SecLists/
