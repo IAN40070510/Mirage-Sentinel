@@ -33,6 +33,7 @@ jobs:
               exit 1
             fi
 
+            export COMPOSE_PROFILES=demo-ui
             $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml restart backend_public backend_soc
             $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml restart frontend_soc frontend_customer
 

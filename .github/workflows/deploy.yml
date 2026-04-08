@@ -30,6 +30,7 @@ jobs:
             fi
 
             git pull --ff-only origin main
+            export COMPOSE_PROFILES=demo-ui
             $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml down
             $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml up -d --build --remove-orphans
 

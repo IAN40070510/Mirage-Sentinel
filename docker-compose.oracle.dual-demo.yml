@@ -14,10 +14,6 @@ services:
         condition: service_started
       backend_soc:
         condition: service_started
-      frontend_soc:
-        condition: service_started
-      frontend_customer:
-        condition: service_started
 
   postgres:
     image: postgres:16-alpine
