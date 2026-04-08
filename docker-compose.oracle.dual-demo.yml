@@ -153,6 +153,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - DB_INIT_RETRIES=90
       - DB_INIT_RETRY_INTERVAL=2
+    command: uvicorn services.dashboard_service:app --host 0.0.0.0 --port 8000
     volumes:
       - ./data:/app/data
     depends_on:
