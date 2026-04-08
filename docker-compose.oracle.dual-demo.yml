@@ -1,6 +1,24 @@
 version: "3.8"
 
 services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: mirage_sentinel_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx/dual-demo.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend_public:
+        condition: service_started
+      backend_soc:
+        condition: service_started
+      frontend_soc:
+        condition: service_started
+      frontend_customer:
+        condition: service_started
+
   postgres:
     image: postgres:16-alpine
     container_name: mirage_sentinel_postgres
@@ -23,8 +41,8 @@ services:
       dockerfile: Dockerfile
     container_name: mirage_sentinel_sandbox
     restart: unless-stopped
-    ports:
-      - "8001:8001"
+    expose:
+      - "8001"
     user: "1000:1000"
     read_only: true
     privileged: false
@@ -46,8 +64,8 @@ services:
       dockerfile: Dockerfile
     container_name: mirage_sentinel_backend_public
     restart: unless-stopped
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     env_file:
       - .env.oracle.public
     environment:
@@ -72,8 +90,8 @@ services:
       dockerfile: Dockerfile
     container_name: mirage_sentinel_backend_soc
     restart: unless-stopped
-    ports:
-      - "8002:8000"
+    expose:
+      - "8000"
     env_file:
       - .env.oracle.soc
     environment:
@@ -122,8 +140,8 @@ services:
     restart: unless-stopped
     profiles:
       - demo-ui
-    ports:
-      - "3001:3001"
+    expose:
+      - "3001"
     env_file:
       - .env.oracle.public
     environment:

@@ -219,6 +219,9 @@ data/*.db
 *.db-wal
 *.db-shm
 
+# External upstream target source
+external/vuln-bank/
+
 # Mirage-Sentinel generated datasets / artifacts
 data/datasets/SecLists/
 data/backups/

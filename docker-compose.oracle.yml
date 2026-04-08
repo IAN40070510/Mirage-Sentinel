@@ -1,23 +1,35 @@
 version: "3.8"
 
 services:
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: mirage_sentinel_backend
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: mirage_sentinel_nginx
     restart: unless-stopped
     ports:
-      - "8000:8000"
-    environment:
-      - PYTHONUNBUFFERED=1
-      - PORT=8000
-      - ENABLE_DASHBOARD=false
-      - DASHBOARD_INTERNAL_ONLY=true
-      - API_KEY=${API_KEY:?API_KEY is required}
-      - SANDBOX_API_URL=http://sandbox:8001/simulate_attack
+      - "80:80"
     volumes:
-      - ./data:/app/data
+      - ./deploy/nginx/oracle.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend_public:
+        condition: service_started
+      backend_soc:
+        condition: service_started
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: mirage_sentinel_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=mirage_sentinel
+      - POSTGRES_USER=mirage_user
+      - POSTGRES_PASSWORD=mirage_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mirage_user -d mirage_sentinel"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   sandbox:
     build:
@@ -25,8 +37,8 @@ services:
       dockerfile: Dockerfile
     container_name: mirage_sentinel_sandbox
     restart: unless-stopped
-    ports:
-      - "8001:8001"
+    expose:
+      - "8001"
     user: "1000:1000"
     read_only: true
     privileged: false
@@ -42,17 +54,99 @@ services:
     volumes:
       - ./data:/app/data
 
-  frontend:
+  backend_public:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mirage_sentinel_backend_public
+    restart: unless-stopped
+    expose:
+      - "8000"
+    env_file:
+      - .env.oracle.public
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=8000
+      - ENABLE_DASHBOARD=false
+      - DASHBOARD_INTERNAL_ONLY=true
+      - SANDBOX_API_URL=http://sandbox:8001/simulate_attack
+      - DB_INIT_RETRIES=90
+      - DB_INIT_RETRY_INTERVAL=2
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      sandbox:
+        condition: service_started
+
+  backend_soc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mirage_sentinel_backend_soc
+    restart: unless-stopped
+    expose:
+      - "8000"
+    env_file:
+      - .env.oracle.soc
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=8000
+      - ENABLE_DASHBOARD=true
+      - DASHBOARD_INTERNAL_ONLY=true
+      - SANDBOX_API_URL=http://sandbox:8001/simulate_attack
+      - DB_INIT_RETRIES=90
+      - DB_INIT_RETRY_INTERVAL=2
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      sandbox:
+        condition: service_started
+
+  # Demo-only UI entrypoint: SOC frontend is exposed only through the demo-ui profile.
+  frontend_soc:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: mirage_sentinel_frontend
+    container_name: mirage_sentinel_frontend_soc
     restart: unless-stopped
+    profiles:
+      - demo-ui
     ports:
       - "3000:3000"
+    env_file:
+      - .env.oracle.soc
     environment:
       - PORT=3000
-      - API_KEY=${API_KEY:?API_KEY is required}
-      - BACKEND_API_BASE_URL=http://backend:8000/api/v1/dashboard
+      - BACKEND_API_BASE_URL=http://backend_soc:8000/api/v1/dashboard
+    command: ["node", "soc-server.js"]
     depends_on:
-      - backend
+      backend_soc:
+        condition: service_started
+
+  # Demo-only UI entrypoint: customer frontend is exposed only through the demo-ui profile.
+  frontend_customer:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mirage_sentinel_frontend_customer
+    restart: unless-stopped
+    profiles:
+      - demo-ui
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env.oracle.public
+    environment:
+      - PORT=3001
+      - BANKING_API_BASE_URL=http://backend_public:8000/api/v1/banking
+    command: ["node", "customer-server.js"]
+    depends_on:
+      backend_public:
+        condition: service_started
+
+volumes:
+  pgdata:

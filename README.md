@@ -325,6 +325,33 @@ npm --prefix frontend run start:soc
 npm --prefix frontend run start:customer
 ```
 
+銀行模組策略（real-first）：
+
+- `api/banking.py` 先走真實銀行資料層；當 Sentinel 判定為異常行為時，才切換到沙盒幻象回應。
+- 沙盒幻象使用 `Commando-X/vuln-bank`，可透過環境變數調整：
+  - `VULN_BANK_BASE_URL`（預設 `http://127.0.0.1:5000`）
+  - `VULN_BANK_USERNAME`
+  - `VULN_BANK_PASSWORD`
+  - `VULN_BANK_TIMEOUT`
+
+抓取銀行幻象到固定路徑（建議）：
+
+```powershell
+# Windows: 下載或更新到 external/vuln-bank
+./scripts/setup_vuln_bank.ps1
+```
+
+```bash
+# Linux/Mac: 下載或更新到 external/vuln-bank
+bash scripts/setup_vuln_bank.sh
+```
+
+防禦層外掛方式：
+
+1. 啟動真實銀行服務（`api/banking.py` 與其資料庫）。
+2. 若要啟用欺敵沙盒，再啟動 `external/vuln-bank` 作為幻象目標。
+3. 進入 `/api/v1/banking/*` 的請求會先經過 Sentinel 偵測；正常流量走真實服務，異常流量改由 Mirage 與沙盒幻象回應。
+
 開啟位置：
 
 - 後端 API 文件：http://127.0.0.1:8000/docs
@@ -333,15 +360,16 @@ npm --prefix frontend run start:customer
 
 OCI 線上環境：
 
-- 服務網址：http://161.33.154.211
-- SOC 前端：http://161.33.154.211:3000
-- 客戶前端：http://161.33.154.211:3001/banking_demo.html
+- 銀行入口：http://161.33.154.211/banking/
+- 資安戰情室入口：http://161.33.154.211:3000/
 
 ### Docker 部署（本地）
 
 ```bash
 docker compose up --build
 ```
+
+本地對外入口為 Nginx `http://127.0.0.1/`，所有請求會先經過 Sentinel 檢查後再轉入 FastAPI。
 
 若要啟用真實 PostgreSQL（可選）：
 
@@ -352,10 +380,12 @@ docker compose --profile db up --build
 
 服務清單：
 
-- API Gateway：http://127.0.0.1:8000
+- 銀行入口：http://127.0.0.1/banking/
+- 資安戰情室入口：http://127.0.0.1:3000/
+- API Gateway（內部）：http://127.0.0.1:8000
 - SOC Frontend Dashboard：http://127.0.0.1:3000
 - Customer Frontend：http://127.0.0.1:3001
-- Sandbox Service：http://127.0.0.1:8001
+- Sandbox Service（內部）：http://sandbox:8001
 - PostgreSQL（可選）：localhost:5432
 
 ### 一鍵驗收流程 (Smoke Test)
