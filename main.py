@@ -63,7 +63,7 @@ distilbert_model = None
 load_dotenv()
 
 # ===== API Key 設定 =====
-# 全環境嚴格要求 API_KEY，不允許預設值或占位字串。
+# API_KEY 主要用於 Dashboard 驗證；當 Dashboard 關閉時，允許以警告模式啟動。
 API_KEY = os.getenv("API_KEY", "").strip()
 ai_sentinel = None
 
@@ -156,15 +156,22 @@ def analyze_intent(text: str):
 async def lifespan(app: FastAPI):
     """
     應用生命週期：
-    1) 驗證 API_KEY（嚴格模式，缺失即拒絕啟動）。
+    1) 驗證 API_KEY（僅在 Dashboard 啟用時要求有效值）。
     2) 初始化 deception / traffic 雙資料庫。
     3) 啟動完成後交由 FastAPI 正常提供服務。
     """
     global API_KEY
     if _is_placeholder_secret(API_KEY):
-        raise RuntimeError(
-            "API_KEY is required and must not be empty or placeholder text."
-        )
+        if ENABLE_DASHBOARD:
+            raise RuntimeError(
+                "API_KEY is required and must not be empty or placeholder text."
+            )
+
+        logger.warning("API_KEY 未提供有效值，Dashboard 已關閉，將以降級模式啟動。")
+        API_KEY = ""
+
+    if not ENABLE_DASHBOARD:
+        logger.info("Dashboard 已停用，略過 API_KEY 強制檢查。")
 
     setup_deception_db()
     setup_traffic_db()

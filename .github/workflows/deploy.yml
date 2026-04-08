@@ -30,9 +30,24 @@ jobs:
             fi
 
             git pull --ff-only origin main
+            runtime_env_file=".env.runtime"
+            runtime_api_key=""
+            if [ -f "$runtime_env_file" ]; then
+              runtime_api_key="$(grep '^API_KEY=' "$runtime_env_file" | head -n 1 | cut -d '=' -f2-)"
+            fi
+            case "$runtime_api_key" in
+              ""|CHANGE_ME_REQUIRED|replace-with-strong-random-key|dev-local-api-key-change-me)
+                runtime_api_key="$(openssl rand -hex 32)"
+                ;;
+            esac
+            umask 077
+            cat > "$runtime_env_file" <<EOF
+            API_KEY=$runtime_api_key
+            EOF
+            export API_KEY="$runtime_api_key"
             export COMPOSE_PROFILES=demo-ui
-            $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml down
-            $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml up -d --build --remove-orphans
+            $COMPOSE_CMD --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml down
+            $COMPOSE_CMD --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml up -d --build --remove-orphans
 
             # Deploy gate: both public and SOC backends must become healthy.
             for i in $(seq 1 30); do
@@ -50,8 +65,8 @@ jobs:
               fi
               if [ "$i" -eq 30 ]; then
                 echo "[deploy] ERROR: health checks failed"
-                $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml ps
-                $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml logs --tail=120 backend_public backend_soc sandbox
+                $COMPOSE_CMD --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml ps
+                $COMPOSE_CMD --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml logs --tail=120 backend_public backend_soc sandbox
                 exit 1
               fi
               sleep 3
@@ -73,16 +88,16 @@ jobs:
               fi
               if [ "$i" -eq 30 ]; then
                 echo "[deploy] ERROR: frontend checks failed"
-                $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml ps
-                $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml logs --tail=120 backend_public backend_soc frontend_soc frontend_customer sandbox
+                $COMPOSE_CMD --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml ps
+                $COMPOSE_CMD --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml logs --tail=120 backend_public backend_soc frontend_soc frontend_customer sandbox
                 exit 1
               fi
               sleep 3
             done
 
             # 強制讓 backend 在 postgres 已健康後重新初始化，避免啟動時短暫失敗而停在 mock mode。
-            $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml restart backend_public backend_soc
-            $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml restart frontend_soc frontend_customer
+            $COMPOSE_CMD --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml restart backend_public backend_soc
+            $COMPOSE_CMD --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml restart frontend_soc frontend_customer
 
             for i in $(seq 1 30); do
               pub_ok=0
@@ -99,8 +114,8 @@ jobs:
               fi
               if [ "$i" -eq 30 ]; then
                 echo "[deploy] ERROR: backend restart health checks failed"
-                $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml ps
-                $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml logs --tail=120 backend_public backend_soc sandbox
+                $COMPOSE_CMD --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml ps
+                $COMPOSE_CMD --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml logs --tail=120 backend_public backend_soc sandbox
                 exit 1
               fi
               sleep 3
@@ -121,8 +136,8 @@ jobs:
               fi
               if [ "$i" -eq 30 ]; then
                 echo "[deploy] ERROR: frontend restart checks failed"
-                $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml ps
-                $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml logs --tail=120 frontend_soc frontend_customer
+                $COMPOSE_CMD --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml ps
+                $COMPOSE_CMD --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml logs --tail=120 frontend_soc frontend_customer
                 exit 1
               fi
               sleep 3
@@ -130,7 +145,7 @@ jobs:
 
             # Seed banking users/accounts into PostgreSQL after services are healthy.
             # Default range can be adjusted directly here based on capacity.
-            $COMPOSE_CMD -f docker-compose.oracle.dual-demo.yml exec -T backend_public \
+            $COMPOSE_CMD --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml exec -T backend_public \
               python scripts/seed_banking_users.py --start 1 --end 10000 --batch-size 1000 --archive-zip scripts/data/archive.zip
 
             sudo docker image prune -f
