@@ -25,9 +25,17 @@ services:
     restart: unless-stopped
     ports:
       - "8001:8001"
+    user: "1000:1000"
+    read_only: true
+    privileged: false
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     command: ["python", "sandbox_service.py"]
     environment:
       - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
       - PORT=8001
     volumes:
       - ./data:/app/data
@@ -84,12 +92,15 @@ services:
       sandbox:
         condition: service_started
 
+  # Demo-only UI entrypoint: SOC frontend is exposed only through the demo-ui profile.
   frontend_soc:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: mirage_sentinel_frontend_soc
     restart: unless-stopped
+    profiles:
+      - demo-ui
     ports:
       - "3000:3000"
     env_file:
@@ -102,12 +113,15 @@ services:
       backend_soc:
         condition: service_started
 
+  # Demo-only UI entrypoint: customer frontend is exposed only through the demo-ui profile.
   frontend_customer:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: mirage_sentinel_frontend_customer
     restart: unless-stopped
+    profiles:
+      - demo-ui
     ports:
       - "3001:3001"
     env_file:

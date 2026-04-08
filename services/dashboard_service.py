@@ -15,7 +15,6 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
 DB_PATH = os.path.join(PROJECT_ROOT, "data", "traffic_logs.db")
 ERROR_LOG_DIR = os.path.join(PROJECT_ROOT, "data", "error_log")
-DEFAULT_DEV_API_KEY = "dev-local-api-key-change-me"
 IP_GEO_CACHE_TTL = int(os.getenv("IP_GEO_CACHE_TTL", "3600"))
 _ip_geo_cache: dict[str, tuple[str, float]] = {}
 
@@ -101,7 +100,9 @@ def _parse_ts(ts: str) -> datetime:
 
 
 def validate_api_key(api_key: str | None) -> bool:
-    expected_key = os.getenv("API_KEY", "").strip() or DEFAULT_DEV_API_KEY
+    expected_key = os.getenv("API_KEY", "").strip()
+    if not expected_key:
+        return False
     return bool(api_key) and api_key == expected_key
 
 

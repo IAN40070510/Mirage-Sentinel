@@ -206,7 +206,7 @@ AI 掃描器對抗： 利用動態變異的 API 結構與錯誤回應，破壞 A
 * **專用子網 (Private Subnet) - 戰略指揮區：**
   * **SOC 後端與 AI 引擎：** 接收誘餌單向傳送的流量複本，進行 AI 意圖判定。完全阻斷來自網際網路的直接存取。
   * **解耦資料庫集群：** `traffic_logs.db` 與 `mirage_memory.db` 獨立運行，落實最小權限原則。
-  * **SOC 戰情室前端：** 管理員視覺化介面。嚴禁對外暴露，僅限透過 API Gateway 或 Bastion Host (跳板機) 建立安全隧道進行存取。
+  * **SOC 戰情室前端：** 管理員視覺化介面。嚴禁對外暴露(測試例外)，僅限透過 API Gateway 或 Bastion Host (跳板機) 建立安全隧道進行存取。
 
 
 ## 專案目錄結構 (Project Structure)
@@ -408,8 +408,8 @@ CI 自動化：
 P0 鑑識事件欄位標準化提供三個新的查詢端點，支援按路由、風險分數篩選與完整攻擊鏈回放：
 
 ```bash
-# 設定 API Key（預設為 dev-local-api-key-change-me）
-API_KEY="dev-local-api-key-change-me"
+# 設定 API Key（必填，不能使用占位字串）
+API_KEY="CHANGE_ME_REQUIRED"
 
 # 1) 查詢欺敵路由事件（deception）
 curl -H "X-API-Key: $API_KEY" \

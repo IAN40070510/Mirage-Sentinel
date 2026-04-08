@@ -1,0 +1,83 @@
+# Mirage-Sentinel: Sentinel 模組資料集建構與特徵工程指南
+
+本文件詳細說明 Mirage-Sentinel 雙引擎防禦系統（Sentinel-X 與 Sentinel-BERT）所需的訓練資料集來源、特徵提取方式，以及如何透過「負向變異技術」合成高品質的攻擊樣本。
+
+構建一個不依賴傳統黑名單、能夠主動防禦的系統，是軟體安全與逆向工程領域中的進階挑戰。此資料集建構流程的核心在於：**定義絕對的正常（Label 0），並透過演算法推演出所有的異常（Label 1）。**
+
+-----
+
+## 一、 資料集建構核心思維
+
+在訓練 Sentinel 模組時，我們無法窮舉所有未來的駭客攻擊，因此資料集的建構策略如下：
+
+1.  **Label 0 (正常行為)：** 來自真實環境或自動化腳本模擬的「黃金路徑」。這部分資料必須 100% 乾淨且符合銀行業務邏輯。
+2.  **Label 1 (異常行為)：** 僅有約 30% 來自真實的掃描工具（如 OWASP ZAP、SQLmap），其餘 70% 必須透過撰寫 Python 腳本，對 Label 0 進行「特徵突變（Mutation）」來合成，以覆蓋高級邏輯漏洞與慢速攻擊。
+
+-----
+
+## 二、 Sentinel-X (統計引擎) 資料集：8 大物理與群體特徵
+
+XGBoost 處理的是結構化的數值與類別資料。這 8 個特徵的資料集必須從伺服器的底層日誌與記憶體資料庫中提取。
+
+### 1\. 特徵定義與提取來源
+
+| 維度 | 特徵名稱 | 提取來源與方式 | 資料型態範例 |
+| :--- | :--- | :--- | :--- |
+| **1. TLS 指紋** | `ja3_hash` | 從 Nginx/Envoy 的底層連線日誌中擷取 TLS 握手特徵。 | `Categorical` (e.g., `"771,4865..."`) |
+| **2. Header 結構** | `header_entropy` | 讀取 HTTP Request Headers，計算排序與內容的亂度或比對白名單。 | `Float` (e.g., `0.15`) |
+| **3. IP 速度** | `ip_velocity` | 結合 GeoIP 資料庫與連續兩次請求的時間差計算物理移動速度。 | `Integer` (e.g., `50` km/h) |
+| **4. 帳號設備比** | `acc_dev_ratio` | 從 Redis 即時快照提取，該帳號近 10 分鐘內綁定的設備指紋數量。 | `Integer` (e.g., `1` 或 `50`) |
+| **5. 設備帳號比** | `dev_acc_ratio` | 從 Redis 即時快照提取，該設備近 10 分鐘內嘗試登入的帳號數量。 | `Integer` (e.g., `1` 或 `100`) |
+| **6. 請求節奏** | `req_time_var` | 收集該 Session 內連續 API 呼叫的時間間隔，計算變異數 (Variance)。 | `Float` (e.g., `0.02` 代表太規律) |
+| **10. 數值慣性** | `amt_deviation` | 比對該使用者歷史交易平均值，計算本次請求金額的標準差偏離值。 | `Float` (e.g., `4.5`) |
+| **11. 生物特徵** | `mouse_entropy` | 需由前端埋點腳本收集游標軌跡與點擊延遲，計算動作混亂度。 | `Float` (e.g., `0.88`) |
+
+### 2\. Label 1 (異常資料) 合成策略：統計極端化
+
+針對 XGBoost，我們寫一個 `xgboost_mutator.py` 腳本來污染正常的 Log：
+
+  * **暴力破解合成：** 讀取一筆正常的登入 Log，將 `dev_acc_ratio` (設備帳號比) 強制修改為 `500`，並將 `req_time_var` (時間變異數) 降至 `0.001`（極度規律）。這就模擬出了撞庫攻擊。
+  * **非人類環境合成：** 將正常 Log 的 `ja3_hash` 替換為已知 Python Requests 或 cURL 的惡意指紋，並將 Header 順序打亂。
+  * **越權轉帳合成：** 將一筆正常轉帳 Log 的 `amt_deviation` 強制修改為 `10.0`，模擬帳號被盜用後的大額洗錢行為。
+
+-----
+
+## 三、 Sentinel-BERT (語義引擎) 資料集：3 大邏輯與序列特徵
+
+DistilBERT 處理的是文字序列。這 3 個特徵必須先轉換為自定義的 Token，並依時間順序串聯成「行為句子」。
+
+### 1\. 特徵定義與 Token 轉換規則
+
+| 維度 | 轉換邏輯 | 正常 Token 範例 | 異常 Token 範例 |
+| :--- | :--- | :--- | :--- |
+| **7. API 路徑** | 直接將 URL 端點映射為單一字彙。 | `[URI_LOGIN]`<br>`[URI_TRANSFER]` | 異常體現在這些 Token 的「排序」不合理，而非單一 Token 錯誤。 |
+| **8. 導航路徑** | 檢查 `Referer` 與 `Origin` 是否符合上一頁的預期來源。 | `[REF_VALID]` | `[REF_EMPTY]` (工具直連)<br>`[REF_MISMATCH]` (跳轉異常) |
+| **9. 參數格式** | 解析 JSON Payload，檢查長度、資料型別與危險字元。 | `[PAYLOAD_CLEAN]` | `[PAYLOAD_DIRTY]` (含 SQLi)<br>`[PARAM_MISSING]` (缺必填項) |
+
+### 2\. Label 0 (黃金序列) 的收集
+
+使用 Playwright 或 Selenium 撰寫自動化測試腳本，模擬使用者的標準操作流程，並匯出為 HAR 檔案。經過預處理程式轉換後，產出如下的黃金序列：
+
+> `[REF_EMPTY] [PAYLOAD_CLEAN] [URI_LOGIN] [SEP] [REF_VALID] [PAYLOAD_EMPTY] [URI_BALANCE] [SEP] [REF_VALID] [PAYLOAD_CLEAN] [URI_TRANSFER]`
+
+### 3\. Label 1 (異常資料) 合成策略：語義破壞
+
+針對 DistilBERT，我們寫一個 `bert_mutator.py` 腳本來破壞黃金序列的上下文邏輯：
+
+  * **步驟跳躍 (邏輯繞過)：** 腳本隨機刪除序列中的必要前置步驟。例如，把上方的黃金序列刪除 `[URI_LOGIN]`，變成未登入直接查帳號，製造出權限繞過 (BOLA/IDOR) 的訓練樣本。
+  * **參數污染 (注入探測)：** 結合開源的安全字典檔 (如 SecLists)，隨機挑選序列中的一個 `[PAYLOAD_CLEAN]` 替換成 `[PAYLOAD_DIRTY]`。這教導模型辨識出「即使順序對，但帶有攻擊 Payload 也是異常」。
+  * **環境剝離 (腳本探測)：** 將序列中所有的 `[REF_VALID]` 替換為 `[REF_EMPTY]`，訓練模型辨識出那些不透過瀏覽器點擊，而是直接用腳本對 API 進行的序列式探測。
+
+-----
+
+## 四、 資料產線自動化流程 (Data Pipeline)
+
+為了確保模型能持續適應新的業務邏輯，整個資料集的產出應完全自動化：
+
+1.  **收集層：** 每日定時將 Nginx 原始 Log 與測試環境的 QA 自動化腳本流量導出。
+2.  **萃取層 (Feature Extraction)：**
+      * 將數值與時間資料清洗並匯出為 `raw_stats.csv` (供 XGBoost 使用)。
+      * 將 URL 與 Payload 狀態轉譯為 Token，匯出為 `raw_sequences.txt` (供 BERT 使用)。
+3.  **變異層 (Mutation Engine)：**
+      * 執行變異腳本，按 7:3 的比例（7 份正常，3 份突變）生成異常數據，並打上 `Label 1`。
+4.  **輸出層：** 產出最終可直接餵給模型訓練的 `train_xgboost.csv` 與 `train_bert.csv`。

@@ -42,11 +42,19 @@ services:
     container_name: mirage_sentinel_sandbox
     ports:
       - "8001:8001"
+    user: "1000:1000"
+    read_only: true
+    privileged: false
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - .:/app
       - ./data:/app/data
     environment:
       - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
     command: ["python", "sandbox_service.py"]
 
 volumes:

@@ -1,23 +1,18 @@
 """
 Mirage 欺敵資料生成層
 負責生成虛假但真實感的回應資料，用於對攻擊者進行欺敵
-使用 Groq AI 進行智能欺敵，而非虛假資料庫
+使用本地 LLaMA（Ollama）進行智能欺敵
 """
 
 import json
 import logging
-import httpx
-import opencc
 import random
 import uuid
 from core.deception_db import get_memory, save_deception_state
 from datetime import datetime, timedelta, timezone
+from model.llama import generate_fake_data_llama
 
 logger = logging.getLogger(__name__)
-
-# Groq API 配置
-GROQ_API_KEY = "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"
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
 def generate_fake_data(
@@ -46,74 +41,12 @@ def generate_fake_data(
         )
         return existing_mem["payload"]
 
-    # [步驟 2] 生成新欺敵資料
-    final_payload_dict = None
-
-    system_prompt = f"""
-    你是一個網路安全欺敵系統。駭客正在進行攻擊。
-    攻擊類型：{attack_vector}。
-    請生成一筆「虛假用戶資料」，嚴格遵守 JSON 格式：
-    {{
-      "user_id": "{query_id}",
-      "name": "隨機台灣人姓名，必須是繁體中文三個字，例如：吳力慶、李美華、張志豪",
-      "email": "隨機Email",
-      "balance": 隨機整數,
-      "status": "Normal",
-      "account_created": "日期",
-      "last_login": "日期"
-    }}
-    注意：
-    1. 只回傳 JSON，不准有任何解釋文字。
-    2. name 欄位必須是繁體中文三個字的台灣人姓名，絕對不能用簡體中文。
-    3. 姓氏必須是台灣常見姓氏，例如：陳、林、黃、張、李、王、吳、劉、蔡、楊。
-    4. 姓名不用生僻字
-    """
-
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    data = {
-        "model": "llama-3.1-8b-instant",
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"為 user_id={query_id} 生成虛假資料"},
-        ],
-        "temperature": 0.7,
-        "response_format": {"type": "json_object"},
-    }
-
-    try:
-        # 嘗試呼叫 Groq AI
-        with httpx.Client(timeout=10.0) as client:
-            response = client.post(GROQ_URL, headers=headers, json=data)
-            response.raise_for_status()
-
-        ai_content = response.json()["choices"][0]["message"]["content"].strip()
-        final_payload_dict = json.loads(ai_content)
-
-        # 簡體轉繁體
-        converter = opencc.OpenCC("s2twp")
-        for key in ["name", "status"]:
-            if key in final_payload_dict:
-                final_payload_dict[key] = converter.convert(
-                    str(final_payload_dict[key])
-                )
-
-        logger.info(f"[AI 欺敵] 成功生成誘餌資料：user_id={query_id}")
-
-    except Exception as e:
-        logger.error(f"[AI 故障] 無法生成欺敵資料: {e}，使用備援方案")
-        # [步驟 3] 備援機制 - 硬 fallback
-        final_payload_dict = {
-            "user_id": str(query_id),
-            "name": "系統預設用戶",
-            "email": f"user.{query_id}@example.com",
-            "balance": 5000,
-            "status": "Active",
-            "account_created": "2024-01-01",
-            "last_login": "2026-04-02",
-        }
+    # [步驟 2] 使用本地 LLaMA 生成新欺敵資料
+    final_payload_dict = generate_fake_data_llama(
+        query_id=query_id,
+        attack_vector=attack_vector,
+    )
+    logger.info("[AI 欺敵] 本地 LLaMA 生成誘餌資料：user_id=%s", query_id)
 
     # [步驟 4] 存放欺敵記憶
     try:

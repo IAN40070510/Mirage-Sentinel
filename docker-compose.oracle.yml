@@ -14,7 +14,7 @@ services:
       - PORT=8000
       - ENABLE_DASHBOARD=false
       - DASHBOARD_INTERNAL_ONLY=true
-      - API_KEY=${API_KEY:-dev-local-api-key-change-me}
+      - API_KEY=${API_KEY:?API_KEY is required}
       - SANDBOX_API_URL=http://sandbox:8001/simulate_attack
     volumes:
       - ./data:/app/data
@@ -27,9 +27,17 @@ services:
     restart: unless-stopped
     ports:
       - "8001:8001"
+    user: "1000:1000"
+    read_only: true
+    privileged: false
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     command: ["python", "sandbox_service.py"]
     environment:
       - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
       - PORT=8001
     volumes:
       - ./data:/app/data
@@ -44,7 +52,7 @@ services:
       - "3000:3000"
     environment:
       - PORT=3000
-      - API_KEY=${API_KEY:-dev-local-api-key-change-me}
+      - API_KEY=${API_KEY:?API_KEY is required}
       - BACKEND_API_BASE_URL=http://backend:8000/api/v1/dashboard
     depends_on:
       - backend

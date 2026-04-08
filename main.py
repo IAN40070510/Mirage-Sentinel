@@ -55,15 +55,24 @@ sys.modules["__main__"].SentinelModule = model.SentinelModule
 sys.modules["__main__"].SecurityExtractor = model.SecurityExtractor
 from fastapi.middleware.cors import CORSMiddleware
 from model.distilbert import load_bert_sentinel
+
 distilbert_model = load_bert_sentinel()
 # 載入 .env（讓 API_KEY / SANDBOX_API_URL 等配置可由環境管理）
 load_dotenv()
 
 # ===== API Key 設定 =====
-# 若未設定 API_KEY，lifespan 會切到開發預設值並記錄 warning。
+# 全環境嚴格要求 API_KEY，不允許預設值或占位字串。
 API_KEY = os.getenv("API_KEY", "").strip()
-DEFAULT_DEV_API_KEY = "dev-local-api-key-change-me"
 ai_sentinel = model.load_sentinel_model()
+
+
+def _is_placeholder_secret(secret: str) -> bool:
+    marker = (secret or "").strip().lower()
+    return (
+        (not marker)
+        or marker.startswith("change_me")
+        or marker.startswith("replace-with")
+    )
 
 
 def _env_flag(name: str, default: str = "true") -> bool:
@@ -145,14 +154,15 @@ def analyze_intent(text: str):
 async def lifespan(app: FastAPI):
     """
     應用生命週期：
-    1) 補齊 API_KEY（開發模式 fallback）。
+    1) 驗證 API_KEY（嚴格模式，缺失即拒絕啟動）。
     2) 初始化 deception / traffic 雙資料庫。
     3) 啟動完成後交由 FastAPI 正常提供服務。
     """
     global API_KEY
-    if not API_KEY:
-        API_KEY = DEFAULT_DEV_API_KEY
-        logger.warning("API_KEY 未設定，使用開發預設值。正式環境請務必設定 API_KEY。")
+    if _is_placeholder_secret(API_KEY):
+        raise RuntimeError(
+            "API_KEY is required and must not be empty or placeholder text."
+        )
 
     setup_deception_db()
     setup_traffic_db()
@@ -566,6 +576,7 @@ async def get_user_data(
 
     return {"user_id": user_id, "name": "真實用戶", "status": "Normal"}
 
+
 @app.get("/api/v1/test_distilbert/{user_id}")
 async def test_distilbert_endpoint(
     user_id: str,
@@ -576,7 +587,7 @@ async def test_distilbert_endpoint(
     background_tasks: BackgroundTasks = None,
 ):
     """
-    DistilBERT 真實流程入口：
+    Handle DistilBERT 真實流程入口：
     完全比照真實入口流程，但推論引擎替換為 DistilBERT 模型。
     包含：記憶提取 -> 沙盒 (Sandbox) 生成 -> 流量落地。
     """
@@ -603,13 +614,15 @@ async def test_distilbert_endpoint(
     is_attack = False
 
     # 確保 bert_model (BertSentinelModule) 已在上方初始化
-    if 'distilbert_model' in globals() and distilbert_model:
+    if "distilbert_model" in globals() and distilbert_model:
         try:
             df_input = pd.DataFrame({"payload": [detection_target]})
             bert_result = distilbert_model.predict(df_input).iloc[0]
             confidence = float(bert_result["attack_score"])
             attack_vector = str(bert_result["top_attack_type"])
-            is_attack = confidence > 0.3 # 大於 0.3 視為有攻擊意圖 (後續還會用 0.75 把關)
+            is_attack = (
+                confidence > 0.3
+            )  # 大於 0.3 視為有攻擊意圖 (後續還會用 0.75 把關)
         except Exception as exc:
             logger.error(f"[BERT] 推論失敗: {exc}")
     else:
@@ -628,7 +641,7 @@ async def test_distilbert_endpoint(
     event_payload = {
         "request_at": request_at,
         "client_ip": client_ip,
-        "location": "Cloud/DistilBERT", # 標記來源為 BERT
+        "location": "Cloud/DistilBERT",  # 標記來源為 BERT
         "is_proxy": detect_proxy(request),
         "user_agent": user_agent,
         "tls_fingerprint": "N/A",
@@ -737,6 +750,7 @@ async def test_distilbert_endpoint(
         log_traffic_event(event_payload)
 
     return {"user_id": user_id, "name": "真實用戶", "status": "Normal"}
+
 
 # 攻擊模擬端點：功能與 /user 類似，但來源資訊固定為測試情境
 @app.post("/api/v1/simulate_attack", summary="模擬攻擊請求")
