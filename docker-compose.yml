@@ -14,8 +14,8 @@ services:
   app:
     build: .
     container_name: mirage_sentinel_app
-    expose:
-      - "8000"
+    ports:
+      - "127.0.0.1:8000:8000"
     volumes:
       - .:/app
       - ./data:/app/data
