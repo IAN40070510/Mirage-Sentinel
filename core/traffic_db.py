@@ -78,6 +78,8 @@ def setup_traffic_db():
         device_user_ratio REAL,
         req_rate_5m REAL,
         graph_feature_source TEXT,
+        mouse_entropy REAL,
+        mouse_source TEXT,
         amount_value REAL,
         amount_deviation REAL,
         is_attack INTEGER DEFAULT 0,
@@ -126,6 +128,8 @@ def setup_traffic_db():
     _ensure_column(conn, "traffic_logs", "device_user_ratio REAL")
     _ensure_column(conn, "traffic_logs", "req_rate_5m REAL")
     _ensure_column(conn, "traffic_logs", "graph_feature_source TEXT")
+    _ensure_column(conn, "traffic_logs", "mouse_entropy REAL")
+    _ensure_column(conn, "traffic_logs", "mouse_source TEXT")
     _ensure_column(conn, "traffic_logs", "amount_value REAL")
     _ensure_column(conn, "traffic_logs", "amount_deviation REAL")
 
@@ -174,8 +178,8 @@ def log_traffic_event(data: dict[str, Any]):
             request_at, response_at, process_ms, method, endpoint, client_id, fingerprint_id,
             query_id, device_id, referer, header_entropy, req_interval_ms, req_time_var,
             user_device_ratio, device_user_ratio, req_rate_5m, graph_feature_source,
-            amount_value, amount_deviation, is_attack, location, is_proxy
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            mouse_entropy, mouse_source, amount_value, amount_deviation, is_attack, location, is_proxy
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             data.get("request_at"),
@@ -195,6 +199,8 @@ def log_traffic_event(data: dict[str, Any]):
             data.get("device_user_ratio"),
             data.get("req_rate_5m"),
             data.get("graph_feature_source"),
+            data.get("mouse_entropy"),
+            data.get("mouse_source"),
             data.get("amount_value"),
             data.get("amount_deviation"),
             is_attack,

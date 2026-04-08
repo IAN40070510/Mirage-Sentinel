@@ -117,6 +117,15 @@ function safeNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function formatMouseEntropy(value, source) {
+  const entropy = Number(value);
+  if (!Number.isFinite(entropy) || entropy <= 0) {
+    return "mouse:n/a";
+  }
+  const normalizedSource = source || "unknown";
+  return `mouse:${entropy.toFixed(3)} (${normalizedSource})`;
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -301,6 +310,8 @@ function normalizeIpBundleResponse(data) {
     protocol: obj.protocol ?? details.tls_fingerprint ?? "-",
     port: obj.port ?? details.query_id ?? "-",
     behavior: obj.behavior ?? details.attack_vector ?? details.mitigation_status ?? "-",
+    mouse_entropy: safeNumber(obj.mouse_entropy ?? details.mouse_entropy, 0),
+    mouse_source: obj.mouse_source ?? details.mouse_source ?? "missing",
     payload: obj.payload ?? details.raw_payload ?? "",
     timeline,
     details,
@@ -464,7 +475,11 @@ function renderDetail(data) {
         ? `${detail.protocol} / ${detail.port}`
         : (detail.protocol || detail.port || "");
   }
-  if (detailBehavior) detailBehavior.textContent = detail.behavior || "";
+  if (detailBehavior) {
+    const behaviorText = detail.behavior || "";
+    const mouseText = formatMouseEntropy(detail.mouse_entropy, detail.mouse_source);
+    detailBehavior.textContent = behaviorText ? `${behaviorText} | ${mouseText}` : mouseText;
+  }
   if (detailPayload) detailPayload.textContent = detail.payload || "";
 
   const fakeResponse = extractFakeResponse(mergedDetail);

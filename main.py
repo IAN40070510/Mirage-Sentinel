@@ -378,6 +378,78 @@ def _derive_device_id(client_ip: str, user_agent: str, tls_fingerprint: str) -> 
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
 
+def _parse_mouse_entropy(request: Request) -> tuple[float, str]:
+    """讀取前端回傳的滑鼠熵：優先 Header，其次 Cookie。"""
+    raw_value = request.headers.get("X-Mouse-Entropy")
+    source = "header"
+    if raw_value is None:
+        raw_value = request.cookies.get("ms_mouse_entropy")
+        source = "cookie"
+
+    if raw_value is None:
+        return 0.0, "missing"
+
+    try:
+        entropy = float(raw_value)
+        if entropy < 0:
+            entropy = 0.0
+        if entropy > 32.0:
+            entropy = 32.0
+        return round(entropy, 6), source
+    except Exception:
+        return 0.0, "invalid"
+
+
+def _mouse_tracker_script() -> str:
+    """注入到 HTML 的追蹤腳本：計算滑鼠方向熵並寫入 cookie。"""
+    return (
+        "<script>(function(){if(window.__msMouseTracker){return;}"
+        "window.__msMouseTracker=true;var pts=[];var maxPts=180;"
+        "function n(v){return Number.isFinite(v)?v:0;}"
+        "function s(){if(pts.length<6){return 0;}"
+        "var bins=[0,0,0,0,0,0,0,0];"
+        "for(var i=1;i<pts.length;i++){var dx=pts[i].x-pts[i-1].x;var dy=pts[i].y-pts[i-1].y;"
+        "if(dx===0&&dy===0){continue;}"
+        "var a=Math.atan2(dy,dx);if(a<0){a+=Math.PI*2;}"
+        "var idx=Math.floor((a/(Math.PI*2))*8);if(idx<0){idx=0;}if(idx>7){idx=7;}bins[idx]++;}"
+        "var total=0;for(var j=0;j<bins.length;j++){total+=bins[j];}if(total===0){return 0;}"
+        "var e=0;for(var k=0;k<bins.length;k++){if(bins[k]===0){continue;}var p=bins[k]/total;e-=p*Math.log2(p);}"
+        "return e;}"
+        "function w(v){document.cookie='ms_mouse_entropy='+encodeURIComponent(v.toFixed(6))+'; Path=/; Max-Age=600; SameSite=Lax';}"
+        "window.addEventListener('mousemove',function(ev){pts.push({x:n(ev.clientX),y:n(ev.clientY),t:Date.now()});"
+        "if(pts.length>maxPts){pts.shift();}}, {passive:true});"
+        "setInterval(function(){try{w(s());}catch(_e){}},1500);"
+        "window.addEventListener('beforeunload',function(){try{w(s());}catch(_e){} });"
+        "})();</script>"
+    )
+
+
+def _inject_mouse_tracker_html(content: bytes, content_type: str | None) -> bytes:
+    if not content:
+        return content
+    ctype = (content_type or "").lower()
+    if "text/html" not in ctype:
+        return content
+
+    try:
+        text = content.decode("utf-8")
+    except Exception:
+        return content
+
+    marker = "window.__msMouseTracker"
+    if marker in text:
+        return content
+
+    script = _mouse_tracker_script()
+    lower = text.lower()
+    idx = lower.rfind("</body>")
+    if idx >= 0:
+        text = text[:idx] + script + text[idx:]
+    else:
+        text = text + script
+    return text.encode("utf-8")
+
+
 @app.get("/")
 async def root():
     """服務根節點：提供健康入口與文件連結。"""
@@ -457,6 +529,7 @@ async def get_user_data(
 
     feature_store.record_observation(user_id=user_id, device_id=device_id)
     graph_metrics = feature_store.get_metrics(user_id=user_id, device_id=device_id)
+    mouse_entropy, mouse_source = _parse_mouse_entropy(request)
 
     risk_reasons = []
     replication_risk, replication_reason = detect_replication_risk(
@@ -500,6 +573,8 @@ async def get_user_data(
         "device_user_ratio": graph_metrics.device_user_ratio,
         "req_rate_5m": graph_metrics.req_rate_5m,
         "graph_feature_source": graph_metrics.source,
+        "mouse_entropy": mouse_entropy,
+        "mouse_source": mouse_source,
         "amount_value": amount_value,
         "amount_deviation": amount_deviation,
         "query_id": user_id,
@@ -661,6 +736,8 @@ async def simulate_attack(
         "device_user_ratio": 0.0,
         "req_rate_5m": 0.0,
         "graph_feature_source": "simulated",
+        "mouse_entropy": 0.0,
+        "mouse_source": "simulated",
         "amount_value": _extract_amount_value(payload, None),
         "amount_deviation": 0.0,
         "referer": None,
@@ -823,6 +900,7 @@ async def _proxy_banking_request(
 
     feature_store.record_observation(user_id=query_id, device_id=device_id)
     graph_metrics = feature_store.get_metrics(user_id=query_id, device_id=device_id)
+    mouse_entropy, mouse_source = _parse_mouse_entropy(request)
 
     is_attack, confidence, attack_vector = analyze_intent(detection_target)
     risk_reasons = []
@@ -863,7 +941,10 @@ async def _proxy_banking_request(
                 headers=_build_upstream_headers(request),
             )
         status_code = upstream_response.status_code
-        response_content = upstream_response.content
+        response_content = _inject_mouse_tracker_html(
+            upstream_response.content,
+            upstream_response.headers.get("content-type"),
+        )
         response_headers = {
             k: v
             for k, v in upstream_response.headers.items()
@@ -905,6 +986,8 @@ async def _proxy_banking_request(
         "device_user_ratio": graph_metrics.device_user_ratio,
         "req_rate_5m": graph_metrics.req_rate_5m,
         "graph_feature_source": graph_metrics.source,
+        "mouse_entropy": mouse_entropy,
+        "mouse_source": mouse_source,
         "amount_value": amount_value,
         "amount_deviation": amount_deviation,
         "attack_vector": attack_vector if should_intercept else None,

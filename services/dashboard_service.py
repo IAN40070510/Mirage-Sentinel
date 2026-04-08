@@ -248,6 +248,8 @@ def get_ip_details(ip: str) -> dict:
                 MAX(t.location) AS location,
                 COUNT(t.id) AS hits,
                 MAX(t.query_id) AS query_id,
+                MAX(t.mouse_entropy) AS mouse_entropy,
+                MAX(t.mouse_source) AS mouse_source,
                 MAX(d.attack_vector) AS attack_vector,
                 MAX(d.raw_payload) AS raw_payload,
                 MAX(d.mitigation_status) AS mitigation_status,
@@ -270,6 +272,8 @@ def get_ip_details(ip: str) -> dict:
     result.setdefault("tls_fingerprint", None)
     result["risk_level"] = int(result.get("risk_level") or 0)
     result["polluted_status"] = int(result.get("polluted_status") or 0)
+    result["mouse_entropy"] = float(result.get("mouse_entropy") or 0.0)
+    result["mouse_source"] = result.get("mouse_source") or "missing"
     result["location"] = _resolve_ip_region(ip, result.get("location"))
     return result
 
@@ -742,6 +746,8 @@ def get_dashboard_ip_bundle(client_ip: str) -> dict:
         "timeline": timeline_data.get("timeline", []),
         "dwell_seconds": dwell.get("dwell_seconds", 0),
         "is_active": dwell.get("is_active", False),
+        "mouse_entropy": details.get("mouse_entropy", 0.0),
+        "mouse_source": details.get("mouse_source", "missing"),
         "details": details,
     }
 
