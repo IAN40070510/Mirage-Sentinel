@@ -13,7 +13,7 @@ compose_file=""
 log_services=""
 
 usage() {
-  echo "Usage: $0 --health-url URL [--health-url URL] --openapi-url URL --banking-url URL [options]"
+  echo "Usage: $0 --health-url URL [--health-url URL] --openapi-url URL [--banking-url URL] [options]"
   echo "Options:"
   echo "  --user-id VALUE"
   echo "  --banking-allow CSV_STATUS_CODES (default: 200)"
@@ -98,12 +98,12 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ "${#health_urls[@]}" -eq 0 ] || [ -z "${openapi_url}" ] || [ -z "${banking_url}" ]; then
+if [ "${#health_urls[@]}" -eq 0 ] || [ -z "${openapi_url}" ]; then
   usage
   fail "missing required arguments"
 fi
 
-if ! [[ "${user_id}" =~ ^CIF[0-9]{9}$ ]]; then
+if [ -n "${banking_url}" ] && ! [[ "${user_id}" =~ ^CIF[0-9]{9}$ ]]; then
   echo "[smoke] WARN: --user-id '${user_id}' is not in CIF format (expected CIF + 9 digits)."
   echo "[smoke] WARN: Banking endpoint may auto-divert to deception_auth and skew smoke expectations."
 fi
@@ -137,13 +137,17 @@ python3 -m json.tool /tmp/openapi.json >/dev/null 2>&1 || fail "openapi.json is 
 test -s /tmp/openapi.json || fail "openapi.json is empty"
 echo "[smoke] openapi check passed"
 
-banking_code=$(curl -sS -o /tmp/banking_accounts.json -w "%{http_code}" -H "X-User-Id: ${user_id}" "${banking_url}" || true)
-if ! contains_code "${banking_code}"; then
-  echo "[smoke] banking response body:"
-  cat /tmp/banking_accounts.json || true
-  fail "banking returned unexpected status ${banking_code}; allow=${banking_allow}"
+if [ -n "${banking_url}" ]; then
+  banking_code=$(curl -sS -o /tmp/banking_accounts.json -w "%{http_code}" -H "X-User-Id: ${user_id}" "${banking_url}" || true)
+  if ! contains_code "${banking_code}"; then
+    echo "[smoke] banking response body:"
+    cat /tmp/banking_accounts.json || true
+    fail "banking returned unexpected status ${banking_code}; allow=${banking_allow}"
+  fi
+  python3 -m json.tool /tmp/banking_accounts.json >/dev/null 2>&1 || fail "banking response is not valid JSON"
+  echo "[smoke] banking check passed (status=${banking_code})"
+else
+  echo "[smoke] banking check skipped (no --banking-url provided)"
 fi
-python3 -m json.tool /tmp/banking_accounts.json >/dev/null 2>&1 || fail "banking response is not valid JSON"
-echo "[smoke] banking check passed (status=${banking_code})"
 
 echo "[smoke] smoke checks completed successfully"

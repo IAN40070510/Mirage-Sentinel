@@ -50,9 +50,6 @@ jobs:
               --health-url http://127.0.0.1:8000/healthz \
               --health-url http://127.0.0.1:8002/healthz \
               --openapi-url http://127.0.0.1:8000/openapi.json \
-              --banking-url http://127.0.0.1:8000/api/v1/banking/accounts \
-              --user-id CIF000000001 \
-              --banking-allow 200 \
               --retries 30 \
               --sleep 3 \
               --compose-cmd "$COMPOSE_CMD" \
@@ -63,19 +60,4 @@ jobs:
             curl -fsS http://127.0.0.1:3000/ >/dev/null
             curl -fsS http://127.0.0.1:3001/banking_demo.html >/dev/null
 
-            # Authorization regression checks on live deployment.
-            bash scripts/ci/authz-smoke.sh http://127.0.0.1:8000
-
-            # Transaction risk rules checks on live deployment.
-            bash scripts/ci/transaction-risk-smoke.sh http://127.0.0.1:8000
-
-            # Deceptive login state machine checks on live deployment.
-            bash scripts/ci/deception-auth-smoke.sh http://127.0.0.1:8000
-
-            # Event query and replay checks on live deployment.
-            if [ -f "$runtime_env_file" ]; then
-              SOC_API_KEY="$(grep '^API_KEY=' "$runtime_env_file" | head -n 1 | cut -d '=' -f2-)"
-            else
-              SOC_API_KEY="$(grep '^API_KEY=' .env.oracle.soc | cut -d '=' -f2-)"
-            fi
-            bash scripts/ci/event-query-smoke.sh http://127.0.0.1:8002 "$SOC_API_KEY"
+            echo "[smoke] Mirage-specific banking regression checks skipped during vuln-bank migration."
