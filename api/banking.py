@@ -1,6 +1,7 @@
 import os
 import re
 import uuid
+import logging
 from datetime import datetime, timezone
 
 import httpx
@@ -15,6 +16,7 @@ from api.db.operations import DBOperations
 from api.db.session import is_real_db_enabled
 
 router = APIRouter(prefix="/banking", tags=["Banking API"])
+logger = logging.getLogger(__name__)
 
 VULN_BANK_BASE_URL = os.getenv("VULN_BANK_BASE_URL", "http://127.0.0.1:5000").rstrip(
     "/"
@@ -634,28 +636,48 @@ async def list_accounts(
     background_tasks: BackgroundTasks,
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ):
-    user_id = _resolve_user_id(x_user_id)
-    diverted = await _maybe_divert_to_sandbox_response(
-        request,
-        background_tasks,
-        x_user_id,
-        "accounts",
-        _request_payload(request, f"user_id={user_id}"),
-        lambda: _deception_accounts_response(),
-    )
-    if diverted is not None:
-        return diverted
-
-    real_response = _real_accounts_response(user_id)
-    if real_response is not None:
-        return real_response
-
-    if is_real_db_enabled():
-        raise HTTPException(
-            status_code=500, detail="Real banking database is unavailable"
+    try:
+        user_id = _resolve_user_id(x_user_id)
+        diverted = await _maybe_divert_to_sandbox_response(
+            request,
+            background_tasks,
+            x_user_id,
+            "accounts",
+            _request_payload(request, f"user_id={user_id}"),
+            lambda: _deception_accounts_response(),
         )
+        if diverted is not None:
+            return diverted
 
-    return await _deception_accounts_response()
+        try:
+            real_response = _real_accounts_response(user_id)
+        except Exception as exc:
+            logger.exception("Real banking accounts query failed: %s", exc)
+            if is_real_db_enabled():
+                raise HTTPException(
+                    status_code=503,
+                    detail="Real banking database is temporarily unavailable",
+                )
+            real_response = None
+
+        if real_response is not None:
+            return real_response
+
+        if is_real_db_enabled():
+            raise HTTPException(
+                status_code=503,
+                detail="Real banking database is temporarily unavailable",
+            )
+
+        return await _deception_accounts_response()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Unhandled error in /banking/accounts: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Banking service is temporarily unavailable",
+        )
 
 
 @router.get("/accounts/{account_id}/balance")

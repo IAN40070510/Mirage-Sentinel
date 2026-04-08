@@ -34,7 +34,10 @@ jobs:
             --user-id CIF000000001 \
             --banking-allow 200,401,403,503 \
             --retries 60 \
-            --sleep 2
+            --sleep 2 \
+            --compose-cmd "docker compose" \
+            --compose-file docker-compose.yml \
+            --log-services "app sandbox postgres"
 
       - name: Run authorization regression checks
         run: |
