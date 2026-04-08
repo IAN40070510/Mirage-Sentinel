@@ -24,8 +24,13 @@ VULN_BANK_BASE_URL = os.getenv("VULN_BANK_BASE_URL", "http://127.0.0.1:5000").rs
 VULN_BANK_USERNAME = os.getenv("VULN_BANK_USERNAME", "admin")
 VULN_BANK_PASSWORD = os.getenv("VULN_BANK_PASSWORD", "admin123")
 TIMEOUT_SECONDS = float(os.getenv("VULN_BANK_TIMEOUT", "10"))
+BANKING_MODE = os.getenv("BANKING_MODE", "vuln-bank").strip().lower()
 
 _USER_TO_ACCOUNT: dict[str, str] = {}
+
+
+def _use_real_banking_db() -> bool:
+    return BANKING_MODE in {"real", "real-first", "mirage-db"}
 
 
 class CreateBeneficiaryRequest(BaseModel):
@@ -454,6 +459,9 @@ async def _deception_transfer_response(user_id: str, req: TransferRequest) -> di
 
 
 def _real_accounts_response(user_id: str) -> dict | None:
+    if not _use_real_banking_db():
+        return None
+
     seeded = DBOperations.ensure_user_account(user_id)
     accounts = DBOperations.get_user_accounts(user_id)
     if accounts is None:
@@ -482,6 +490,9 @@ def _real_accounts_response(user_id: str) -> dict | None:
 
 
 def _real_balance_response(account_id: str, user_id: str) -> dict | None:
+    if not _use_real_banking_db():
+        return None
+
     if not DBOperations.account_belongs_to_user(account_id, user_id):
         return None
 
@@ -495,6 +506,9 @@ def _real_balance_response(account_id: str, user_id: str) -> dict | None:
 
 
 def _real_transactions_response(account_id: str, user_id: str) -> dict | None:
+    if not _use_real_banking_db():
+        return None
+
     if not DBOperations.account_belongs_to_user(account_id, user_id):
         return None
 
@@ -513,6 +527,9 @@ def _real_transactions_response(account_id: str, user_id: str) -> dict | None:
 
 
 def _real_beneficiaries_response(user_id: str) -> dict | None:
+    if not _use_real_banking_db():
+        return None
+
     beneficiaries = DBOperations.get_user_beneficiaries(user_id)
     if beneficiaries is None:
         return None
@@ -528,6 +545,9 @@ def _real_beneficiaries_response(user_id: str) -> dict | None:
 def _real_create_beneficiary_response(
     user_id: str, req: CreateBeneficiaryRequest
 ) -> dict | None:
+    if not _use_real_banking_db():
+        return None
+
     created = DBOperations.create_beneficiary(
         user_id=user_id,
         nickname=req.nickname,
@@ -544,6 +564,9 @@ def _real_create_beneficiary_response(
 
 
 def _real_transfer_response(user_id: str, req: TransferRequest) -> dict | None:
+    if not _use_real_banking_db():
+        return None
+
     transferred = DBOperations.transfer_money(
         user_id=user_id,
         from_account=req.from_account,
@@ -653,7 +676,7 @@ async def list_accounts(
             real_response = _real_accounts_response(user_id)
         except Exception as exc:
             logger.exception("Real banking accounts query failed: %s", exc)
-            if is_real_db_enabled():
+            if _use_real_banking_db() and is_real_db_enabled():
                 raise HTTPException(
                     status_code=503,
                     detail="Real banking database is temporarily unavailable",
@@ -663,7 +686,7 @@ async def list_accounts(
         if real_response is not None:
             return real_response
 
-        if is_real_db_enabled():
+        if _use_real_banking_db() and is_real_db_enabled():
             raise HTTPException(
                 status_code=503,
                 detail="Real banking database is temporarily unavailable",
@@ -703,7 +726,7 @@ async def get_balance(
     if real_response is not None:
         return real_response
 
-    if is_real_db_enabled():
+    if _use_real_banking_db() and is_real_db_enabled():
         raise HTTPException(status_code=404, detail="Account not found")
 
     return await _deception_balance_response(account_id)
@@ -732,7 +755,7 @@ async def get_transactions(
     if real_response is not None:
         return real_response
 
-    if is_real_db_enabled():
+    if _use_real_banking_db() and is_real_db_enabled():
         raise HTTPException(status_code=404, detail="Account not found")
 
     return await _deception_transactions_response(account_id)
@@ -760,7 +783,7 @@ async def list_beneficiaries(
     if real_response is not None:
         return real_response
 
-    if is_real_db_enabled():
+    if _use_real_banking_db() and is_real_db_enabled():
         raise HTTPException(
             status_code=500, detail="Real banking database is unavailable"
         )
@@ -794,7 +817,7 @@ async def create_beneficiary(
     if real_response is not None:
         return real_response
 
-    if is_real_db_enabled():
+    if _use_real_banking_db() and is_real_db_enabled():
         raise HTTPException(
             status_code=409, detail="Beneficiary already exists or cannot be created"
         )
@@ -831,7 +854,7 @@ async def transfer(
     if real_response is not None:
         return real_response
 
-    if is_real_db_enabled():
+    if _use_real_banking_db() and is_real_db_enabled():
         raise HTTPException(status_code=400, detail="Transfer could not be completed")
 
     return await _deception_transfer_response(user_id, req)

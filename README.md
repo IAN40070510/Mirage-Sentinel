@@ -325,9 +325,10 @@ npm --prefix frontend run start:soc
 npm --prefix frontend run start:customer
 ```
 
-銀行模組策略（real-first）：
+銀行模組策略（目前預設 vuln-bank-first）：
 
-- `api/banking.py` 先走真實銀行資料層；當 Sentinel 判定為異常行為時，才切換到沙盒幻象回應。
+- `api/banking.py` 目前預設 `BANKING_MODE=vuln-bank`，優先使用 `Commando-X/vuln-bank` 作為銀行資料來源。
+- 若需回切 Mirage DB，請將 `BANKING_MODE` 設為 `real` / `real-first` / `mirage-db`。
 - 沙盒幻象使用 `Commando-X/vuln-bank`，可透過環境變數調整：
   - `VULN_BANK_BASE_URL`（預設 `http://127.0.0.1:5000`）
   - `VULN_BANK_USERNAME`

@@ -67,6 +67,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - PORT=8000
+      - BANKING_MODE=vuln-bank
       - ENABLE_DASHBOARD=false
       - DASHBOARD_INTERNAL_ONLY=true
       - SANDBOX_API_URL=http://sandbox:8001/simulate_attack
@@ -93,6 +94,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - PORT=8000
+      - BANKING_MODE=vuln-bank
       - ENABLE_DASHBOARD=true
       - DASHBOARD_INTERNAL_ONLY=true
       - SANDBOX_API_URL=http://sandbox:8001/simulate_attack
