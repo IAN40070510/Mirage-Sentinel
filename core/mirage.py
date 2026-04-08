@@ -10,7 +10,8 @@ import random
 import uuid
 from core.deception_db import get_memory, save_deception_state
 from datetime import datetime, timedelta, timezone
-from model.llama import generate_fake_data_llama
+
+# from model.llama import generate_fake_data_llama
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +42,16 @@ def generate_fake_data(
         )
         return existing_mem["payload"]
 
-    # [步驟 2] 使用本地 LLaMA 生成新欺敵資料
-    final_payload_dict = generate_fake_data_llama(
-        query_id=query_id,
-        attack_vector=attack_vector,
-    )
-    logger.info("[AI 欺敵] 本地 LLaMA 生成誘餌資料：user_id=%s", query_id)
+    # [步驟 2] 改用固定資料
+    final_payload_dict = {
+        "status": "success",
+        "user_id": query_id,
+        "display_name": "Mirage Guest",
+        "accounts": [],
+        "transactions": [],
+        "attack_vector": attack_vector,
+    }
+    logger.info("[AI 欺敵] 改用固定誘餌資料：user_id=%s", query_id)
 
     # [步驟 4] 存放欺敵記憶
     try:

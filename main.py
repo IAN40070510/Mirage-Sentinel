@@ -49,7 +49,7 @@ from api import banking
 from api.db.session import init_db, create_tables, seed_banking_demo_data
 import model.ai_sentinel as model
 
-from model.llama import generate_fake_data_llama
+# from model.llama import generate_fake_data_llama
 
 sys.modules["__main__"].SentinelModule = model.SentinelModule
 sys.modules["__main__"].SecurityExtractor = model.SecurityExtractor
@@ -359,10 +359,15 @@ async def get_user_data_llama(
             fake_data = mem["payload"]
             logger.info(f"[欺敵記憶命中] 攻擊者 {client_ip} 繼續餵給 LLaMA 舊資料")
         else:
-            # 無記憶：直接呼叫 LLaMA 生成全新且完整的假資料
-            fake_data = generate_fake_data_llama(
-                query_id=user_id, attack_vector=attack_vector
-            )
+            # 無記憶：改用固定資料
+            fake_data = {
+                "status": "success",
+                "user_id": user_id,
+                "display_name": "Mirage Guest",
+                "account_balance": 0,
+                "currency": "TWD",
+                "attack_vector": attack_vector,
+            }
 
         process_ms = int((time.perf_counter() - start_perf) * 1000)
         response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
