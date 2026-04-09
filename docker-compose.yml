@@ -16,6 +16,7 @@ services:
     container_name: mirage_sentinel_app
     ports:
       - "127.0.0.1:8000:8000"
+      - "8002:8002"
     volumes:
       - .:/app
       - ./data:/app/data
@@ -25,7 +26,12 @@ services:
       - API_KEY=${API_KEY:-}
       - ENABLE_DASHBOARD=true
       - DASHBOARD_INTERNAL_ONLY=true
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+    command:
+      - sh
+      - -c
+      - |
+        uvicorn main:app --host 0.0.0.0 --port 8000 & \
+        uvicorn main:app --host 0.0.0.0 --port 8002
     depends_on:
       - sandbox
 
