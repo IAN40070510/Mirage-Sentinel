@@ -30,6 +30,14 @@ def health_check():
     return {"status": "ok"}
 
 
+@app.get("/api/v1/dashboard/recent_traffic")
+async def dashboard_recent_traffic(
+    request: Request, limit: int = 100, mode: str = "all"
+):
+    require_api_key(request)
+    return fetch_recent_traffic(limit, mode)
+
+
 # SOC Dashboard API 路由
 @app.get("/api/v1/dashboard/ips")
 async def dashboard_ips(request: Request):
