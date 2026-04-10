@@ -5,17 +5,17 @@ const app = express();
 const PORT = Number(process.env.SOC_PORT || process.env.PORT || 3000);
 
 const DASHBOARD_BASE_URL =
-  process.env.BACKEND_API_BASE_URL || "http://localhost:8000/api/v1/dashboard";
+  process.env.BACKEND_API_BASE_URL || "http://localhost:8000/dashboard";
 const DASHBOARD_API_KEY = process.env.API_KEY || "dev-local-api-key-change-me";
 
 const BASE_URL_CANDIDATES = Array.from(
   new Set(
     [
       DASHBOARD_BASE_URL,
-      "http://localhost:8002/api/v1/dashboard",
-      "http://localhost:8000/api/v1/dashboard",
-      "http://127.0.0.1:8002/api/v1/dashboard",
-      "http://127.0.0.1:8000/api/v1/dashboard",
+      "http://localhost:8002/dashboard",
+      "http://localhost:8000/dashboard",
+      "http://127.0.0.1:8002/dashboard",
+      "http://127.0.0.1:8000/dashboard",
     ].filter(Boolean)
   )
 );

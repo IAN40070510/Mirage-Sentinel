@@ -5,6 +5,29 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
+# 與新版 API 相容的 alias 路由，供 SOC 前端存取
+from fastapi import APIRouter
+
+alias_router = APIRouter(prefix="")
+
+
+@alias_router.get("/recent_traffic")
+async def alias_recent_traffic(request: Request, limit: int = 100, mode: str = "all"):
+    return await dashboard_recent_traffic(request, limit, mode)
+
+
+@alias_router.get("/live_ips")
+async def alias_live_ips(request: Request, limit: int = 500):
+    return await dashboard_ips(request)
+
+
+@alias_router.get("/ip_bundle/{client_ip}")
+async def alias_ip_bundle(client_ip: str, request: Request):
+    return await dashboard_ip_detail(client_ip, request)
+
+
+app.include_router(alias_router, prefix="/api/v1/dashboard")
+
 # 允許前端跨域請求
 app.add_middleware(
     CORSMiddleware,

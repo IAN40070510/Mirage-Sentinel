@@ -6,7 +6,7 @@ const PORT = Number(process.env.PORT || 3000);
 
 // 後端 FastAPI Dashboard API
 const DASHBOARD_BASE_URL =
-  process.env.BACKEND_API_BASE_URL || "http://localhost:8000/api/v1/dashboard";
+  process.env.BACKEND_API_BASE_URL || "http://localhost:8000/dashboard";
 
 // 正常用戶 Banking API（展示用）
 const BANKING_BASE_URL =
