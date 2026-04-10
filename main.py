@@ -1,19 +1,19 @@
-﻿"""
+﻿# deception_db：欺敵記憶讀寫（同 IP + query_id 的持續欺敵）
+from core.deception_db import setup_deception_db
+
+"""
 Mirage-Sentinel 主入口（API Gateway）
 
 本檔案負責：
-1. 啟動 FastAPI 與 middleware。
-2. 初始化雙資料庫（traffic + deception memory）。
-3. 提供主要對外 API：
-   - /api/v1/user/{user_id}：實際流量入口
-   - /api/v1/simulate_attack：攻擊模擬入口
+1. 啟動 FastAPI 與 Nginx、middleware。
+2. 提供主要對外 API（已移除 /api/v1/user/{user_id} 與 /api/v1/simulate_attack，改由 80 port 的 vuln-bank-main API 服務）。
+3. 初始化雙資料庫（traffic + deception memory）。
 4. 協調哨兵偵測、欺敵策略、沙盒回應與日誌落地。
 """
 
 from fastapi import (
     FastAPI,
     Request,
-    Query,
     BackgroundTasks,
     HTTPException,
     Depends,
@@ -21,7 +21,6 @@ from fastapi import (
 )
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import Response
-import sys
 import uvicorn
 import time
 import os
@@ -33,7 +32,6 @@ import re
 import hashlib
 import pandas as pd
 import httpx
-from types import SimpleNamespace
 from datetime import datetime
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
@@ -47,15 +45,12 @@ logger = logging.getLogger(__name__)
 # deception_engine：互動深度/漏斗層級評分
 # traffic_db：全量流量事件落地
 # sandbox：惡意流量導向沙盒/降級假資料
-from core.deception_db import setup_deception_db, get_memory, save_deception_state
-from core.deception_engine import compute_interaction_metrics
 from core.traffic_db import (
     setup_traffic_db,
     log_traffic_event,
     get_recent_transactions_by_user,
     get_transaction_amounts_by_user,
 )
-from core.sandbox import run_attack_in_sandbox
 from core.feature_store import get_feature_store
 from core.sentinel import (
     analyze_intent as signature_analyze_intent,
@@ -102,7 +97,7 @@ def _env_flag(name: str, default: str = "true") -> bool:
 ENABLE_DASHBOARD = _env_flag("ENABLE_DASHBOARD", "false")
 DASHBOARD_INTERNAL_ONLY = _env_flag("DASHBOARD_INTERNAL_ONLY", "true")
 DASHBOARD_ADMIN_KEY = os.getenv("DASHBOARD_ADMIN_KEY", "").strip()
-VULN_BANK_BASE_URL = os.getenv("VULN_BANK_BASE_URL", "http://vuln_bank:5000").rstrip(
+VULN_BANK_BASE_URL = os.getenv("VULN_BANK_BASE_URL", "http://vuln-bank-main:80").rstrip(
     "/"
 )
 
@@ -180,15 +175,12 @@ async def lifespan(app: FastAPI):
     2) 初始化 deception / traffic 雙資料庫。
     3) 啟動完成後交由 FastAPI 正常提供服務。
     """
-    global API_KEY
     if _is_placeholder_secret(API_KEY):
         if ENABLE_DASHBOARD:
             raise RuntimeError(
                 "API_KEY is required and must not be empty or placeholder text."
             )
-
         logger.warning("API_KEY 未提供有效值，Dashboard 已關閉，將以降級模式啟動。")
-        API_KEY = ""
 
     if not ENABLE_DASHBOARD:
         logger.info("Dashboard 已停用，略過 API_KEY 強制檢查。")
@@ -239,7 +231,7 @@ app.add_middleware(
 
 
 # 自定義 OpenAPI schema 生成：根據 ENABLE_DASHBOARD 過濾文檔
-def custom_openapi():
+def custom_openapi() -> dict:
     """
     生成 OpenAPI schema，當 ENABLE_DASHBOARD=false 時，隱藏 Dashboard 路由。
     符合 AGENTS.md 安全規範：公開蜜罐不應暴露敏感監控功能。
@@ -318,7 +310,7 @@ def _parse_request_at(value: str | None) -> datetime | None:
 def _compute_timing_features(user_id: str) -> tuple[float, float]:
     """從近期請求推估間隔與節奏變異。"""
     recent = get_recent_transactions_by_user(user_id, limit_seconds=900, max_results=25)
-    timestamps = []
+    timestamps: list[datetime] = []
     for record in recent:
         parsed = _parse_request_at(record.get("request_at"))
         if parsed:
@@ -328,7 +320,7 @@ def _compute_timing_features(user_id: str) -> tuple[float, float]:
         return 0.0, 0.0
 
     timestamps.sort()
-    intervals_ms = []
+    intervals_ms: list[float] = []
     for i in range(1, len(timestamps)):
         delta_ms = (timestamps[i] - timestamps[i - 1]).total_seconds() * 1000.0
         intervals_ms.append(delta_ms)
@@ -451,7 +443,7 @@ def _inject_mouse_tracker_html(content: bytes, content_type: str | None) -> byte
 
 
 @app.get("/")
-async def root():
+async def root() -> dict:
     """服務根節點：提供健康入口與文件連結。"""
     return {
         "service": "Mirage-Sentinel API Gateway",
@@ -470,347 +462,7 @@ async def healthz():
     return {"status": "ok"}
 
 
-# @app.get("/api/v1/user/llama/{user_id}")
-# async def get_user_data_llama(
-#     user_id: str,
-#     payload: str = Query(
-#         None, max_length=2000, description="指令測試區 (最多 2000 字)"
-#     ),
-#     request: Request = None,
-#     background_tasks: BackgroundTasks = None,
-# ):
-#     """
-#     Llama 專屬入口：暫時停用。
-#     """
-#     pass
-
-
-@app.get("/api/v1/user/{user_id}")
-async def get_user_data(
-    user_id: str,
-    payload: str = Query(
-        None, max_length=2000, description="指令測試區 (最多 2000 字)"
-    ),
-    amount: float | None = Query(
-        None, description="可選金額欄位，用於異常金額偏離分析"
-    ),
-    request: Request = None,
-    background_tasks: BackgroundTasks = None,
-):
-    """
-    真實入口：
-    1) 分析請求是否惡意。
-    2) 惡意則回傳欺敵資料；正常則回傳真實資料。
-    3) 不論惡意與否，皆落地 traffic 事件（可同步或背景）。
-    """
-    if request is None:
-        raise HTTPException(status_code=400, detail="Request context is required")
-
-    # 入口起始時間（毫秒）與基礎請求資訊
-    start_perf = time.perf_counter()
-    request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    client_ip = request.client.host
-    user_agent = request.headers.get("user-agent", "Unknown")
-    referer = request.headers.get("referer")
-    tls_fingerprint = request.headers.get("X-JA3-Fingerprint", "N/A")
-    device_id = _derive_device_id(client_ip, user_agent, tls_fingerprint)
-    header_entropy = _compute_header_entropy(request)
-    current_payload = payload if payload else ""
-    detection_target = (
-        f"{user_id} {current_payload}".strip() if current_payload else str(user_id)
-    )
-    confidence = 0.0
-    attack_vector = "None"
-    is_attack, confidence, attack_vector = analyze_intent(detection_target)
-
-    req_interval_ms, req_time_var = _compute_timing_features(user_id)
-    amount_value = _extract_amount_value(current_payload, amount)
-    amount_deviation = _compute_amount_deviation(user_id, amount_value)
-
-    feature_store.record_observation(user_id=user_id, device_id=device_id)
-    graph_metrics = feature_store.get_metrics(user_id=user_id, device_id=device_id)
-    mouse_entropy, mouse_source = _parse_mouse_entropy(request)
-
-    risk_reasons = []
-    replication_risk, replication_reason = detect_replication_risk(
-        user_id, detection_target
-    )
-    if replication_risk:
-        risk_reasons.append(replication_reason)
-
-    rate_risk, rate_reason = detect_rate_limiting_risk(client_ip)
-    if rate_risk:
-        risk_reasons.append(rate_reason)
-
-    amount_risk, amount_reason = detect_anomalous_amount_risk(
-        user_id, int(amount_value) if amount_value is not None else None
-    )
-    if amount_risk:
-        risk_reasons.append(amount_reason)
-
-    should_intercept = (is_attack and confidence > 0.75) or bool(risk_reasons)
-    if risk_reasons:
-        attack_vector = ", ".join(filter(None, [attack_vector, *risk_reasons]))
-
-    process_ms = None
-    response_at = None
-    event_payload = {
-        "request_at": request_at,
-        "client_ip": client_ip,
-        "location": "Cloud",
-        "is_proxy": detect_proxy(request),
-        "user_agent": user_agent,
-        "tls_fingerprint": tls_fingerprint,
-        "raw_payload": detection_target,
-        "endpoint": request.url.path,
-        "method": request.method,
-        "referer": referer,
-        "header_entropy": header_entropy,
-        "req_interval_ms": req_interval_ms,
-        "req_time_var": req_time_var,
-        "device_id": device_id,
-        "user_device_ratio": graph_metrics.user_device_ratio,
-        "device_user_ratio": graph_metrics.device_user_ratio,
-        "req_rate_5m": graph_metrics.req_rate_5m,
-        "graph_feature_source": graph_metrics.source,
-        "mouse_entropy": mouse_entropy,
-        "mouse_source": mouse_source,
-        "amount_value": amount_value,
-        "amount_deviation": amount_deviation,
-        "query_id": user_id,
-        "attack_vector": None,
-        "risk_level": 0,
-        "is_attack": 0,
-    }
-
-    if should_intercept:
-        # ===== 惡意請求路徑 =====
-        risk_score = int(confidence * 100)
-
-        # 先查記憶：同一攻擊者可維持一致假資料，避免露餡
-        mem = get_memory(client_ip, user_id)
-
-        # 計算互動指標（停留時間、漏斗層級、演化分數等）
-        metrics = compute_interaction_metrics(
-            client_ip=client_ip,
-            query_id=user_id,
-            current_payload=detection_target,
-            has_memory_hit=bool(mem),
-        )
-
-        dwell_time = float(metrics["dwell_seconds"])
-        interaction_depth = int(metrics["depth_score"])
-        hits = 1
-
-        if mem:
-            # 已有記憶：沿用舊假資料，提升欺敵連續性
-            hits = mem["hits"] + 1
-            fake_data = mem["payload"]
-        else:
-            # 無記憶：稍後進沙盒生成
-            fake_data = None
-
-        process_ms = int((time.perf_counter() - start_perf) * 1000)
-        response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-
-        # 第一次命中才呼叫沙盒；避免重複生成不同假資料
-        if fake_data is None:
-            fake_data = await run_attack_in_sandbox(
-                {
-                    **event_payload,
-                    "response_at": response_at,
-                    "process_ms": process_ms,
-                    "hits": hits,
-                    "interaction_depth": interaction_depth,
-                    "dwell_time": dwell_time,
-                }
-            )
-
-        # 回填完整事件，供後續落地與 API 回傳
-        event_payload.update(
-            {
-                "response_at": response_at,
-                "process_ms": process_ms,
-                "response_payload": fake_data,
-                "hits": hits,
-                "interaction_depth": interaction_depth,
-                "dwell_time": dwell_time,
-                "mitigation_status": "Sandboxed",
-                "risk_level": risk_score,
-            }
-        )
-
-        # 流量寫入可異步（避免延遲主請求）或同步（保持即時一致）
-        if background_tasks:
-            background_tasks.add_task(log_traffic_event, event_payload)
-        else:
-            log_traffic_event(event_payload)
-
-        # 寫入欺敵記憶，供下一次相同攻擊者沿用
-        save_deception_state(client_ip, user_id, attack_vector, risk_score, fake_data)
-
-        logger.info(
-            f"[BERT哨兵攔截] {attack_vector} (信心: {confidence}) | "
-            f"深度: {interaction_depth} | 漏斗: {metrics['funnel_level']} | 隔離: Docker沙盒"
-        )
-        if isinstance(fake_data, dict):
-            fake_data["_debug_score"] = round(confidence, 4)
-            fake_data["_debug_vector"] = attack_vector
-        return fake_data
-
-    # ===== 正常請求路徑 =====
-    process_ms = int((time.perf_counter() - start_perf) * 1000)
-    response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-
-    event_payload.update(
-        {
-            "response_at": response_at,
-            "process_ms": process_ms,
-            "response_payload": None,
-            "hits": 0,
-            "interaction_depth": 0,
-            "dwell_time": 0.0,
-            "mitigation_status": "normal",
-            "risk_level": 0,
-        }
-    )
-
-    if background_tasks:
-        background_tasks.add_task(log_traffic_event, event_payload)
-    else:
-        log_traffic_event(event_payload)
-
-    return {"user_id": user_id, "name": "真實用戶", "status": "Normal"}
-
-
 # 攻擊模擬端點：功能與 /user 類似，但來源資訊固定為測試情境
-@app.post("/api/v1/simulate_attack", summary="模擬攻擊請求")
-async def simulate_attack(
-    user_id: str = Query(..., description="用戶 ID"),
-    payload: str = Query(
-        "",
-        description="""模擬的攻擊指令（選填，留空為正常請求）
-
-常見攻擊模板：
-  • SQL 注入: ' OR '1'='1 / DROP TABLE users / UNION SELECT * FROM admin
-  • LFI: ../../../../etc/passwd / ../../config.php / /etc/shadow
-  • XSS: <script>alert('xss')</script> / javascript:alert(1)
-  • RCE: ; ls -la / $(whoami) / `id`
-  • 目錄遍歷: ../../../ / ..\\..\\..\\
-    """,
-    ),
-    client_ip: str = Query("192.168.0.1", description="攻擊者 IP（可選）"),
-    background_tasks: BackgroundTasks = None,
-):
-    """
-    模擬攻擊專用：方便在測試環境快速重現攻擊流程。
-    - 可透過 client_ip 模擬同一/不同攻擊者的記憶命中行為。
-    """
-    start_perf = time.perf_counter()
-    request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    user_agent = "Simulated-Attack-Client"
-
-    detection_target = f"{user_id} {payload}".strip()
-
-    # 偵測攻擊意圖
-    is_attack, confidence, attack_vector = analyze_intent(detection_target)
-    should_intercept = is_attack and confidence > 0.75
-
-    event_payload = {
-        "request_at": request_at,
-        "client_ip": client_ip,
-        "location": "Simulated",
-        "is_proxy": 0,
-        "user_agent": user_agent,
-        "tls_fingerprint": "N/A",
-        "raw_payload": detection_target,
-        "query_id": user_id,
-        "attack_vector": attack_vector if is_attack else None,
-        "risk_level": int(confidence * 100) if is_attack else 0,
-        "is_attack": 1 if should_intercept else 0,
-        "header_entropy": 0.0,
-        "req_interval_ms": 0.0,
-        "req_time_var": 0.0,
-        "device_id": "simulated-device",
-        "user_device_ratio": 0.0,
-        "device_user_ratio": 0.0,
-        "req_rate_5m": 0.0,
-        "graph_feature_source": "simulated",
-        "mouse_entropy": 0.0,
-        "mouse_source": "simulated",
-        "amount_value": _extract_amount_value(payload, None),
-        "amount_deviation": 0.0,
-        "referer": None,
-        "endpoint": "/api/v1/simulate_attack",
-        "method": "POST",
-    }
-
-    if should_intercept:
-        risk_score = int(confidence * 100)
-        mem = get_memory(client_ip, user_id)
-
-        metrics = compute_interaction_metrics(
-            client_ip=client_ip,
-            query_id=user_id,
-            current_payload=detection_target,
-            has_memory_hit=bool(mem),
-        )
-
-        # 四維度指標：停留時間、深度分數、命中次數
-        dwell_time = float(metrics["dwell_seconds"])
-        interaction_depth = int(metrics["depth_score"])
-        hits = 1
-        if mem:
-            hits = mem["hits"] + 1
-            fake_data = mem["payload"]
-        else:
-            fake_data = await run_attack_in_sandbox(event_payload)
-
-        process_ms = int((time.perf_counter() - start_perf) * 1000)
-        response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-
-        event_payload.update(
-            {
-                "response_at": response_at,
-                "process_ms": process_ms,
-                "response_payload": fake_data,
-                "mitigation_status": "Sandboxed",
-                "hits": hits,
-                "interaction_depth": interaction_depth,
-                "dwell_time": dwell_time,
-                "risk_level": risk_score,
-            }
-        )
-
-        if background_tasks:
-            background_tasks.add_task(log_traffic_event, event_payload)
-        else:
-            log_traffic_event(event_payload)
-
-        # 保存欺騙狀態到記憶庫，回傳最新快照供檢視
-        save_deception_state(client_ip, user_id, attack_vector, risk_score, fake_data)
-        latest_memory = get_memory(client_ip, user_id)
-
-        return {
-            "status": "attack_detected",
-            "fake_data": fake_data,
-            "event_log": event_payload,
-            "mirage_memory": latest_memory,
-            "deception_memory": {
-                "dwell_time": dwell_time,
-                "interaction_depth": interaction_depth,
-                "hits": hits,
-                "funnel_level": metrics["funnel_level"],
-                "endpoint_coverage": metrics["endpoint_coverage"],
-                "payload_evolution_score": metrics["payload_evolution_score"],
-            },
-        }
-
-    return {
-        "status": "normal_request",
-        "message": "未檢測到攻擊行為",
-        "event_log": event_payload,
-    }
 
 
 def detect_proxy(request: Request) -> int:
@@ -831,7 +483,7 @@ def detect_proxy(request: Request) -> int:
         if header in request.headers:
             return 1
 
-    client_ip = request.client.host
+    client_ip = request.client.host if request.client else ""
     if is_known_proxy_ip(client_ip):
         return 1
 
@@ -903,7 +555,7 @@ async def _proxy_banking_request(
     mouse_entropy, mouse_source = _parse_mouse_entropy(request)
 
     is_attack, confidence, attack_vector = analyze_intent(detection_target)
-    risk_reasons = []
+    risk_reasons: list[str] = []
 
     replication_risk, replication_reason = detect_replication_risk(
         query_id, detection_target
