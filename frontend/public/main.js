@@ -1264,7 +1264,7 @@ function animateRows() {
 // =========================
 // 自動刷新
 // =========================
-function refreshDashboard(manual = false) {
+async function refreshDashboard(manual = false) {
   if (refreshInFlight) return null;
   refreshInFlight = true;
 

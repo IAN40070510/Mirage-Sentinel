@@ -12,7 +12,7 @@ jobs:
     name: Deploy to Server
 
     environment:
-      name: production
+      # name: production  # 此行不合法，已移除
       url: https://vulnbank.org
 
     steps:
