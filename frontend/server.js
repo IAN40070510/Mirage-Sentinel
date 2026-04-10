@@ -10,7 +10,7 @@ const DASHBOARD_BASE_URL =
 
 // 正常用戶 Banking API（展示用）
 const BANKING_BASE_URL =
-  process.env.BANKING_API_BASE_URL || "http://backend_public:8000/api/v1/banking";
+  process.env.BANKING_API_BASE_URL || "http://backend_public/api/v1/banking";
 
 // API Key 只存在 server 端，不暴露給前端
 const DASHBOARD_API_KEY =
