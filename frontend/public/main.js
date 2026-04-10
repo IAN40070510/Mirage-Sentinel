@@ -1,3 +1,23 @@
+// 攔截流量紀錄 DOM
+const recentTrafficList = document.getElementById("recentTrafficList");
+
+async function loadRecentTraffic() {
+  if (!recentTrafficList) return;
+  try {
+    const data = await fetchJson(`${API_BASE}/recent_traffic?limit=30`);
+    const logs = Array.isArray(data.recent_traffic) ? data.recent_traffic : [];
+    recentTrafficList.innerHTML = logs.map(log => `
+      <div class="log-item${log.risk_level > 0 ? ' attack' : ''}">
+        <span class="log-time">${escapeHtml(log.request_at || "")}</span>
+        <span class="log-ep">${escapeHtml(log.endpoint || "")}</span>
+        <span class="log-payload">${escapeHtml(log.raw_payload || "")}</span>
+        <span class="log-risk">${log.risk_level > 0 ? "⚠️" : ""}</span>
+      </div>
+    `).join("") || "<div class='system-empty'>目前沒有攔截紀錄</div>";
+  } catch (e) {
+    recentTrafficList.innerHTML = "<div class='system-empty'>無法取得攔截紀錄</div>";
+  }
+}
 let API_BASE = "/api/dashboard";
 const AUTO_REFRESH_MS = 5000;
 
@@ -1328,6 +1348,10 @@ async function init() {
 
   createRows();
   animateRows();
+
+  // 載入攔截流量紀錄
+  await loadRecentTraffic();
+  setInterval(loadRecentTraffic, 8000);
 }
 
 window.addEventListener("resize", createRows);
