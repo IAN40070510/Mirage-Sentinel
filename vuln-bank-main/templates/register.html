@@ -73,11 +73,11 @@
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('registerForm').addEventListener('submit', async (event) => {
                 event.preventDefault();
-
+                
                 const formData = new FormData(event.target);
                 const jsonData = {};
                 formData.forEach((value, key) => jsonData[key] = value);
-
+                
                 try {
                     const response = await fetch('/register', {
                         method: 'POST',
@@ -86,14 +86,14 @@
                         },
                         body: JSON.stringify(jsonData)
                     });
-
+                    
                     const data = await response.json();
-
+                    
                     if (data.status === 'success') {
                         // Vulnerability: innerHTML used instead of textContent
                         document.getElementById('message').innerHTML = data.message;
                         document.getElementById('message').className = 'success';
-
+                        
                         // Redirect to login after 2 seconds
                         setTimeout(() => {
                             window.location.href = '/login';

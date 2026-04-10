@@ -120,13 +120,13 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('card_currency').addEventListener('change', updateCardLimitHelper);
     document.getElementById('fund_amount').addEventListener('input', updateFundingPreview);
     updateCardLimitHelper();
-
+    
     // Load virtual cards
     fetchVirtualCards();
 
     // Add bill payment functions
     document.getElementById('payBillForm').addEventListener('submit', handleBillPayment);
-
+    
     // Load initial data
     loadBillCategories();
     loadPaymentHistory();
@@ -137,7 +137,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (activeLink) {
         setActiveLink(activeLink);
     }
-
+    
     // Add scroll event listener
     window.addEventListener('scroll', handleScroll);
 });
@@ -148,10 +148,10 @@ function setActiveLink(element) {
     document.querySelectorAll('.nav-link').forEach(link => {
         link.classList.remove('active');
     });
-
+    
     // Add active class to clicked link
     element.classList.add('active');
-
+    
     // For mobile view, close the menu
     if (window.innerWidth <= 768) {
         document.querySelector('.side-panel').classList.remove('active');
@@ -165,16 +165,16 @@ function toggleSidePanel() {
 function handleScroll() {
     const sections = document.querySelectorAll('.dashboard-section');
     const navLinks = document.querySelectorAll('.nav-link');
-
+    
     let current = '';
-
+    
     sections.forEach(section => {
         const sectionTop = section.offsetTop;
         if (pageYOffset >= (sectionTop - 200)) {
             current = '#' + section.getAttribute('id');
         }
     });
-
+    
     navLinks.forEach(link => {
         link.classList.remove('active');
         if (link.getAttribute('href') === current) {
@@ -208,7 +208,7 @@ async function handleTransfer(event) {
 
             // Refresh transactions
             fetchTransactions();
-
+            
             // Clear form
             event.target.reset();
         } else {
@@ -262,7 +262,7 @@ async function handleLoanRequest(event) {
                 // Add it to the loans section
                 document.getElementById('loans').appendChild(loansSection);
             }
-
+            
             // Add new loan to the table
             const loansTableBody = loansSection.querySelector('tbody');
             const newRow = document.createElement('tr');
@@ -271,7 +271,7 @@ async function handleLoanRequest(event) {
                 <td><span class="status-pending">pending</span></td>
             `;
             loansTableBody.appendChild(newRow);
-
+            
             // Clear form
             event.target.reset();
         } else {
@@ -400,12 +400,12 @@ async function fetchTransactions() {
                 document.getElementById('transaction-list').innerHTML = '<p style="text-align: center; padding: 2rem;">No transactions found</p>';
                 return;
             }
-
+            
             // Vulnerability: innerHTML used with unsanitized data
             const transactionHtml = data.transactions.map(t => {
                 const isOutgoing = t.from_account === accountNumber;
                 const transactionType = isOutgoing ? 'sent' : 'received';
-
+                
                 return `
                     <div class="transaction-item ${transactionType}">
                         <div class="transaction-details">
@@ -421,7 +421,7 @@ async function fetchTransactions() {
                     </div>
                 `;
             }).join('');
-
+            
             document.getElementById('transaction-list').innerHTML = transactionHtml;
         } else {
             document.getElementById('transaction-list').innerHTML = '<p style="text-align: center; padding: 2rem;">Error loading transactions</p>';
@@ -502,7 +502,7 @@ function renderVirtualCards() {
         container.innerHTML = '<div class="cards-empty-state">No virtual cards found. Create one to get started.</div>';
         return;
     }
-
+    
     // Vulnerability: XSS possible in card rendering
     container.innerHTML = virtualCards.map(card => `
         <div class="virtual-card ${String(card.card_type || '').toLowerCase()} ${card.is_frozen ? 'frozen' : ''}" id="card-${card.id}">
@@ -551,7 +551,7 @@ function showCardDetails(cardId) {
 
     const modal = document.getElementById('cardDetailsModal');
     const content = document.getElementById('cardDetailsContent');
-
+    
     content.innerHTML = `
         <div class="form-group">
             <label>Card Number</label>
@@ -590,7 +590,7 @@ function showCardDetails(cardId) {
             <p>${new Date(card.created_at).toLocaleDateString()}</p>
         </div>
     `;
-
+    
     modal.style.display = 'flex';
 }
 
@@ -743,13 +743,13 @@ async function showTransactionHistory(cardId) {
         if (data.status === 'success') {
             const modal = document.getElementById('cardDetailsModal');
             const content = document.getElementById('cardDetailsContent');
-
+            
             if (data.transactions.length === 0) {
                 content.innerHTML = '<p style="text-align: center; padding: 1rem;">No transactions found for this card</p>';
                 modal.style.display = 'flex';
                 return;
             }
-
+            
             content.innerHTML = `
                 <h4>Transaction History</h4>
                 <div class="transaction-list">
@@ -764,7 +764,7 @@ async function showTransactionHistory(cardId) {
                     `).join('')}
                 </div>
             `;
-
+            
             modal.style.display = 'flex';
         } else {
             showError(data.message, 'Failed to Load History');
@@ -780,7 +780,7 @@ async function showUpdateLimit(cardId) {
 
     const modal = document.getElementById('cardDetailsModal');
     const content = document.getElementById('cardDetailsContent');
-
+    
     // Vulnerability: Exposing form that allows updating any field
     content.innerHTML = `
         <h4>Update Card Limit</h4>
@@ -795,7 +795,7 @@ async function showUpdateLimit(cardId) {
             </div>
         </form>
     `;
-
+    
     modal.style.display = 'flex';
 }
 
@@ -803,7 +803,7 @@ async function showUpdateLimit(cardId) {
 async function handleCardUpdate(event, cardId) {
     event.preventDefault();
     const formData = new FormData(event.target);
-
+    
     // Only send card_limit from UI
     const jsonData = {
         card_limit: parseFloat(formData.get('card_limit'))
@@ -852,7 +852,7 @@ async function loadBillCategories() {
     try {
         const response = await fetch('/api/bill-categories');
         const data = await response.json();
-
+        
         if (data.status === 'success') {
             const select = document.getElementById('billCategory');
             // Vulnerability: XSS possible in category name and description
@@ -876,16 +876,16 @@ async function loadBillers(categoryId) {
         select.disabled = true;
         return;
     }
-
+    
     try {
         const response = await fetch(`/api/billers/by-category/${categoryId}`);
         const data = await response.json();
-
+        
         const select = document.getElementById('biller');
         if (data.status === 'success') {
             // Create a Map to store unique billers by name
             const billerMap = new Map();
-
+            
             // Only keep the first occurrence of each biller name
             data.billers.forEach(biller => {
                 if (!billerMap.has(biller.name)) {
@@ -902,7 +902,7 @@ async function loadBillers(categoryId) {
             select.innerHTML = `
                 <option value="">Select Biller</option>
                 ${uniqueBillers.map(biller => `
-                    <option value="${biller.id}"
+                    <option value="${biller.id}" 
                             data-min="${biller.minimum_amount}"
                             data-max="${biller.maximum_amount || ''}"
                     >${biller.name}</option>
@@ -949,7 +949,7 @@ async function loadVirtualCardsForPayment() {
                 <option value="">Select Card</option>
                 ${data.cards.filter(card => !card.is_frozen).map(card => `
                     <option value="${card.id}">
-                        Card ending in ${card.card_number.slice(-4)}
+                        Card ending in ${card.card_number.slice(-4)} 
                         (${card.currency}: ${formatCurrencyAmount(card.balance, card.currency)})
                     </option>
                 `).join('')}
@@ -970,7 +970,7 @@ async function handleBillPayment(event) {
         payment_method: formData.get('payment_method'),
         description: formData.get('description') || 'Bill Payment'
     };
-
+    
     if (jsonData.payment_method === 'virtual_card') {
         jsonData.card_id = parseInt(formData.get('card_id'));
     }
@@ -1067,7 +1067,7 @@ let chatHistory = [];
 document.addEventListener('DOMContentLoaded', function() {
     // Set initial time for welcome message
     document.getElementById('initialTime').textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-
+    
     // Add enter key listener for chat input
     document.getElementById('chatMessageInput').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
@@ -1080,7 +1080,7 @@ function toggleChat() {
     const chatWindow = document.getElementById('chatWindow');
     const chatBadge = document.getElementById('chatBadge');
     const chatWidget = document.getElementById('chatWidget');
-
+    
     if (chatOpen) {
         // Close chat
         chatWindow.classList.add('closing');
@@ -1099,10 +1099,10 @@ function toggleChat() {
             chatWindow.classList.remove('opening');
         }, 300);
         chatOpen = true;
-
+        
         // Hide notification badge
         chatBadge.style.display = 'none';
-
+        
         // Focus input
         setTimeout(() => {
             document.getElementById('chatMessageInput').focus();
@@ -1113,36 +1113,36 @@ function toggleChat() {
 function sendChatMessage() {
     const input = document.getElementById('chatMessageInput');
     const message = input.value.trim();
-
+    
     if (!message) return;
-
+    
     // Check for special commands
     if (message.toLowerCase() === '/status' || message.toLowerCase() === '/rate-limit') {
         // Add user message to chat
         addMessageToChat(message, true);
-
+        
         // Clear input
         input.value = '';
-
+        
         // Show typing indicator briefly
         const typingIndicator = document.getElementById('typingIndicator');
         typingIndicator.style.display = 'flex';
-
+        
         setTimeout(() => {
             typingIndicator.style.display = 'none';
             checkRateLimitStatus();
         }, 500);
-
+        
         return;
     }
-
+    
     if (message.toLowerCase() === '/help' || message.toLowerCase() === '/commands') {
         // Add user message to chat
         addMessageToChat(message, true);
-
+        
         // Clear input
         input.value = '';
-
+        
         const helpMessage = `🤖 **Available Commands:**\n\n` +
             `• **/help** - Show this help message\n` +
             `• **/status** or **/rate-limit** - Check your current rate limit status\n` +
@@ -1151,27 +1151,27 @@ function sendChatMessage() {
             `• Anonymous: 5 requests per 3 hours\n` +
             `• Authenticated: 10 requests per 3 hours\n\n` +
             `Just type your question to chat with the AI assistant!`;
-
+        
         setTimeout(() => {
             addMessageToChat(helpMessage, false);
         }, 300);
-
+        
         return;
     }
-
+    
     // Add user message to chat
     addMessageToChat(message, true);
-
+    
     // Clear input
     input.value = '';
-
+    
     // Disable send button and show typing indicator
     const sendBtn = document.getElementById('sendChatBtn');
     const typingIndicator = document.getElementById('typingIndicator');
-
+    
     sendBtn.disabled = true;
     typingIndicator.style.display = 'flex';
-
+    
     // Send message to AI
     sendToAI(message);
 }
@@ -1179,13 +1179,13 @@ function sendChatMessage() {
 function addMessageToChat(message, isUser = false, timestamp = null) {
     const messagesContainer = document.getElementById('chatMessages');
     const messageTime = timestamp || new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-
+    
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
-
+    
     messageDiv.innerHTML = `
         <div class="message-avatar">
-            ${isUser ?
+            ${isUser ? 
                 `<svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
                 </svg>` :
@@ -1199,7 +1199,7 @@ function addMessageToChat(message, isUser = false, timestamp = null) {
             <div class="message-time">${messageTime}</div>
         </div>
     `;
-
+    
     messagesContainer.appendChild(messageDiv);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
@@ -1209,10 +1209,10 @@ async function sendToAI(message) {
         // Get selected chat mode
         const selectedMode = document.querySelector('input[name="chatMode"]:checked').value;
         const token = localStorage.getItem('jwt_token');
-
+        
         // Determine endpoint and headers based on mode
         let endpoint, headers;
-
+        
         if (selectedMode === 'authenticated') {
             endpoint = '/api/ai/chat';
             headers = {
@@ -1225,21 +1225,21 @@ async function sendToAI(message) {
                 'Content-Type': 'application/json'
             };
         }
-
+        
         const response = await fetch(endpoint, {
             method: 'POST',
             headers: headers,
             body: JSON.stringify({ message: message })
         });
-
+        
         const data = await response.json();
-
+        
         // Hide typing indicator
         document.getElementById('typingIndicator').style.display = 'none';
-
+        
         // Re-enable send button
         document.getElementById('sendChatBtn').disabled = false;
-
+        
         if (response.status === 429) {
             // Handle rate limiting specifically
             const rateLimitInfo = data.rate_limit_info || {};
@@ -1247,9 +1247,9 @@ async function sendToAI(message) {
             const currentCount = rateLimitInfo.current_count || 'unknown';
             const limit = rateLimitInfo.limit || 'unknown';
             const windowHours = rateLimitInfo.window_hours || 3;
-
+            
             let rateLimitMessage = `🚫 **Rate Limit Exceeded**\n\n`;
-
+            
             if (limitType === 'unauthenticated_ip') {
                 rateLimitMessage += `You've reached the limit for anonymous users: **${currentCount}/${limit} requests** in the last ${windowHours} hours.\n\n`;
                 rateLimitMessage += `💡 **Tip**: Log in to get higher limits (10 requests per 3 hours)`;
@@ -1263,14 +1263,14 @@ async function sendToAI(message) {
                 rateLimitMessage += `${data.message || 'Too many requests. Please try again later.'}\n\n`;
                 rateLimitMessage += `You can check your rate limit status in the chat options.`;
             }
-
+            
             setTimeout(() => {
                 addMessageToChat(rateLimitMessage, false);
             }, 500);
-
+            
         } else if (data.status === 'success') {
             const aiResponse = data.ai_response.response || 'Sorry, I couldn\'t process your request.';
-
+            
             // Add mode indicator to response for debugging
             let responseWithMode = aiResponse;
             if (selectedMode === 'anonymous') {
@@ -1278,16 +1278,16 @@ async function sendToAI(message) {
             } else {
                 responseWithMode += '\n\n🔐 (Authenticated Mode - User context included)';
             }
-
+            
             // Add AI response with slight delay for realism
             setTimeout(() => {
                 addMessageToChat(responseWithMode, false);
             }, 500);
-
+            
         } else {
             // Handle other API errors (400, 401, 500, etc.)
             let errorMsg = 'Sorry, I\'m experiencing technical difficulties. Please try again later.';
-
+            
             if (response.status === 401) {
                 errorMsg = '🔐 **Authentication Error**\n\nYour session has expired. Please log in again or switch to Anonymous mode.';
             } else if (response.status === 400) {
@@ -1298,29 +1298,29 @@ async function sendToAI(message) {
                 // Use the specific error message from the server
                 errorMsg = '⚠️ **Error**\n\n' + data.message;
             }
-
+            
             setTimeout(() => {
                 addMessageToChat(errorMsg, false);
             }, 500);
         }
-
+        
     } catch (error) {
         console.error('Chat error:', error);
-
+        
         // Hide typing indicator
         document.getElementById('typingIndicator').style.display = 'none';
-
+        
         // Re-enable send button
         document.getElementById('sendChatBtn').disabled = false;
-
+        
         // Show error message with mode awareness
         const selectedMode = document.querySelector('input[name="chatMode"]:checked').value;
         let errorMsg = 'I\'m currently unable to connect. Please check your internet connection and try again.';
-
+        
         if (selectedMode === 'authenticated' && error.message && error.message.includes('token')) {
             errorMsg = 'Authentication failed. Please try logging in again or switch to Anonymous mode.';
         }
-
+        
         setTimeout(() => {
             addMessageToChat(errorMsg, false);
         }, 500);
@@ -1343,25 +1343,25 @@ async function checkRateLimitStatus() {
     try {
         const token = localStorage.getItem('jwt_token');
         const headers = {};
-
+        
         // Include auth header if available for more detailed status
         if (token) {
             headers['Authorization'] = `Bearer ${token}`;
         }
-
+        
         const response = await fetch('/api/ai/rate-limit-status', {
             headers: headers
         });
-
+        
         if (response.ok) {
             const data = await response.json();
             const unauth = data.rate_limits.unauthenticated;
             const auth = data.rate_limits.authenticated;
-
+            
             let statusMessage = `📊 **Current Rate Limit Status**\n\n`;
             statusMessage += `**Anonymous Mode:**\n`;
             statusMessage += `${unauth.requests_made}/${unauth.limit} requests used (${unauth.remaining || 0} remaining)\n\n`;
-
+            
             if (data.authenticated_user) {
                 statusMessage += `**Authenticated Mode (${data.authenticated_user.username}):**\n`;
                 statusMessage += `User: ${auth.user_requests_made}/${auth.limit} requests used (${auth.user_remaining || 0} remaining)\n`;
@@ -1370,9 +1370,9 @@ async function checkRateLimitStatus() {
                 statusMessage += `**Authenticated Mode:**\n`;
                 statusMessage += `Log in to see your authenticated rate limits\n\n`;
             }
-
+            
             statusMessage += `Rate limits reset every ${unauth.window_hours} hours.`;
-
+            
             addMessageToChat(statusMessage, false);
         } else {
             addMessageToChat('❌ Unable to check rate limit status. Please try again later.', false);
@@ -1400,7 +1400,7 @@ function addWelcomeMessage() {
             `• Type **/status** to check your rate limits\n` +
             `• Switch between Anonymous (5 requests/3hrs) and Authenticated (10 requests/3hrs) modes above\n\n` +
             `Ask me about your account, transactions, or any banking questions!`;
-
+        
         chatHistory.push({
             message: welcomeMsg,
             isUser: false,

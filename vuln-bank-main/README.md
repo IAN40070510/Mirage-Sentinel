@@ -449,7 +449,7 @@ Contributions are welcome! Feel free to:
 
 ## 📝 Blog Write-Up
 
-A detailed walkthrough about this lab and my findings here:
+A detailed walkthrough about this lab and my findings here:  
 👇 Read the Blog By [DghostNinja](https://github.com/DghostNinja)
 
 (https://dghostninja.github.io/posts/Vulnerable-Bank-API/)

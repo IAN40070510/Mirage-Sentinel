@@ -82,7 +82,7 @@ services:
 
   vuln_bank:
     build:
-      context: ./vuln-bank-main/vuln-bank-main
+      context: ./vuln-bank-main
       dockerfile: Dockerfile
     container_name: mirage_sentinel_vuln_bank
     restart: unless-stopped
@@ -94,7 +94,7 @@ services:
       - DB_PORT=5432
       - DEEPSEEK_API_KEY=
     volumes:
-      - ./vuln-bank-main/vuln-bank-main/static/uploads:/app/static/uploads
+      - ./vuln-bank-main/static/uploads:/app/static/uploads
     depends_on:
       vuln_bank_db:
         condition: service_healthy

@@ -73,11 +73,11 @@
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('loginForm').addEventListener('submit', async (event) => {
                 event.preventDefault();
-
+                
                 const formData = new FormData(event.target);
                 const jsonData = {};
                 formData.forEach((value, key) => jsonData[key] = value);
-
+                
                 try {
                     const response = await fetch('/login', {
                         method: 'POST',
@@ -86,9 +86,9 @@
                         },
                         body: JSON.stringify(jsonData)
                     });
-
+                    
                     const data = await response.json();
-
+                    
                     if (data.status === 'success' && data.token) {
                         // Vulnerability: Token stored in localStorage (intentionally vulnerable)
                         localStorage.setItem('jwt_token', data.token);

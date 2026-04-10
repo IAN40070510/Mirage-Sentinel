@@ -281,7 +281,7 @@ npm --prefix frontend run start:customer
 
 OCI 線上環境：
 
-- 銀行入口：http://161.33.154.211/banking/（OCI 80 直接轉發到 `vuln-bank-main/vuln-bank-main`）
+- 銀行入口：http://161.33.154.211/banking/（OCI 80 直接轉發到 `vuln-bank-main`）
 - 資安戰情室入口：http://161.33.154.211:3000/
 
 ### Docker 部署（本地）
