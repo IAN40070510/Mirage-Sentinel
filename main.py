@@ -62,7 +62,8 @@ from api import dashboard
 from api.db.session import init_db, create_tables, seed_banking_demo_data
 
 # 暫時停用模型載入，保留啟動流程。
-# import model.ai_sentinel as model
+from model.ai_sentinel import load_sentinel_model
+
 # from model.llama import generate_fake_data_llama
 # sys.modules["__main__"].SentinelModule = model.SentinelModule
 # sys.modules["__main__"].SecurityExtractor = model.SecurityExtractor
@@ -78,7 +79,7 @@ feature_store = get_feature_store()
 # ===== API Key 設定 =====
 # API_KEY 主要用於 Dashboard 驗證；當 Dashboard 關閉時，允許以警告模式啟動。
 API_KEY = os.getenv("API_KEY", "").strip()
-ai_sentinel = None
+ai_sentinel = load_sentinel_model()
 
 
 def _is_placeholder_secret(secret: str) -> bool:
@@ -231,7 +232,7 @@ app.add_middleware(
 
 
 # 自定義 OpenAPI schema 生成：根據 ENABLE_DASHBOARD 過濾文檔
-def custom_openapi() -> dict:
+def custom_openapi() -> dict[str, object]:
     """
     生成 OpenAPI schema，當 ENABLE_DASHBOARD=false 時，隱藏 Dashboard 路由。
     符合 AGENTS.md 安全規範：公開蜜罐不應暴露敏感監控功能。
@@ -443,7 +444,7 @@ def _inject_mouse_tracker_html(content: bytes, content_type: str | None) -> byte
 
 
 @app.get("/")
-async def root() -> dict:
+async def root() -> dict[str, object]:
     """服務根節點：提供健康入口與文件連結。"""
     return {
         "service": "Mirage-Sentinel API Gateway",
@@ -616,7 +617,7 @@ async def _proxy_banking_request(
     response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
     should_intercept = (is_attack and confidence > 0.75) or bool(risk_reasons)
-    event_payload = {
+    event_payload: dict[str, object] = {
         "request_at": request_at,
         "response_at": response_at,
         "process_ms": process_ms,
