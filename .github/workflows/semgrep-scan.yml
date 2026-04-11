@@ -1,0 +1,149 @@
+name: Semgrep Security Scan
+
+"on":
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  semgrep-scan:
+    name: SAST Scan
+    runs-on: ubuntu-latest
+
+    outputs:
+      finding_count: ${{ steps.parse.outputs.finding_count }}
+      error_count: ${{ steps.parse.outputs.error_count }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run Semgrep (JSON output)
+        run: |
+          semgrep \
+            --config=p/owasp-top-ten \
+            --config=p/sql-injection \
+            --config=p/jwt \
+            --config=p/secrets \
+            --config=p/flask \
+            --config=p/python \
+            --json \
+            --output=semgrep-report.json \
+            . || true
+
+      - name: Run Semgrep (Text output)
+        run: |
+          semgrep \
+            --config=p/owasp-top-ten \
+            --config=p/sql-injection \
+            --config=p/jwt \
+            --config=p/secrets \
+            --config=p/flask \
+            --config=p/python \
+            --output=semgrep-report.txt \
+            . || true
+
+      - name: Parse & Print Summary
+        id: parse
+        run: |
+          python3 -c "
+          import json, os
+
+          with open('semgrep-report.json') as f:
+              data = json.load(f)
+
+          results = data.get('results', [])
+          total = len(results)
+
+          from collections import Counter
+          sev = Counter(r['extra']['severity'] for r in results)
+          errors   = sev.get('ERROR', 0)
+          warnings = sev.get('WARNING', 0)
+          infos    = sev.get('INFO', 0)
+
+          print('=' * 50)
+          print('Semgrep 掃描結果摘要')
+          print('=' * 50)
+          print(f'總計發現   : {total}')
+          print(f'🔴 ERROR   : {errors}')
+          print(f'🟠 WARNING : {warnings}')
+          print(f'🔵 INFO    : {infos}')
+          print()
+
+          for r in results:
+              icon = {'ERROR':'🔴','WARNING':'🟠','INFO':'🔵'}.get(r['extra']['severity'],'⚪')
+              print(f\"{icon} [{r['extra']['severity']}] {r['check_id']}\")
+              print(f\"   {r['path']} 第 {r['start']['line']} 行\")
+              msg = r['extra'].get('message','')[:120]
+              print(f\"   {msg}\")
+              print()
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
+              print(f'finding_count={total}', file=fh)
+              print(f'error_count={errors}', file=fh)
+          "
+
+      - name: Upload Reports as Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-report-${{ github.sha }}
+          path: |
+            semgrep-report.json
+            semgrep-report.txt
+          retention-days: 30
+
+      # ── 可選：ERROR 等級漏洞時阻擋後續 deploy，取消註解啟用 ──
+      # - name: Block deploy on HIGH findings
+      #   if: steps.parse.outputs.error_count > 0
+      #   run: |
+      #     echo "發現 ${{ steps.parse.outputs.error_count }} 個高危漏洞，阻擋部署！"
+      #     exit 1
+
+  # ============================================
+  # 掃完後把報告上傳到 Oracle VM
+  # ============================================
+  upload-report:
+    name: 📤 Upload Report to Oracle VM
+    runs-on: ubuntu-latest
+    needs: semgrep-scan
+    if: github.ref == 'refs/heads/main'   # 只有 push main 才上傳
+
+    steps:
+      - name: Download Semgrep Report
+        uses: actions/download-artifact@v4
+        with:
+          name: semgrep-report-${{ github.sha }}
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.OCI_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H -p ${{ secrets.OCI_PORT }} ${{ secrets.OCI_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Upload Report to VM
+        run: |
+          REPORT_DIR="~/Mirage-Sentinel/security-reports"
+          REPORT_NAME="semgrep-$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA::8}.json"
+
+          ssh -p ${{ secrets.OCI_PORT }} \
+            ${{ secrets.OCI_USER }}@${{ secrets.OCI_HOST }} \
+            "mkdir -p $REPORT_DIR"
+
+          scp -P ${{ secrets.OCI_PORT }} semgrep-report.json \
+            ${{ secrets.OCI_USER }}@${{ secrets.OCI_HOST }}:$REPORT_DIR/$REPORT_NAME
+
+          echo "報告已上傳至 VM: $REPORT_DIR/$REPORT_NAME"
+          echo "本次發現: ${{ needs.semgrep-scan.outputs.finding_count }} 個"
