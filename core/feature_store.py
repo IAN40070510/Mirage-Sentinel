@@ -4,8 +4,6 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-import redis
-
 logger = logging.getLogger(__name__)
 
 
@@ -22,7 +20,9 @@ class RedisFeatureStore:
 
     def __init__(self):
         self.enabled = False
-        self.client: Any = None
+        import redis  # 避免型別循環
+
+        self.client: redis.Redis | None = None
         self.window_seconds = int(os.getenv("REDIS_FEATURE_WINDOW_SECONDS", "300"))
         self.key_ttl_seconds = int(os.getenv("REDIS_FEATURE_TTL_SECONDS", "86400"))
         self._init_client()
@@ -34,10 +34,14 @@ class RedisFeatureStore:
             return
 
         try:
-            self.client = redis.Redis.from_url(
-                redis_url, decode_responses=True
-            )  # pyright: ignore[reportUnknownMemberType]
-            self.client.ping()
+            import redis
+            from typing import cast
+
+            self.client = cast(
+                redis.Redis,
+                redis.Redis.from_url(redis_url, decode_responses=True),  # type: ignore
+            )  # type: ignore
+            self.client.ping()  # type: ignore
             self.enabled = True
             logger.info("Redis Feature Store 已連線。")
         except Exception as exc:
@@ -64,7 +68,7 @@ class RedisFeatureStore:
         event_member = f"{now_ms}:{device_id}:{time.time_ns()}"
 
         try:
-            pipeline: Any = self.client.pipeline(transaction=False)
+            pipeline: Any = self.client.pipeline(transaction=False)  # type: ignore
             pipeline.sadd(user_devices_key, device_id)
             pipeline.expire(user_devices_key, self.key_ttl_seconds)
 
@@ -91,7 +95,7 @@ class RedisFeatureStore:
         user_events_key = self._safe_key("user_events", user_id)
 
         try:
-            pipeline: Any = self.client.pipeline(transaction=False)
+            pipeline: Any = self.client.pipeline(transaction=False)  # type: ignore
             pipeline.scard(user_devices_key)
             pipeline.scard(device_users_key)
             pipeline.zcount(user_events_key, now_ts - self.window_seconds, now_ts)

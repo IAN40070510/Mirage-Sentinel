@@ -110,11 +110,11 @@ class SentinelEngine:
         if loaded_count > 0:
             self.automaton.make_automaton()
             self.automaton_ready = True
-            logger.info(f"✅ Sentinel 核心已武裝！總計載入 {loaded_count} 筆簽名")
+            logger.info(f"Sentinel 核心已武裝！總計載入 {loaded_count} 筆簽名")
         else:
             self.automaton_ready = False
             logger.error(
-                "❌ Sentinel 未載入到任何簽名字典，將以安全降級模式運行（所有請求視為非攻擊）。"
+                "Sentinel 未載入到任何簽名字典，將以安全降級模式運行（所有請求視為非攻擊）。"
             )
 
     def _recursive_url_decode(self, text: str, depth=0) -> str:
