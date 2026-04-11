@@ -9,6 +9,11 @@ DB_PATH = os.path.join(PROJECT_ROOT, "data", "traffic_logs.db")
 
 
 def get_connection():
+    """
+    取得 traffic_logs.db 的 SQLite 連線（僅供 SOC/後台分析使用）。
+    若資料庫不存在則拋出 FileNotFoundError。
+    嚴禁於 Mirage-Sentinel 誘餌主機直接調用。
+    """
     if not os.path.exists(DB_PATH):
         raise FileNotFoundError(f"Traffic DB not initialized: {DB_PATH}")
     conn = sqlite3.connect(DB_PATH)
@@ -17,9 +22,17 @@ def get_connection():
 
 
 def get_attack_summary(limit: int = 100):
+    """
+    取得近期攻擊事件摘要。
+    僅供 SOC/後台分析模組查詢 traffic_logs.db，回傳攻擊事件的詳細欄位。
+    參數：
+        limit (int): 回傳筆數上限，預設 100。
+    回傳：
+        list[dict]: 攻擊事件列表，每筆為 dict。
+    注意：禁止於 Mirage-Sentinel 誘餌主機直接調用。
+    """
     conn = get_connection()
     cursor = conn.cursor()
-
     cursor.execute(
         """
         SELECT t.id, t.request_at, t.response_at, c.ip AS client_ip,
@@ -35,25 +48,27 @@ def get_attack_summary(limit: int = 100):
     """,
         (limit,),
     )
-
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
 
 
 def get_traffic_stats():
+    """
+    統計 traffic_logs.db 內總流量、攻擊流量、正常流量與攻擊率。
+    僅供 SOC/後台分析模組查詢。
+    回傳：
+        dict: {"total", "attacks", "normals", "attack_rate"}
+    注意：禁止於 Mirage-Sentinel 誘餌主機直接調用。
+    """
     conn = get_connection()
     cursor = conn.cursor()
-
     cursor.execute("SELECT COUNT(1) AS total FROM traffic_logs")
     total = cursor.fetchone()["total"]
-
     cursor.execute("SELECT COUNT(1) AS attacks FROM traffic_logs WHERE is_attack = 1")
     attacks = cursor.fetchone()["attacks"]
-
     cursor.execute("SELECT COUNT(1) AS normals FROM traffic_logs WHERE is_attack = 0")
     normals = cursor.fetchone()["normals"]
-
     conn.close()
     return {
         "total": total,
@@ -64,30 +79,11 @@ def get_traffic_stats():
 
 
 def get_client_profile(client_ip: str):
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        "SELECT id, ip, polluted_status FROM clients WHERE ip = ?", (client_ip,)
-    )
-    client = cursor.fetchone()
-    if not client:
-        conn.close()
-        return {}
-
-    cursor.execute(
-        """
-        SELECT t.id, t.request_at, t.response_at, t.query_id, t.is_attack,
-               d.attack_vector, d.risk_level, d.hits, d.interaction_depth, d.dwell_time
-        FROM traffic_logs t
-        LEFT JOIN attack_details d ON d.traffic_log_id = t.id
-        WHERE t.client_id = ?
-        ORDER BY t.request_at DESC
-        LIMIT 50
-    """,
-        (client["id"],),
-    )
-
-    events = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return {"client": dict(client), "events": events}
+    """
+    查詢指定 IP 的客戶端資料與互動事件紀錄。
+    僅供 SOC/後台分析模組查詢。
+    參數：
+        client_ip (str): 目標客戶端 IP。
+    回傳：
+        dict: {"client": {...}, "events": [...]}
+    """

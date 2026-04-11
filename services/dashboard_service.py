@@ -263,36 +263,29 @@ def get_hacker_dwell_time(client_ip: str) -> dict[str, Any]:
         }
 
 
-def analyze_interaction_depth(client_ip: str, query_id: str) -> dict[str, Any]:
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT COUNT(*)
-                FROM traffic_logs t
-                JOIN clients c ON c.id = t.client_id
-                WHERE c.ip = ? AND t.query_id = ? AND t.is_attack = 1
-                """,
-                (client_ip, query_id),
-            )
-            total_actions = int((cursor.fetchone() or [0])[0])
+from core.deception_engine import compute_interaction_metrics
 
-        return {
-            "client_ip": client_ip,
-            "query_id": query_id,
-            "interaction_depth": total_actions,
-            "depth_level": total_actions,
-            "total_actions": total_actions,
-        }
+
+def analyze_interaction_depth(client_ip: str, query_id: str) -> dict[str, Any]:
+    """
+    進階互動深度分析：回傳多維度誘餌擬真度與攻擊者信任度指標，供 SOC 前端判斷。
+    """
+    try:
+        # 這裡 current_payload 與 has_memory_hit 可依需求調整，先設為 None/False
+        metrics = compute_interaction_metrics(
+            client_ip=client_ip,
+            query_id=query_id,
+            current_payload=None,
+            has_memory_hit=False,
+        )
+        metrics["client_ip"] = client_ip
+        metrics["query_id"] = query_id
+        return metrics
     except Exception as exc:
         logger.error("Failed to analyze interaction depth for %s: %r", client_ip, exc)
         return {
             "client_ip": client_ip,
             "query_id": query_id,
-            "interaction_depth": 0,
-            "depth_level": 0,
-            "total_actions": 0,
             "error": str(exc),
         }
 
@@ -806,7 +799,12 @@ def auto_updates() -> dict[str, Any]:
     }
 
 
-def set_log_category(category_name: str, items: list | None = None) -> dict[str, Any]:
+from typing import Any
+
+
+def set_log_category(
+    category_name: str, items: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
     return {"category_name": category_name, "items": items or [], "status": "ready"}
 
 

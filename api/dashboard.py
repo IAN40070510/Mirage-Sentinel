@@ -17,11 +17,12 @@ class MisjudgmentRequest(BaseModel):
     )
 
 
-class CategoryRequest(BaseModel):
+# Renamed to avoid redeclaration error
+class DashboardCategoryRequest(BaseModel):
     category_name: str = Field(
         ..., min_length=1, max_length=100, description="Category name"
     )
-    items: list | None = None
+    items: list[str] | None = None
 
 
 class CommandRequest(BaseModel):
@@ -38,8 +39,11 @@ def verify_api_key(x_api_key: str | None):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
+from typing import Dict, Any
+
+
 @router.get("", summary="Dashboard API 入口")
-async def dashboard_root():
+async def dashboard_root() -> Dict[str, Any]:
     return {
         "service": "Mirage Dashboard API",
         "hint": "Use /api/v1/dashboard/* endpoints with X-API-Key",
@@ -174,7 +178,23 @@ async def get_ip_detail(
         ) from exc
 
 
-@router.get("/report/{client_ip}", summary="生成特定駭客行為報告書")
+# --- Add Pydantic model for report response ---
+from pydantic import BaseModel
+from typing import Any
+
+
+class HackerReportResponse(BaseModel):
+    report_title: str
+    summary: Any
+    details: Any
+    full_trajectory: Any
+
+
+@router.get(
+    "/report/{client_ip}",
+    summary="生成特定駭客行為報告書",
+    response_model=HackerReportResponse,
+)
 async def get_hacker_report(
     client_ip: str,
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
@@ -186,12 +206,12 @@ async def get_hacker_report(
         details = ws.get_ip_details(client_ip)
         if not details:
             raise HTTPException(status_code=404, detail="查無此 IP 紀錄")
-        return {
-            "report_title": f"Hacker Forensic Report - {client_ip}",
-            "summary": analysis,
-            "details": details,
-            "full_trajectory": timeline,
-        }
+        return HackerReportResponse(
+            report_title=f"Hacker Forensic Report - {client_ip}",
+            summary=analysis,
+            details=details,
+            full_trajectory=timeline,
+        )
     except HTTPException:
         raise
     except Exception as exc:
@@ -225,6 +245,31 @@ async def get_traffic_compare(
         raise HTTPException(status_code=500, detail=f"取得流量比較失敗: {exc}") from exc
 
 
+# 假設 CategoryItem 為 items 的型別，若未定義則補上
+from typing import Any
+from pydantic import BaseModel
+
+
+class CategoryItem(BaseModel):
+    # 根據實際 items 結構調整欄位
+    name: str
+    value: Any
+
+
+class CategoryRequest(BaseModel):
+    category_name: str
+    items: list[CategoryItem] | None = None
+
+
+# 明確指定 set_log_category 的 items 型別
+from typing import TypedDict
+
+
+class LogCategoryItem(TypedDict):
+    name: str
+    value: Any
+
+
 @router.post("/set_category", summary="設定前端分類資料")
 async def post_set_category(
     req: CategoryRequest,
@@ -232,7 +277,11 @@ async def post_set_category(
 ):
     verify_api_key(x_api_key)
     try:
-        return ws.set_log_category(req.category_name, req.items)
+        # 型別安全：直接產生 list[dict[str, Any]] | None
+        items: list[dict[str, Any]] | None = (
+            [item.model_dump() for item in req.items] if req.items is not None else None
+        )
+        return ws.set_log_category(req.category_name, items)
     except Exception as exc:
         logger.error("設定分類失敗: %r", exc)
         raise HTTPException(status_code=500, detail=f"設定分類失敗: {exc}") from exc

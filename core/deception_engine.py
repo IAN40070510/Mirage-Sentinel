@@ -3,15 +3,15 @@ import re
 import urllib.parse
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from core.traffic_db import get_connection
 
+
 # 模組層級快取：簽名檔案（避免重複讀檔）
-_SIGNATURES_CACHE: dict[str, Any] | None = None
+_signatures_cache: dict[str, dict[str, list[str]]] | None = None
 
 
-def _default_signatures() -> dict[str, Any]:
+def _default_signatures() -> dict[str, dict[str, list[str]]]:
     return {
         "deep_markers": {
             "admin_endpoints": ["/api/admin", "/api/salary", "/api/internal"],
@@ -26,22 +26,17 @@ def _default_signatures() -> dict[str, Any]:
     }
 
 
-def _merge_signatures(base: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+def _merge_signatures(
+    base: dict[str, dict[str, list[str]]], incoming: dict[str, dict[str, list[str]]]
+) -> dict[str, dict[str, list[str]]]:
     # 逐分類合併並去重，保留原始順序。
     for section in ("deep_markers", "tool_signatures"):
         base.setdefault(section, {})
         incoming_section = incoming.get(section, {})
-        if not isinstance(incoming_section, dict):
-            continue
-
         for category, items in incoming_section.items():
-            if not isinstance(items, list):
-                continue
-            existing = base[section].setdefault(category, [])
+            existing: list[str] = base[section].setdefault(category, [])
             seen = set(existing)
             for item in items:
-                if not isinstance(item, str):
-                    continue
                 normalized = item.strip().lower()
                 if normalized and normalized not in seen:
                     existing.append(normalized)
@@ -49,12 +44,12 @@ def _merge_signatures(base: dict[str, Any], incoming: dict[str, Any]) -> dict[st
     return base
 
 
-def _load_attack_signatures() -> dict[str, Any]:
+def _load_attack_signatures() -> dict[str, dict[str, list[str]]]:
     """載入並合併多來源簽名，避免單一來源覆蓋造成資料遺失。"""
-    global _SIGNATURES_CACHE
+    global _signatures_cache
 
-    if _SIGNATURES_CACHE is not None:
-        return _SIGNATURES_CACHE
+    if _signatures_cache is not None:
+        return _signatures_cache
 
     repo_root = Path(__file__).parent.parent
     # 單一可信來源：僅讀取 data/，避免 scripts/data 舊檔污染評分。
@@ -63,7 +58,10 @@ def _load_attack_signatures() -> dict[str, Any]:
         repo_root / "data" / "attack_signatures.json",
     ]
 
-    merged = {"deep_markers": {}, "tool_signatures": {}}
+    merged: dict[str, dict[str, list[str]]] = {
+        "deep_markers": {},
+        "tool_signatures": {},
+    }
     loaded_any = False
 
     for sig_file in candidate_files:
@@ -80,11 +78,11 @@ def _load_attack_signatures() -> dict[str, Any]:
         except Exception as e:
             print(f"[!] 解析簽名檔失敗 {sig_file}: {e}")
 
-    _SIGNATURES_CACHE = merged if loaded_any else _default_signatures()
-    return _SIGNATURES_CACHE
+    _signatures_cache = merged if loaded_any else _default_signatures()
+    return _signatures_cache
 
 
-def _parse_signature_txt(filepath: Path) -> dict[str, Any]:
+def _parse_signature_txt(filepath: Path) -> dict[str, dict[str, list[str]]]:
     """解析 attack_signatures.txt（INI-like 格式）
 
     格式：
@@ -93,7 +91,10 @@ def _parse_signature_txt(filepath: Path) -> dict[str, Any]:
 
     # 這是註解
     """
-    signatures = {"deep_markers": {}, "tool_signatures": {}}
+    signatures: dict[str, dict[str, list[str]]] = {
+        "deep_markers": {},
+        "tool_signatures": {},
+    }
     current_category = None
     current_section = "deep_markers"
     deep_categories = {
@@ -201,7 +202,9 @@ def _normalize_payload(payload: str) -> str:
     return normalized.lower()
 
 
-def _detect_attack_pattern(payload: str, tool_signatures: dict) -> tuple[bool, str]:
+def _detect_attack_pattern(
+    payload: str, tool_signatures: dict[str, list[str]]
+) -> tuple[bool, str]:
     """檢測是否包含已知攻擊工具或模式簽名
 
     返回：(是否匹配, 匹配的簽名類別)
@@ -224,11 +227,15 @@ def _payload_complexity(payload: str) -> float:
     return specials / max(len(payload), 1)
 
 
+from typing import Optional
+from datetime import datetime
+
+
 def _funnel_level(
     payload: str,
     endpoint_coverage: int,
     has_memory_hit: bool,
-    attack_times: list | None = None,
+    attack_times: Optional[list[datetime]] = None,
 ) -> int:
     """漏斗層級判定（L1~L3），加強防禦編碼/工具化攻擊
 
@@ -250,7 +257,7 @@ def _funnel_level(
 
     # 抽取所有深層標記（展平所有類別）
     deep_markers_by_category = signatures.get("deep_markers", {})
-    deep_markers = set()
+    deep_markers: set[str] = set()
     for category_marks in deep_markers_by_category.values():
         deep_markers.update(category_marks)
 
@@ -265,7 +272,7 @@ def _funnel_level(
         return 3
 
     # 條件 3：工具簽名偵測 → L3
-    is_tool_detected, category = _detect_attack_pattern(payload or "", tool_signatures)
+    is_tool_detected, _ = _detect_attack_pattern(payload or "", tool_signatures)
     if is_tool_detected:
         return 3
 
@@ -292,8 +299,32 @@ def compute_interaction_metrics(
     query_id: str,
     current_payload: str | None,
     has_memory_hit: bool,
-) -> dict[str, Any]:
-    """以欺敵成效量化互動深度，輸出四維度與總分。"""
+) -> dict[str, int]:
+    """
+    [SOC 專用] 量化駭客對誘餌系統的信任度與擬真度指標。
+
+    本函式會分析單一攻擊者(client_ip)在 Mirage-Sentinel 誘餌環境中的互動行為，
+    綜合評分其「攻擊深度」、「探索廣度」、「行為演化」與「停留時間」，
+    以推估攻擊者是否誤信本系統為真實目標，並提供給 SOC 前端儀表板做可視化。
+
+    主要用途：
+    - 讓 SOC 團隊一眼判斷誘餌成效(駭客是否投入大量資源、是否進行多樣化攻擊、是否長時間停留)。
+    - 作為誘餌系統「擬真度」與「攻擊者信任度」的量化依據。
+
+    回傳欄位說明：
+        depth_score (int): 綜合擬真度分數(0~100，愈高代表駭客愈信任誘餌、互動愈深入)
+        funnel_level (int): 漏斗層級(1=新手/試探，2=重複攻擊，3=高信任/自動化工具)
+        dwell_seconds (int): 攻擊者在誘餌系統的總停留秒數
+        endpoint_coverage (int): 攻擊過的不同 API/端點數量(愈多代表探索愈廣)
+        payload_evolution_score (int): 攻擊 payload 的多樣性與複雜度分數
+        funnel_score (int): 層級分數(依 funnel_level 對應 25/60/100)
+        dwell_score (int): 停留時間分數(愈久愈高)
+        coverage_score (int): 端點探索分數(愈多愈高)
+        unique_payloads (int): 不同 payload 數量
+
+    SOC 可依 depth_score 與 funnel_level 快速判斷誘餌成效，
+    其餘欄位可用於細部行為分析與報表。
+    """
     # 讀取同一攻擊者歷史攻擊資料，作為四維度評分基礎
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -311,9 +342,9 @@ def compute_interaction_metrics(
         )
         rows = cursor.fetchall()
 
-    attack_times = []
-    query_ids = set()
-    payloads = []
+    attack_times: list[datetime] = []
+    query_ids: set[str] = set()
+    payloads: list[str] = []
     for row in rows:
         ts = parse_db_timestamp(row[0])
         if ts:
@@ -325,8 +356,8 @@ def compute_interaction_metrics(
 
     # 停留時間：首筆攻擊到最後一筆攻擊（秒）
     if attack_times:
-        first_seen = attack_times[0]
-        last_seen = attack_times[-1]
+        first_seen: datetime = attack_times[0]
+        last_seen: datetime = attack_times[-1]
         dwell_seconds = max(int((last_seen - first_seen).total_seconds()), 0)
     else:
         dwell_seconds = 0
