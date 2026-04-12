@@ -68,6 +68,7 @@ def setup_traffic_db():
         endpoint TEXT,
         client_id INTEGER NOT NULL,
         fingerprint_id INTEGER,
+        principal_id TEXT,
         query_id TEXT,
         device_id TEXT,
         referer TEXT,
@@ -119,6 +120,7 @@ def setup_traffic_db():
     # 兼容既有 DB：若 traffic_logs 為舊 schema，補齊新特徵欄位。
     _ensure_column(conn, "traffic_logs", "method TEXT")
     _ensure_column(conn, "traffic_logs", "endpoint TEXT")
+    _ensure_column(conn, "traffic_logs", "principal_id TEXT")
     _ensure_column(conn, "traffic_logs", "device_id TEXT")
     _ensure_column(conn, "traffic_logs", "referer TEXT")
     _ensure_column(conn, "traffic_logs", "header_entropy REAL")
@@ -176,10 +178,10 @@ def log_traffic_event(data: dict[str, Any]) -> None:
         """
         INSERT INTO traffic_logs (
             request_at, response_at, process_ms, method, endpoint, client_id, fingerprint_id,
-            query_id, device_id, referer, header_entropy, req_interval_ms, req_time_var,
+            principal_id, query_id, device_id, referer, header_entropy, req_interval_ms, req_time_var,
             user_device_ratio, device_user_ratio, req_rate_5m, graph_feature_source,
             mouse_entropy, mouse_source, amount_value, amount_deviation, is_attack, location, is_proxy
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             data.get("request_at"),
@@ -189,6 +191,7 @@ def log_traffic_event(data: dict[str, Any]) -> None:
             data.get("endpoint"),
             client_id,
             fingerprint_id,
+            data.get("principal_id", data.get("query_id")),
             data.get("query_id"),
             data.get("device_id"),
             data.get("referer"),

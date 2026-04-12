@@ -8,6 +8,23 @@
 
 更新日期：2026-04-12
 
+## 名詞說明
+
+- `principal_id`
+  - 新的建議語意名稱。
+  - 表示「互動主體識別」。
+  - 目前在 banking proxy 中，優先對應 `X-User-Id`，通常就是 `vuln-bank-main` 的 CIF 或 customer id。
+  - 若請求未帶主體識別，則退回 `proxy:<client_ip>`。
+
+- `query_id`
+  - 既有歷史命名。
+  - 在目前程式裡實際上大多承載的是 `principal_id` 語意，而不是 query string id。
+  - 現階段保留是為了相容既有資料表、回放 API 與分析函式；後續新功能應優先使用 `principal_id`。
+
+- `request_chain_id`
+  - 建議下一階段補上的欄位。
+  - 用來表示單次攻擊鏈或單次互動鏈，不應與 `principal_id` 混用。
+
 ## 一、整體判定
 
 - 專案目前屬於「可運行整合原型」階段。

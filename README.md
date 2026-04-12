@@ -380,12 +380,17 @@ curl -H "X-API-Key: $API_KEY" \
 ```
 
 **回應欄位說明：**
+- `principal_id` - 互動主體識別，優先對應 `X-User-Id` / CIF；若缺失則回退為 `proxy:<client_ip>`
 - `route` - 分流路由（`real` 或 `deception`）
 - `risk_score` - 風險評分（0-100 整數）
 - `deception_reason` - 欺敵觸發原因（如 `invalid_user_id_format,suspicious_user_agent`）
 - `attack_vector` - 攻擊向量分類（如 `sqli`, `lfi`, `paths`）
 - `chain_length` - 攻擊鏈完整步驟數（回放端點時）
 - `deception_events` - 鏈中欺敵事件計數（回放端點時）
+
+補充：
+- `query_id` 為歷史命名，現階段在多數查詢與回放 API 中仍保留。
+- 它目前實際上大多承載的是 `principal_id` 語意，不是 query string id。
 
 
 ---

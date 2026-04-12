@@ -545,22 +545,26 @@ async def _proxy_banking_request(
     body_bytes = await request.body()
     body_text = body_bytes.decode("utf-8", errors="ignore") if body_bytes else ""
     query_text = request.url.query or ""
-    query_id = request.headers.get("X-User-Id", f"proxy:{client_ip}")
+    # principal_id 表示「互動主體識別」，目前優先對應到 vuln-bank-main 的
+    # X-User-Id / CIF / customer id。若缺失則回退成 proxy:<client_ip>。
+    # query_id 為歷史命名，暫時保留作為相容欄位。
+    principal_id = request.headers.get("X-User-Id", "").strip() or f"proxy:{client_ip}"
+    query_id = principal_id
     detection_target = f"{upstream_path} {query_text} {body_text}".strip()[:2000]
 
-    req_interval_ms, req_time_var = _compute_timing_features(query_id)
+    req_interval_ms, req_time_var = _compute_timing_features(principal_id)
     amount_value = _extract_amount_value(body_text, None)
-    amount_deviation = _compute_amount_deviation(query_id, amount_value)
+    amount_deviation = _compute_amount_deviation(principal_id, amount_value)
 
-    feature_store.record_observation(user_id=query_id, device_id=device_id)
-    graph_metrics = feature_store.get_metrics(user_id=query_id, device_id=device_id)
+    feature_store.record_observation(user_id=principal_id, device_id=device_id)
+    graph_metrics = feature_store.get_metrics(user_id=principal_id, device_id=device_id)
     mouse_entropy, mouse_source = _parse_mouse_entropy(request)
 
     is_attack, confidence, attack_vector = analyze_intent(detection_target)
     risk_reasons: list[str] = []
 
     replication_risk, replication_reason = detect_replication_risk(
-        query_id, detection_target
+        principal_id, detection_target
     )
     if replication_risk:
         risk_reasons.append(replication_reason)
@@ -570,7 +574,7 @@ async def _proxy_banking_request(
         risk_reasons.append(rate_reason)
 
     amount_risk, amount_reason = detect_anomalous_amount_risk(
-        query_id, int(amount_value) if amount_value is not None else None
+        principal_id, int(amount_value) if amount_value is not None else None
     )
     if amount_risk:
         risk_reasons.append(amount_reason)
@@ -629,6 +633,7 @@ async def _proxy_banking_request(
         "user_agent": user_agent,
         "tls_fingerprint": tls_fingerprint,
         "raw_payload": detection_target,
+        "principal_id": principal_id,
         "query_id": query_id,
         "method": request.method,
         "endpoint": f"/{upstream_path.lstrip('/')}",
@@ -659,39 +664,49 @@ async def _proxy_banking_request(
     if should_intercept:
         try:
             from core.ai_agent_orchestrator import execute_sandbox_ai_agent
-            
-            logger.info(f"[AI AGENT] 調用沙盒AI Agent處理攻擊: {client_ip} - {attack_vector}")
-            
+
+            logger.info(
+                f"[AI AGENT] 調用沙盒AI Agent處理攻擊: {client_ip} - {attack_vector}"
+            )
+
             ai_response = await execute_sandbox_ai_agent(
                 client_ip=client_ip,
-                query_id=query_id,
+                query_id=principal_id,
                 raw_payload=detection_target,
                 attack_vector=attack_vector,
-                risk_level=int(confidence * 10)
+                risk_level=int(confidence * 10),
             )
-            
+
             # 使用AI生成的假資料作為響應
             if ai_response.get("status") == "ai_processed":
                 fake_data = ai_response.get("fake_data", {})
-                response_content = json.dumps(fake_data).encode('utf-8')
+                response_content = json.dumps(fake_data).encode("utf-8")
                 response_headers = {"content-type": "application/json"}
                 status_code = 200
-                
+
                 # 更新事件payload
                 event_payload["response_payload"] = str(fake_data)
                 event_payload["mitigation_status"] = "ai_deception"
-                event_payload["ai_action"] = ai_response.get("ai_decision", {}).get("action")
-                event_payload["ai_confidence"] = ai_response.get("ai_decision", {}).get("confidence", 0)
-                
-                logger.info(f"[AI AGENT] AI處理成功: {ai_response.get('ai_decision', {}).get('action')}")
+                event_payload["ai_action"] = ai_response.get("ai_decision", {}).get(
+                    "action"
+                )
+                event_payload["ai_confidence"] = ai_response.get("ai_decision", {}).get(
+                    "confidence", 0
+                )
+
+                logger.info(
+                    f"[AI AGENT] AI處理成功: {ai_response.get('ai_decision', {}).get('action')}"
+                )
             else:
                 # AI處理失敗，使用備用響應
                 logger.warning(f"[AI AGENT] AI處理失敗，使用備用響應")
-                response_content = b'{"status":"error","message":"Service temporarily unavailable"}'
+                response_content = (
+                    b'{"status":"error","message":"Service temporarily unavailable"}'
+                )
                 response_headers = {"content-type": "application/json"}
                 status_code = 503
                 event_payload["mitigation_status"] = "ai_fallback"
-                
+
         except Exception as ai_exc:
             logger.error(f"[AI AGENT] AI Agent調用失敗: {ai_exc}")
             # AI失敗時，回退到正常響應
