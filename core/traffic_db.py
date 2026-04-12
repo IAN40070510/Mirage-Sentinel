@@ -206,6 +206,22 @@ def log_traffic_event(data: dict[str, Any]) -> None:
     )
     fingerprint_id = cursor.fetchone()["id"]
 
+    route_before = data.get("route_before") or "banking_proxy"
+    route_after = data.get("route_after") or ("mirage" if is_attack else "vuln_bank_main")
+    response_origin = data.get("response_origin") or (
+        "sandbox_ai" if is_attack else "vuln_bank_main"
+    )
+    flow_stage = data.get("flow_stage") or ("deception" if is_attack else "upstream")
+    deception_score = data.get("deception_score")
+    trust_level = data.get("trust_level") or ("medium" if is_attack else "low")
+    real_backend_touched = 1 if data.get("real_backend_touched") else 0
+    deception_engaged = 1 if data.get("deception_engaged") else 0
+    upstream_attempted = 1 if data.get("upstream_attempted") else 0
+    risk_level = int(data.get("risk_level") or 0)
+    if not is_attack:
+        deception_score = 0
+        risk_level = 0
+
     cursor.execute(
         """
         INSERT INTO traffic_logs (
@@ -247,49 +263,48 @@ def log_traffic_event(data: dict[str, Any]) -> None:
 
     traffic_log_id = cursor.lastrowid
 
-    if is_attack:
-        cursor.execute(
-            """
-            INSERT OR REPLACE INTO attack_details (
-                traffic_log_id, raw_payload, response_payload, attack_vector,
-                risk_level, hits, interaction_depth, dwell_time, mitigation_status,
-                decision_source, route_before, route_after, deception_reason,
-                policy_hit, upstream_attempted, upstream_status_code,
-                deception_engaged, deception_mode, real_backend_touched, response_origin,
-                flow_stage, deception_score, trust_level, memory_hit
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+    cursor.execute(
+        """
+        INSERT OR REPLACE INTO attack_details (
+            traffic_log_id, raw_payload, response_payload, attack_vector,
+            risk_level, hits, interaction_depth, dwell_time, mitigation_status,
+            decision_source, route_before, route_after, deception_reason,
+            policy_hit, upstream_attempted, upstream_status_code,
+            deception_engaged, deception_mode, real_backend_touched, response_origin,
+            flow_stage, deception_score, trust_level, memory_hit
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            traffic_log_id,
+            data.get("raw_payload"),
             (
-                traffic_log_id,
-                data.get("raw_payload"),
-                (
-                    json.dumps(data.get("response_payload"), ensure_ascii=False)
-                    if data.get("response_payload") is not None
-                    else None
-                ),
-                data.get("attack_vector"),
-                data.get("risk_level"),
-                data.get("hits"),
-                data.get("interaction_depth"),
-                data.get("dwell_time"),
-                data.get("mitigation_status"),
-                data.get("decision_source"),
-                data.get("route_before"),
-                data.get("route_after"),
-                data.get("deception_reason"),
-                data.get("policy_hit"),
-                1 if data.get("upstream_attempted") else 0,
-                data.get("upstream_status_code"),
-                1 if data.get("deception_engaged") else 0,
-                data.get("deception_mode"),
-                1 if data.get("real_backend_touched") else 0,
-                data.get("response_origin"),
-                data.get("flow_stage"),
-                data.get("deception_score"),
-                data.get("trust_level"),
-                1 if data.get("memory_hit") else 0,
+                json.dumps(data.get("response_payload"), ensure_ascii=False)
+                if data.get("response_payload") is not None
+                else None
             ),
-        )
+            data.get("attack_vector") if is_attack else None,
+            risk_level,
+            data.get("hits") if is_attack else 0,
+            data.get("interaction_depth") if is_attack else 0,
+            data.get("dwell_time") if is_attack else 0.0,
+            data.get("mitigation_status"),
+            data.get("decision_source") if is_attack else "normal_flow",
+            route_before,
+            route_after,
+            data.get("deception_reason") if is_attack else None,
+            data.get("policy_hit") if is_attack else None,
+            upstream_attempted,
+            data.get("upstream_status_code"),
+            deception_engaged,
+            data.get("deception_mode") if is_attack else None,
+            real_backend_touched,
+            response_origin,
+            flow_stage,
+            deception_score,
+            trust_level,
+            1 if data.get("memory_hit") else 0,
+        ),
+    )
 
     conn.commit()
     conn.close()

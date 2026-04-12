@@ -978,8 +978,15 @@ def get_deception_effectiveness_summary(hours: int = 24) -> dict[str, Any]:
             """
             SELECT
                 COUNT(*) AS total_events,
-                SUM(CASE WHEN COALESCE(d.flow_stage, '') = 'deception' THEN 1 ELSE 0 END) AS deception_events,
-                SUM(CASE WHEN COALESCE(d.real_backend_touched, 0) = 1 THEN 1 ELSE 0 END) AS real_path_events,
+                SUM(CASE WHEN COALESCE(d.flow_stage, '') = 'deception'
+                          OR COALESCE(d.route_after, '') = 'mirage'
+                          OR COALESCE(d.deception_engaged, 0) = 1
+                         THEN 1 ELSE 0 END) AS deception_events,
+                SUM(CASE WHEN t.is_attack = 0
+                          OR COALESCE(d.flow_stage, '') IN ('upstream', 'upstream_error')
+                          OR COALESCE(d.route_after, '') = 'vuln_bank_main'
+                          OR COALESCE(d.real_backend_touched, 0) = 1
+                         THEN 1 ELSE 0 END) AS real_path_events,
                 AVG(COALESCE(d.deception_score, 0)) AS avg_deception_score,
                 SUM(CASE WHEN COALESCE(d.trust_level, '') = 'high' THEN 1 ELSE 0 END) AS high_trust_events,
                 SUM(CASE WHEN COALESCE(d.memory_hit, 0) = 1 THEN 1 ELSE 0 END) AS memory_hit_events
