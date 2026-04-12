@@ -61,6 +61,25 @@ async def dashboard_recent_traffic(
     return fetch_recent_traffic(limit, mode)
 
 
+@app.get("/api/v1/dashboard")
+@app.get("/api/v1/dashboard/")
+async def dashboard_root(request: Request):
+    require_api_key(request)
+    # 提供可用路由摘要，避免 /soc/ 直接回 404 影響排障。
+    return {
+        "service": "Mirage SOC Dashboard API",
+        "status": "ok",
+        "available_routes": [
+            "/api/v1/dashboard/recent_traffic",
+            "/api/v1/dashboard/events/by_route/{route}",
+            "/api/v1/dashboard/events/by_risk_score",
+            "/api/v1/dashboard/replay/{query_id}",
+            "/api/v1/dashboard/replay/session/{session_chain_id}",
+            "/api/v1/dashboard/statistics/deception_effectiveness",
+        ],
+    }
+
+
 # SOC Dashboard API 路由
 @app.get("/api/v1/dashboard/ips")
 async def dashboard_ips(request: Request):
@@ -114,6 +133,46 @@ async def dashboard_top_ips(request: Request):
 async def dashboard_time_series(request: Request):
     require_api_key(request)
     return get_time_series_stats()
+
+
+@app.get("/api/v1/dashboard/events/by_route/{route}")
+async def dashboard_events_by_route(
+    route: str,
+    request: Request,
+    limit: int = 100,
+    offset: int = 0,
+):
+    require_api_key(request)
+    return get_events_by_route(route, limit=limit, offset=offset)
+
+
+@app.get("/api/v1/dashboard/events/by_risk_score")
+async def dashboard_events_by_risk_score(
+    request: Request,
+    min_score: int = 0,
+    max_score: int = 100,
+    limit: int = 100,
+):
+    require_api_key(request)
+    return get_events_by_risk_score(min_score=min_score, max_score=max_score, limit=limit)
+
+
+@app.get("/api/v1/dashboard/replay/{query_id}")
+async def dashboard_replay_by_query(query_id: str, request: Request):
+    require_api_key(request)
+    return get_deception_chain(query_id)
+
+
+@app.get("/api/v1/dashboard/replay/session/{session_chain_id}")
+async def dashboard_replay_by_session(session_chain_id: str, request: Request):
+    require_api_key(request)
+    return get_deception_chain_by_session(session_chain_id)
+
+
+@app.get("/api/v1/dashboard/statistics/deception_effectiveness")
+async def dashboard_deception_effectiveness(request: Request, hours: int = 24):
+    require_api_key(request)
+    return get_deception_effectiveness_summary(hours=hours)
 
 
 import json
