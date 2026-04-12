@@ -115,7 +115,7 @@ jobs:
   # 掃完後把報告上傳到 Oracle VM
   # ============================================
   upload-report:
-    name: 📤 Upload Report to Oracle VM
+    name: Upload Report to Oracle VM
     runs-on: ubuntu-latest
     needs: semgrep-scan
     if: github.ref == 'refs/heads/main'   # 只有 push main 才上傳
