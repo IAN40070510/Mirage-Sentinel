@@ -528,6 +528,97 @@ def _build_upstream_headers(request: Request) -> dict[str, str]:
     return headers
 
 
+def _decision_source(is_attack: bool, risk_reasons: list[str]) -> str:
+    if is_attack and risk_reasons:
+        return "hybrid"
+    if is_attack:
+        return "ml"
+    if risk_reasons:
+        return "rule"
+    return "none"
+
+
+def _local_deception_payload(
+    principal_id: str,
+    attack_vector: str,
+    client_ip: str,
+    upstream_path: str,
+) -> dict[str, object]:
+    now_iso = datetime.now().isoformat(timespec="milliseconds")
+    return {
+        "status": "ok",
+        "route": "mirage",
+        "response_origin": "mirage",
+        "user_id": principal_id,
+        "attack_vector": attack_vector or "suspicious",
+        "message": "Request accepted for extended verification.",
+        "ticket": f"MRG-{hashlib.sha256(f'{client_ip}|{principal_id}|{upstream_path}|{now_iso}'.encode('utf-8')).hexdigest()[:12]}",
+        "queued_at": now_iso,
+        "next_step": "manual_review",
+    }
+
+
+async def _execute_deception_response(
+    client_ip: str,
+    principal_id: str,
+    detection_target: str,
+    attack_vector: str,
+    risk_level: int,
+) -> tuple[bytes, int, dict[str, str], dict[str, object]]:
+    try:
+        from core.ai_agent_orchestrator import execute_sandbox_ai_agent
+
+        logger.info(
+            "[AI AGENT] 前置分流到沙盒AI Agent: %s - %s", client_ip, attack_vector
+        )
+
+        ai_response = await execute_sandbox_ai_agent(
+            client_ip=client_ip,
+            query_id=principal_id,
+            raw_payload=detection_target,
+            attack_vector=attack_vector,
+            risk_level=max(1, risk_level // 10),
+        )
+
+        fake_data = ai_response.get("fake_data")
+        if isinstance(fake_data, dict) and fake_data:
+            return (
+                json.dumps(fake_data).encode("utf-8"),
+                200,
+                {"content-type": "application/json"},
+                {
+                    "mitigation_status": "ai_deception",
+                    "response_payload": fake_data,
+                    "response_origin": "sandbox_ai",
+                    "deception_mode": "sandbox_ai",
+                    "ai_action": ai_response.get("ai_decision", {}).get("action"),
+                    "ai_confidence": ai_response.get("ai_decision", {}).get(
+                        "confidence", 0
+                    ),
+                },
+            )
+    except Exception as ai_exc:
+        logger.error("[AI AGENT] 前置分流失敗，改用本機 Mirage 備援: %s", ai_exc)
+
+    fallback_payload = _local_deception_payload(
+        principal_id=principal_id,
+        attack_vector=attack_vector,
+        client_ip=client_ip,
+        upstream_path=detection_target.split(" ", 1)[0],
+    )
+    return (
+        json.dumps(fallback_payload).encode("utf-8"),
+        200,
+        {"content-type": "application/json"},
+        {
+            "mitigation_status": "local_deception_fallback",
+            "response_payload": fallback_payload,
+            "response_origin": "mirage",
+            "deception_mode": "local_fallback",
+        },
+    )
+
+
 async def _proxy_banking_request(
     upstream_path: str,
     request: Request,
@@ -582,51 +673,14 @@ async def _proxy_banking_request(
     if risk_reasons:
         attack_vector = ", ".join(filter(None, [attack_vector, *risk_reasons]))
 
-    upstream_url = f"{VULN_BANK_BASE_URL}/{upstream_path.lstrip('/')}"
-    if query_text:
-        upstream_url = f"{upstream_url}?{query_text}"
-
-    status_code = 502
-    response_content = b""
-    response_headers: dict[str, str] = {}
-
-    try:
-        async with httpx.AsyncClient(timeout=20.0, follow_redirects=False) as client:
-            upstream_response = await client.request(
-                method=request.method,
-                url=upstream_url,
-                content=body_bytes if body_bytes else None,
-                headers=_build_upstream_headers(request),
-            )
-        status_code = upstream_response.status_code
-        response_content = _inject_mouse_tracker_html(
-            upstream_response.content,
-            upstream_response.headers.get("content-type"),
-        )
-        response_headers = {
-            k: v
-            for k, v in upstream_response.headers.items()
-            if k.lower()
-            not in {
-                "content-length",
-                "transfer-encoding",
-                "connection",
-            }
-        }
-    except Exception as exc:
-        logger.error("banking proxy upstream failed: %s", exc)
-        response_content = b'{"detail":"upstream unavailable"}'
-        response_headers = {"content-type": "application/json"}
-
-    process_ms = int((time.perf_counter() - start_perf) * 1000)
-    response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-
     should_intercept = (is_attack and confidence > 0.75) or bool(risk_reasons)
+    decision_source = _decision_source(is_attack, risk_reasons)
+    risk_level = max(int(confidence * 100), 80 if risk_reasons else 0)
 
     event_payload = {
         "request_at": request_at,
-        "response_at": response_at,
-        "process_ms": process_ms,
+        "response_at": None,
+        "process_ms": 0,
         "client_ip": client_ip,
         "location": "banking:proxy",
         "is_proxy": detect_proxy(request),
@@ -651,69 +705,89 @@ async def _proxy_banking_request(
         "amount_value": amount_value,
         "amount_deviation": amount_deviation,
         "attack_vector": attack_vector if should_intercept else None,
-        "risk_level": int(confidence * 100) if is_attack else 0,
+        "risk_level": risk_level if should_intercept else 0,
         "is_attack": 1 if should_intercept else 0,
         "response_payload": None,
         "hits": 0,
         "interaction_depth": 0,
         "dwell_time": 0.0,
         "mitigation_status": "normal" if not should_intercept else "observed",
+        "decision_source": decision_source,
+        "route_before": "banking_proxy",
+        "route_after": "mirage" if should_intercept else "vuln_bank_main",
+        "deception_reason": ", ".join(risk_reasons) if risk_reasons else attack_vector,
+        "policy_hit": attack_vector if should_intercept else None,
+        "upstream_attempted": 0,
+        "upstream_status_code": None,
+        "deception_engaged": 1 if should_intercept else 0,
+        "deception_mode": None,
+        "real_backend_touched": 0,
+        "response_origin": "pending",
     }
 
-    # 如果檢測到攻擊，使用沙盒AI Agent處理
+    status_code = 502
+    response_content = b""
+    response_headers: dict[str, str] = {}
+
     if should_intercept:
-        try:
-            from core.ai_agent_orchestrator import execute_sandbox_ai_agent
-
-            logger.info(
-                f"[AI AGENT] 調用沙盒AI Agent處理攻擊: {client_ip} - {attack_vector}"
-            )
-
-            ai_response = await execute_sandbox_ai_agent(
-                client_ip=client_ip,
-                query_id=principal_id,
-                raw_payload=detection_target,
-                attack_vector=attack_vector,
-                risk_level=int(confidence * 10),
-            )
-
-            # 使用AI生成的假資料作為響應
-            if ai_response.get("status") == "ai_processed":
-                fake_data = ai_response.get("fake_data", {})
-                response_content = json.dumps(fake_data).encode("utf-8")
-                response_headers = {"content-type": "application/json"}
-                status_code = 200
-
-                # 更新事件payload
-                event_payload["response_payload"] = str(fake_data)
-                event_payload["mitigation_status"] = "ai_deception"
-                event_payload["ai_action"] = ai_response.get("ai_decision", {}).get(
-                    "action"
-                )
-                event_payload["ai_confidence"] = ai_response.get("ai_decision", {}).get(
-                    "confidence", 0
-                )
-
-                logger.info(
-                    f"[AI AGENT] AI處理成功: {ai_response.get('ai_decision', {}).get('action')}"
-                )
-            else:
-                # AI處理失敗，使用備用響應
-                logger.warning(f"[AI AGENT] AI處理失敗，使用備用響應")
-                response_content = (
-                    b'{"status":"error","message":"Service temporarily unavailable"}'
-                )
-                response_headers = {"content-type": "application/json"}
-                status_code = 503
-                event_payload["mitigation_status"] = "ai_fallback"
-
-        except Exception as ai_exc:
-            logger.error(f"[AI AGENT] AI Agent調用失敗: {ai_exc}")
-            # AI失敗時，回退到正常響應
-            event_payload["mitigation_status"] = "ai_error"
+        (
+            response_content,
+            status_code,
+            response_headers,
+            deception_meta,
+        ) = await _execute_deception_response(
+            client_ip=client_ip,
+            principal_id=principal_id,
+            detection_target=detection_target,
+            attack_vector=attack_vector,
+            risk_level=risk_level,
+        )
+        event_payload.update(deception_meta)
     else:
-        # 非攻擊請求，正常代理到上游
-        pass
+        upstream_url = f"{VULN_BANK_BASE_URL}/{upstream_path.lstrip('/')}"
+        if query_text:
+            upstream_url = f"{upstream_url}?{query_text}"
+
+        event_payload["upstream_attempted"] = 1
+        try:
+            async with httpx.AsyncClient(
+                timeout=20.0, follow_redirects=False
+            ) as client:
+                upstream_response = await client.request(
+                    method=request.method,
+                    url=upstream_url,
+                    content=body_bytes if body_bytes else None,
+                    headers=_build_upstream_headers(request),
+                )
+            status_code = upstream_response.status_code
+            response_content = _inject_mouse_tracker_html(
+                upstream_response.content,
+                upstream_response.headers.get("content-type"),
+            )
+            response_headers = {
+                k: v
+                for k, v in upstream_response.headers.items()
+                if k.lower()
+                not in {
+                    "content-length",
+                    "transfer-encoding",
+                    "connection",
+                }
+            }
+            event_payload["upstream_status_code"] = status_code
+            event_payload["real_backend_touched"] = 1
+            event_payload["response_origin"] = "vuln_bank_main"
+        except Exception as exc:
+            logger.error("banking proxy upstream failed: %s", exc)
+            response_content = b'{"detail":"upstream unavailable"}'
+            response_headers = {"content-type": "application/json"}
+            event_payload["mitigation_status"] = "upstream_error"
+            event_payload["response_origin"] = "upstream_error"
+
+    process_ms = int((time.perf_counter() - start_perf) * 1000)
+    response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    event_payload["process_ms"] = process_ms
+    event_payload["response_at"] = response_at
 
     if background_tasks:
         background_tasks.add_task(log_traffic_event, event_payload)

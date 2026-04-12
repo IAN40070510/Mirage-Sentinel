@@ -104,6 +104,17 @@ def setup_traffic_db():
         interaction_depth INTEGER,
         dwell_time REAL,
         mitigation_status TEXT,
+        decision_source TEXT,
+        route_before TEXT,
+        route_after TEXT,
+        deception_reason TEXT,
+        policy_hit TEXT,
+        upstream_attempted INTEGER DEFAULT 0,
+        upstream_status_code INTEGER,
+        deception_engaged INTEGER DEFAULT 0,
+        deception_mode TEXT,
+        real_backend_touched INTEGER DEFAULT 0,
+        response_origin TEXT,
         FOREIGN KEY(traffic_log_id) REFERENCES traffic_logs(id)
     )
     """
@@ -134,6 +145,17 @@ def setup_traffic_db():
     _ensure_column(conn, "traffic_logs", "mouse_source TEXT")
     _ensure_column(conn, "traffic_logs", "amount_value REAL")
     _ensure_column(conn, "traffic_logs", "amount_deviation REAL")
+    _ensure_column(conn, "attack_details", "decision_source TEXT")
+    _ensure_column(conn, "attack_details", "route_before TEXT")
+    _ensure_column(conn, "attack_details", "route_after TEXT")
+    _ensure_column(conn, "attack_details", "deception_reason TEXT")
+    _ensure_column(conn, "attack_details", "policy_hit TEXT")
+    _ensure_column(conn, "attack_details", "upstream_attempted INTEGER DEFAULT 0")
+    _ensure_column(conn, "attack_details", "upstream_status_code INTEGER")
+    _ensure_column(conn, "attack_details", "deception_engaged INTEGER DEFAULT 0")
+    _ensure_column(conn, "attack_details", "deception_mode TEXT")
+    _ensure_column(conn, "attack_details", "real_backend_touched INTEGER DEFAULT 0")
+    _ensure_column(conn, "attack_details", "response_origin TEXT")
 
     conn.commit()
     conn.close()
@@ -219,8 +241,11 @@ def log_traffic_event(data: dict[str, Any]) -> None:
             """
             INSERT OR REPLACE INTO attack_details (
                 traffic_log_id, raw_payload, response_payload, attack_vector,
-                risk_level, hits, interaction_depth, dwell_time, mitigation_status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                risk_level, hits, interaction_depth, dwell_time, mitigation_status,
+                decision_source, route_before, route_after, deception_reason,
+                policy_hit, upstream_attempted, upstream_status_code,
+                deception_engaged, deception_mode, real_backend_touched, response_origin
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 traffic_log_id,
@@ -236,6 +261,17 @@ def log_traffic_event(data: dict[str, Any]) -> None:
                 data.get("interaction_depth"),
                 data.get("dwell_time"),
                 data.get("mitigation_status"),
+                data.get("decision_source"),
+                data.get("route_before"),
+                data.get("route_after"),
+                data.get("deception_reason"),
+                data.get("policy_hit"),
+                1 if data.get("upstream_attempted") else 0,
+                data.get("upstream_status_code"),
+                1 if data.get("deception_engaged") else 0,
+                data.get("deception_mode"),
+                1 if data.get("real_backend_touched") else 0,
+                data.get("response_origin"),
             ),
         )
 
@@ -249,7 +285,10 @@ def get_recent_traffic(limit: int = 100) -> list[dict[str, Any]]:
     cursor.execute(
         """
         SELECT t.*, c.ip AS client_ip, f.user_agent, f.tls_fingerprint, d.attack_vector,
-               d.risk_level, d.hits, d.interaction_depth, d.dwell_time, d.mitigation_status
+               d.risk_level, d.hits, d.interaction_depth, d.dwell_time, d.mitigation_status,
+               d.decision_source, d.route_before, d.route_after, d.deception_reason,
+               d.policy_hit, d.upstream_attempted, d.upstream_status_code,
+               d.deception_engaged, d.deception_mode, d.real_backend_touched, d.response_origin
         FROM traffic_logs t
         JOIN clients c ON t.client_id = c.id
         LEFT JOIN fingerprints f ON t.fingerprint_id = f.id
