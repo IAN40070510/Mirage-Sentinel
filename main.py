@@ -28,6 +28,7 @@ import logging
 import ipaddress
 import math
 import statistics
+import json
 import re
 import hashlib
 import pandas as pd
@@ -617,7 +618,51 @@ async def _proxy_banking_request(
     response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
     should_intercept = (is_attack and confidence > 0.75) or bool(risk_reasons)
-    event_payload: dict[str, object] = {
+    
+    # 如果檢測到攻擊，使用沙盒AI Agent處理
+    if should_intercept:
+        try:
+            from core.ai_agent_orchestrator import execute_sandbox_ai_agent
+            
+            logger.info(f"[AI AGENT] 調用沙盒AI Agent處理攻擊: {client_ip} - {attack_vector}")
+            
+            ai_response = await execute_sandbox_ai_agent(
+                client_ip=client_ip,
+                query_id=query_id,
+                raw_payload=detection_target,
+                attack_vector=attack_vector,
+                risk_level=int(confidence * 10)
+            )
+            
+            # 使用AI生成的假資料作為響應
+            if ai_response.get("status") == "ai_processed":
+                fake_data = ai_response.get("fake_data", {})
+                response_content = json.dumps(fake_data).encode('utf-8')
+                response_headers = {"content-type": "application/json"}
+                status_code = 200
+                
+                # 更新事件payload
+                event_payload["response_payload"] = str(fake_data)
+                event_payload["mitigation_status"] = "ai_deception"
+                event_payload["ai_action"] = ai_response.get("ai_decision", {}).get("action")
+                event_payload["ai_confidence"] = ai_response.get("ai_decision", {}).get("confidence", 0)
+                
+                logger.info(f"[AI AGENT] AI處理成功: {ai_response.get('ai_decision', {}).get('action')}")
+            else:
+                # AI處理失敗，使用備用響應
+                logger.warning(f"[AI AGENT] AI處理失敗，使用備用響應")
+                response_content = b'{"status":"error","message":"Service temporarily unavailable"}'
+                response_headers = {"content-type": "application/json"}
+                status_code = 503
+                event_payload["mitigation_status"] = "ai_fallback"
+                
+        except Exception as ai_exc:
+            logger.error(f"[AI AGENT] AI Agent調用失敗: {ai_exc}")
+            # AI失敗時，回退到正常響應
+            event_payload["mitigation_status"] = "ai_error"
+    else:
+        # 非攻擊請求，正常代理到上游
+        pass
         "request_at": request_at,
         "response_at": response_at,
         "process_ms": process_ms,

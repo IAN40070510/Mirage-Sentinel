@@ -61,6 +61,11 @@ services:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - PORT=8001
+      - SANDBOX_AI_TOKEN=mirage_sentinel_sandbox_token
+      - OLLAMA_URL=http://host.docker.internal:11434/api/generate
+      - OLLAMA_MODEL=llama3.1:8b
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/app/data
 
