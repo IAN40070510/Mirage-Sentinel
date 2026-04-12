@@ -549,6 +549,36 @@ def _is_internal_sentinel_path(path: str) -> bool:
     return path.startswith(internal_prefixes)
 
 
+def _is_render_critical_path(path: str) -> bool:
+    """前端關鍵資源路徑：避免純規則風險誤攔截造成頁面失真。"""
+    normalized = "/" + (path or "").lstrip("/")
+    if normalized == "/":
+        return True
+
+    if normalized.startswith("/static/"):
+        return True
+
+    if normalized in {"/login", "/register", "/forgot-password", "/reset-password"}:
+        return True
+
+    ext = os.path.splitext(normalized)[1].lower()
+    return ext in {
+        ".css",
+        ".js",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".svg",
+        ".ico",
+        ".webp",
+        ".woff",
+        ".woff2",
+        ".ttf",
+        ".map",
+    }
+
+
 def _build_upstream_headers(request: Request) -> dict[str, str]:
     drop_headers = {
         "host",
@@ -685,6 +715,8 @@ async def _proxy_banking_request(
         device_id=device_id,
         request_epoch_ms=request_epoch_ms,
     )
+    normalized_upstream_path = "/" + upstream_path.lstrip("/")
+    render_critical_path = _is_render_critical_path(normalized_upstream_path)
     detection_target = f"{upstream_path} {query_text} {body_text}".strip()[:2000]
 
     req_interval_ms, req_time_var = _compute_timing_features(principal_id)
@@ -717,14 +749,17 @@ async def _proxy_banking_request(
     if risk_reasons:
         attack_vector = ", ".join(filter(None, [attack_vector, *risk_reasons]))
 
-    should_intercept = (is_attack and confidence > 0.75) or bool(risk_reasons)
-    decision_source = _decision_source(is_attack, risk_reasons)
-    risk_level = max(int(confidence * 100), 80 if risk_reasons else 0)
+    should_intercept = (is_attack and confidence > 0.75) or (
+        bool(risk_reasons) and not render_critical_path
+    )
+    effective_risk_reasons = risk_reasons if not render_critical_path else []
+    decision_source = _decision_source(is_attack, effective_risk_reasons)
+    risk_level = max(int(confidence * 100), 80 if effective_risk_reasons else 0)
     flow_stage, deception_score, trust_level, memory_hit = _compute_deception_effectiveness(
         should_intercept=should_intercept,
         risk_level=risk_level,
         confidence=confidence,
-        risk_reasons_count=len(risk_reasons),
+        risk_reasons_count=len(effective_risk_reasons),
     )
 
     event_payload = {
@@ -766,7 +801,9 @@ async def _proxy_banking_request(
         "decision_source": decision_source,
         "route_before": "banking_proxy",
         "route_after": "mirage" if should_intercept else "vuln_bank_main",
-        "deception_reason": ", ".join(risk_reasons) if risk_reasons else attack_vector,
+        "deception_reason": ", ".join(effective_risk_reasons)
+        if effective_risk_reasons
+        else attack_vector,
         "policy_hit": attack_vector if should_intercept else None,
         "upstream_attempted": 0,
         "upstream_status_code": None,
