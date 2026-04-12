@@ -387,4 +387,57 @@ curl -H "X-API-Key: $API_KEY" \
 - `chain_length` - 攻擊鏈完整步驟數（回放端點時）
 - `deception_events` - 鏈中欺敵事件計數（回放端點時）
 
-這些端點已集成到 CI 迴歸測試，確保新增欄位在 PR 與線上部署時保持可用。
+
+---
+
+## 互動深度分析（Interaction Depth Analysis）
+
+Mirage-Sentinel 針對銀行誘餌 API 攻擊路徑，設計多維度「互動深度分析」指標，協助 SOC 與資安人員判斷攻擊者是否進行高價值、深度互動，並評估誘餌成效。
+
+### 設計理念
+- 追蹤攻擊者在誘餌銀行 API 的操作路徑、步數與持續度
+- 標記是否觸發高價值 API（如 /transfer、/admin、/download）
+- 分析攻擊特徵（SQLi、LFI、XSS、RCE 等）
+- 偵測 session/token 行為（重用、竄改、cookie injection）
+- 綜合評分攻擊者信任度與誘餌命中率
+
+### 主要指標範例
+
+| 欄位                | 說明                                  |
+|---------------------|---------------------------------------|
+| interaction_steps   | 互動步數（API 呼叫次數）              |
+| unique_apis         | 涉及的 API 路徑清單                   |
+| reached_high_value_api | 是否觸發高價值 API                |
+| attack_vectors      | 偵測到的攻擊手法（如 SQLi、XSS）      |
+| session_reuse       | 是否有 session 重用                   |
+| token_manipulation  | 是否有 token 竄改                     |
+| dwell_seconds       | 持續互動秒數                          |
+| deception_score     | 綜合誘餌成效分數（0-100）             |
+| trust_level         | 攻擊者信任度（low/medium/high）       |
+| memory_hit          | 是否命中記憶型誘餌                    |
+
+### 回傳格式範例
+
+```json
+{
+  "client_ip": "1.2.3.4",
+  "query_id": "CIF000001001",
+  "interaction_steps": 5,
+  "unique_apis": ["login", "balance", "transfer"],
+  "reached_high_value_api": true,
+  "attack_vectors": ["SQLi", "XSS"],
+  "session_reuse": false,
+  "token_manipulation": true,
+  "dwell_seconds": 120,
+  "deception_score": 85,
+  "trust_level": "high",
+  "memory_hit": false
+}
+```
+
+### 實作建議
+1. 於 `core/deception_engine.py` 或 `dashboard_service.py` 擴充 `compute_interaction_metrics`，依據流量日誌與攻擊特徵自動計算上述指標。
+2. 所有分析僅針對誘餌資料，不可讀取或影響真實資料庫，並於沙盒環境執行。
+3. 可依專案需求擴充指標，強化誘餌成效評估與攻擊行為鑑識。
+
+---

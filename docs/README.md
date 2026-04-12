@@ -8,10 +8,12 @@
 - 開發規範與程式協作：`DEVELOPMENT_GUIDELINES.md`
 - SecLists 維護流程：`SECLISTS_UPDATE_GUIDE.md`
 - 運維、503 排障、DB 遷移、事件回放：`RUNBOOK.md`
+- 目前進度、優先級與核對清單：`STATUS_REPORT.md`
 
 ## 建議閱讀順序
 
 1. `REQUIREMENTS.md`
 2. `DEVELOPMENT_GUIDELINES.md`
-3. `RUNBOOK.md`
-4. `SECLISTS_UPDATE_GUIDE.md`
+3. `STATUS_REPORT.md`
+4. `RUNBOOK.md`
+5. `SECLISTS_UPDATE_GUIDE.md`
