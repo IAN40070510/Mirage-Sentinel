@@ -372,6 +372,43 @@ def _derive_device_id(client_ip: str, user_agent: str, tls_fingerprint: str) -> 
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
 
+def _derive_session_chain_id(
+    client_ip: str,
+    principal_id: str,
+    device_id: str,
+    request_epoch_ms: int,
+    bucket_minutes: int = 10,
+) -> str:
+    """用時間桶將連續互動歸入同一條 session chain，供 SOC 回放。"""
+    bucket_ms = max(bucket_minutes, 1) * 60 * 1000
+    bucket_index = request_epoch_ms // bucket_ms
+    raw = f"{client_ip}|{principal_id}|{device_id}|{bucket_index}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def _compute_deception_effectiveness(
+    should_intercept: bool,
+    risk_level: int,
+    confidence: float,
+    risk_reasons_count: int,
+) -> tuple[str, int, str, bool]:
+    """將分流結果標準化成 SOC 可直接顯示的成效欄位。"""
+    if not should_intercept:
+        return "upstream", 0, "low", False
+
+    base_score = int(min(100, max(risk_level, int(confidence * 100))))
+    adjusted_score = min(100, base_score + min(risk_reasons_count * 5, 15))
+
+    if adjusted_score >= 80:
+        trust_level = "high"
+    elif adjusted_score >= 50:
+        trust_level = "medium"
+    else:
+        trust_level = "low"
+
+    return "deception", adjusted_score, trust_level, False
+
+
 def _parse_mouse_entropy(request: Request) -> tuple[float, str]:
     """讀取前端回傳的滑鼠熵：優先 Header，其次 Cookie。"""
     raw_value = request.headers.get("X-Mouse-Entropy")
@@ -625,6 +662,7 @@ async def _proxy_banking_request(
     background_tasks: BackgroundTasks | None,
 ):
     start_perf = time.perf_counter()
+    request_epoch_ms = int(time.time() * 1000)
     request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     client_ip = request.client.host if request.client else ""
     user_agent = request.headers.get("user-agent", "Unknown")
@@ -641,6 +679,12 @@ async def _proxy_banking_request(
     # query_id 為歷史命名，暫時保留作為相容欄位。
     principal_id = request.headers.get("X-User-Id", "").strip() or f"proxy:{client_ip}"
     query_id = principal_id
+    session_chain_id = _derive_session_chain_id(
+        client_ip=client_ip,
+        principal_id=principal_id,
+        device_id=device_id,
+        request_epoch_ms=request_epoch_ms,
+    )
     detection_target = f"{upstream_path} {query_text} {body_text}".strip()[:2000]
 
     req_interval_ms, req_time_var = _compute_timing_features(principal_id)
@@ -676,6 +720,12 @@ async def _proxy_banking_request(
     should_intercept = (is_attack and confidence > 0.75) or bool(risk_reasons)
     decision_source = _decision_source(is_attack, risk_reasons)
     risk_level = max(int(confidence * 100), 80 if risk_reasons else 0)
+    flow_stage, deception_score, trust_level, memory_hit = _compute_deception_effectiveness(
+        should_intercept=should_intercept,
+        risk_level=risk_level,
+        confidence=confidence,
+        risk_reasons_count=len(risk_reasons),
+    )
 
     event_payload = {
         "request_at": request_at,
@@ -688,6 +738,7 @@ async def _proxy_banking_request(
         "tls_fingerprint": tls_fingerprint,
         "raw_payload": detection_target,
         "principal_id": principal_id,
+        "session_chain_id": session_chain_id,
         "query_id": query_id,
         "method": request.method,
         "endpoint": f"/{upstream_path.lstrip('/')}",
@@ -723,6 +774,10 @@ async def _proxy_banking_request(
         "deception_mode": None,
         "real_backend_touched": 0,
         "response_origin": "pending",
+        "flow_stage": flow_stage,
+        "deception_score": deception_score,
+        "trust_level": trust_level,
+        "memory_hit": memory_hit,
     }
 
     status_code = 502
@@ -743,6 +798,9 @@ async def _proxy_banking_request(
             risk_level=risk_level,
         )
         event_payload.update(deception_meta)
+        event_payload["flow_stage"] = "deception"
+        event_payload["deception_score"] = max(event_payload.get("deception_score", 0), 70)
+        event_payload["trust_level"] = "high" if event_payload.get("deception_score", 0) >= 80 else "medium"
     else:
         upstream_url = f"{VULN_BANK_BASE_URL}/{upstream_path.lstrip('/')}"
         if query_text:
@@ -777,12 +835,14 @@ async def _proxy_banking_request(
             event_payload["upstream_status_code"] = status_code
             event_payload["real_backend_touched"] = 1
             event_payload["response_origin"] = "vuln_bank_main"
+            event_payload["flow_stage"] = "upstream"
         except Exception as exc:
             logger.error("banking proxy upstream failed: %s", exc)
             response_content = b'{"detail":"upstream unavailable"}'
             response_headers = {"content-type": "application/json"}
             event_payload["mitigation_status"] = "upstream_error"
             event_payload["response_origin"] = "upstream_error"
+            event_payload["flow_stage"] = "upstream_error"
 
     process_ms = int((time.perf_counter() - start_perf) * 1000)
     response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]

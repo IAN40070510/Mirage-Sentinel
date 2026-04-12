@@ -69,6 +69,7 @@ def setup_traffic_db():
         client_id INTEGER NOT NULL,
         fingerprint_id INTEGER,
         principal_id TEXT,
+        session_chain_id TEXT,
         query_id TEXT,
         device_id TEXT,
         referer TEXT,
@@ -115,6 +116,10 @@ def setup_traffic_db():
         deception_mode TEXT,
         real_backend_touched INTEGER DEFAULT 0,
         response_origin TEXT,
+        flow_stage TEXT,
+        deception_score INTEGER,
+        trust_level TEXT,
+        memory_hit INTEGER DEFAULT 0,
         FOREIGN KEY(traffic_log_id) REFERENCES traffic_logs(id)
     )
     """
@@ -132,6 +137,7 @@ def setup_traffic_db():
     _ensure_column(conn, "traffic_logs", "method TEXT")
     _ensure_column(conn, "traffic_logs", "endpoint TEXT")
     _ensure_column(conn, "traffic_logs", "principal_id TEXT")
+    _ensure_column(conn, "traffic_logs", "session_chain_id TEXT")
     _ensure_column(conn, "traffic_logs", "device_id TEXT")
     _ensure_column(conn, "traffic_logs", "referer TEXT")
     _ensure_column(conn, "traffic_logs", "header_entropy REAL")
@@ -156,6 +162,10 @@ def setup_traffic_db():
     _ensure_column(conn, "attack_details", "deception_mode TEXT")
     _ensure_column(conn, "attack_details", "real_backend_touched INTEGER DEFAULT 0")
     _ensure_column(conn, "attack_details", "response_origin TEXT")
+    _ensure_column(conn, "attack_details", "flow_stage TEXT")
+    _ensure_column(conn, "attack_details", "deception_score INTEGER")
+    _ensure_column(conn, "attack_details", "trust_level TEXT")
+    _ensure_column(conn, "attack_details", "memory_hit INTEGER DEFAULT 0")
 
     conn.commit()
     conn.close()
@@ -200,10 +210,10 @@ def log_traffic_event(data: dict[str, Any]) -> None:
         """
         INSERT INTO traffic_logs (
             request_at, response_at, process_ms, method, endpoint, client_id, fingerprint_id,
-            principal_id, query_id, device_id, referer, header_entropy, req_interval_ms, req_time_var,
+            principal_id, session_chain_id, query_id, device_id, referer, header_entropy, req_interval_ms, req_time_var,
             user_device_ratio, device_user_ratio, req_rate_5m, graph_feature_source,
             mouse_entropy, mouse_source, amount_value, amount_deviation, is_attack, location, is_proxy
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             data.get("request_at"),
@@ -214,6 +224,7 @@ def log_traffic_event(data: dict[str, Any]) -> None:
             client_id,
             fingerprint_id,
             data.get("principal_id", data.get("query_id")),
+            data.get("session_chain_id"),
             data.get("query_id"),
             data.get("device_id"),
             data.get("referer"),
@@ -244,8 +255,9 @@ def log_traffic_event(data: dict[str, Any]) -> None:
                 risk_level, hits, interaction_depth, dwell_time, mitigation_status,
                 decision_source, route_before, route_after, deception_reason,
                 policy_hit, upstream_attempted, upstream_status_code,
-                deception_engaged, deception_mode, real_backend_touched, response_origin
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                deception_engaged, deception_mode, real_backend_touched, response_origin,
+                flow_stage, deception_score, trust_level, memory_hit
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 traffic_log_id,
@@ -272,6 +284,10 @@ def log_traffic_event(data: dict[str, Any]) -> None:
                 data.get("deception_mode"),
                 1 if data.get("real_backend_touched") else 0,
                 data.get("response_origin"),
+                data.get("flow_stage"),
+                data.get("deception_score"),
+                data.get("trust_level"),
+                1 if data.get("memory_hit") else 0,
             ),
         )
 
@@ -288,7 +304,8 @@ def get_recent_traffic(limit: int = 100) -> list[dict[str, Any]]:
                d.risk_level, d.hits, d.interaction_depth, d.dwell_time, d.mitigation_status,
                d.decision_source, d.route_before, d.route_after, d.deception_reason,
                d.policy_hit, d.upstream_attempted, d.upstream_status_code,
-               d.deception_engaged, d.deception_mode, d.real_backend_touched, d.response_origin
+             d.deception_engaged, d.deception_mode, d.real_backend_touched, d.response_origin,
+             d.flow_stage, d.deception_score, d.trust_level, d.memory_hit
         FROM traffic_logs t
         JOIN clients c ON t.client_id = c.id
         LEFT JOIN fingerprints f ON t.fingerprint_id = f.id

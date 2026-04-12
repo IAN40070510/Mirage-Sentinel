@@ -278,9 +278,11 @@ def analyze_interaction_depth(client_ip: str, query_id: str) -> dict[str, Any]:
             current_payload=None,
             has_memory_hit=False,
         )
-        metrics["client_ip"] = client_ip
-        metrics["query_id"] = query_id
-        return metrics
+        # 正規化為可擴充的字典，避免型別推斷把 value 限制為 int。
+        output: dict[str, Any] = dict(metrics)
+        output["client_ip"] = client_ip
+        output["query_id"] = query_id
+        return output
     except Exception as exc:
         logger.error("Failed to analyze interaction depth for %s: %r", client_ip, exc)
         return {
@@ -529,29 +531,49 @@ def get_events_by_route(
         with get_db_connection() as conn:
             cursor = conn.cursor()
 
-            # 查詢欺敵路由（is_attack=1）或真實路由（is_attack=0）
-            is_attack = 1 if route == "deception" else 0
+            # 以分流證據欄位判斷 real/deception，而非僅依賴 is_attack。
+            if route == "deception":
+                where_clause = """
+                    (COALESCE(d.route_after, '') = 'mirage'
+                     OR COALESCE(d.deception_engaged, 0) = 1
+                     OR COALESCE(d.response_origin, '') IN ('mirage', 'sandbox_ai'))
+                """
+            else:
+                where_clause = """
+                    (COALESCE(d.real_backend_touched, 0) = 1
+                     OR COALESCE(d.response_origin, '') = 'vuln_bank_main'
+                     OR (t.is_attack = 0 AND COALESCE(d.route_after, '') != 'mirage'))
+                """
 
             cursor.execute(
-                """
+                f"""
                 SELECT
                     t.id,
                     t.request_at,
                     c.ip AS client_ip,
                     COALESCE(t.principal_id, t.query_id) AS principal_id,
+                    t.session_chain_id,
                     t.query_id,
                     t.location,
                     d.response_payload,
                     d.risk_level,
-                    d.attack_vector
+                    d.attack_vector,
+                    d.route_before,
+                    d.route_after,
+                    d.response_origin,
+                    d.real_backend_touched,
+                    d.deception_score,
+                    d.trust_level,
+                    d.memory_hit,
+                    d.flow_stage
                 FROM traffic_logs t
                 JOIN clients c ON t.client_id = c.id
                 LEFT JOIN attack_details d ON d.traffic_log_id = t.id
-                WHERE t.is_attack = ?
+                WHERE {where_clause}
                 ORDER BY t.request_at DESC
                 LIMIT ? OFFSET ?
                 """,
-                (is_attack, limit, offset),
+                (limit, offset),
             )
             rows = cursor.fetchall()
 
@@ -562,11 +584,20 @@ def get_events_by_route(
                 "request_at": row["request_at"],
                 "client_ip": row["client_ip"],
                 "principal_id": row["principal_id"],
+                "session_chain_id": row["session_chain_id"],
                 "query_id": row["query_id"],
                 "location": row["location"],
                 "route": route,
                 "risk_level": int(row["risk_level"] or 0),
                 "attack_vector": row["attack_vector"],
+                "route_before": row["route_before"],
+                "route_after": row["route_after"],
+                "response_origin": row["response_origin"],
+                "real_backend_touched": int(row["real_backend_touched"] or 0),
+                "flow_stage": row["flow_stage"],
+                "deception_score": int(row["deception_score"] or 0),
+                "trust_level": row["trust_level"] or "low",
+                "memory_hit": bool(row["memory_hit"] or 0),
                 "risk_score": None,
                 "deception_reason": None,
             }
@@ -684,6 +715,8 @@ def get_deception_chain(query_id: str) -> dict[str, Any]:
                     t.id,
                     t.request_at,
                     c.ip AS client_ip,
+                    t.session_chain_id,
+                    COALESCE(t.principal_id, t.query_id) AS principal_id,
                     t.query_id,
                     t.location,
                     t.is_attack,
@@ -692,7 +725,15 @@ def get_deception_chain(query_id: str) -> dict[str, Any]:
                     d.risk_level,
                     d.attack_vector,
                     d.interaction_depth,
-                    d.dwell_time
+                    d.dwell_time,
+                    d.route_before,
+                    d.route_after,
+                    d.response_origin,
+                    d.real_backend_touched,
+                    d.flow_stage,
+                    d.deception_score,
+                    d.trust_level,
+                    d.memory_hit
                 FROM traffic_logs t
                 JOIN clients c ON t.client_id = c.id
                 LEFT JOIN attack_details d ON d.traffic_log_id = t.id
@@ -720,11 +761,21 @@ def get_deception_chain(query_id: str) -> dict[str, Any]:
             event = {
                 "timestamp": row["request_at"],
                 "client_ip": row["client_ip"],
+                "principal_id": row["principal_id"],
+                "session_chain_id": row["session_chain_id"],
                 "location": row["location"],
                 "is_attack": bool(row["is_attack"]),
                 "attack_vector": row["attack_vector"],
                 "raw_payload": row["raw_payload"],
                 "risk_level": int(row["risk_level"] or 0),
+                "route_before": row["route_before"],
+                "route_after": row["route_after"],
+                "response_origin": row["response_origin"],
+                "real_backend_touched": int(row["real_backend_touched"] or 0),
+                "flow_stage": row["flow_stage"],
+                "deception_score": int(row["deception_score"] or 0),
+                "trust_level": row["trust_level"] or "low",
+                "memory_hit": bool(row["memory_hit"] or 0),
                 "risk_score": None,
                 "deception_reason": None,
                 "route": None,
@@ -747,10 +798,13 @@ def get_deception_chain(query_id: str) -> dict[str, Any]:
                     # 追蹤最高風險分數與欺敵事件數
                     if event["risk_score"]:
                         max_risk_score = max(max_risk_score, event["risk_score"])
-                    if payload.get("route") == "deception":
-                        deception_events += 1
                 except (json.JSONDecodeError, TypeError):
                     pass
+
+            if event["deception_score"]:
+                max_risk_score = max(max_risk_score, int(event["deception_score"]))
+            if event["flow_stage"] == "deception":
+                deception_events += 1
 
             if row["dwell_time"]:
                 total_dwell_time = max(total_dwell_time, float(row["dwell_time"]))
@@ -760,6 +814,7 @@ def get_deception_chain(query_id: str) -> dict[str, Any]:
         return {
             "query_id": query_id,
             "client_ip": rows[0]["client_ip"] if rows else None,
+            "session_chain_id": rows[0]["session_chain_id"] if rows else None,
             "chain_length": len(events),
             "deception_events": deception_events,
             "max_risk_score": max_risk_score,
@@ -771,6 +826,135 @@ def get_deception_chain(query_id: str) -> dict[str, Any]:
     except Exception as exc:
         logger.error("Failed to get deception chain for query_id %s: %r", query_id, exc)
         return {"query_id": query_id, "error": str(exc), "events": []}
+
+
+def get_deception_chain_by_session(session_chain_id: str) -> dict[str, Any]:
+    """按 session_chain_id 回放事件鏈，供 SOC 做攻擊鏈分段與驗證。"""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT
+                    t.request_at,
+                    c.ip AS client_ip,
+                    COALESCE(t.principal_id, t.query_id) AS principal_id,
+                    t.session_chain_id,
+                    t.query_id,
+                    t.method,
+                    t.endpoint,
+                    t.is_attack,
+                    d.attack_vector,
+                    d.route_before,
+                    d.route_after,
+                    d.response_origin,
+                    d.real_backend_touched,
+                    d.flow_stage,
+                    d.deception_score,
+                    d.trust_level,
+                    d.memory_hit
+                FROM traffic_logs t
+                JOIN clients c ON t.client_id = c.id
+                LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+                WHERE t.session_chain_id = ?
+                ORDER BY t.request_at ASC
+                """,
+                (session_chain_id,),
+            )
+            rows = cursor.fetchall()
+
+        if not rows:
+            return {
+                "session_chain_id": session_chain_id,
+                "chain_length": 0,
+                "events": [],
+                "message": "No events found",
+            }
+
+        events = [
+            {
+                "timestamp": row["request_at"],
+                "client_ip": row["client_ip"],
+                "principal_id": row["principal_id"],
+                "query_id": row["query_id"],
+                "method": row["method"],
+                "endpoint": row["endpoint"],
+                "is_attack": bool(row["is_attack"]),
+                "attack_vector": row["attack_vector"],
+                "route_before": row["route_before"],
+                "route_after": row["route_after"],
+                "response_origin": row["response_origin"],
+                "real_backend_touched": int(row["real_backend_touched"] or 0),
+                "flow_stage": row["flow_stage"],
+                "deception_score": int(row["deception_score"] or 0),
+                "trust_level": row["trust_level"] or "low",
+                "memory_hit": bool(row["memory_hit"] or 0),
+            }
+            for row in rows
+        ]
+
+        return {
+            "session_chain_id": session_chain_id,
+            "principal_id": rows[0]["principal_id"],
+            "client_ip": rows[0]["client_ip"],
+            "chain_length": len(events),
+            "first_event": rows[0]["request_at"],
+            "last_event": rows[-1]["request_at"],
+            "events": events,
+        }
+    except Exception as exc:
+        logger.error(
+            "Failed to get deception chain for session_chain_id %s: %r",
+            session_chain_id,
+            exc,
+        )
+        return {"session_chain_id": session_chain_id, "error": str(exc), "events": []}
+
+
+def get_deception_effectiveness_summary(hours: int = 24) -> dict[str, Any]:
+    """彙總 Mirage 成效指標，供 SOC 快速判讀欺敵品質。"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                COUNT(*) AS total_events,
+                SUM(CASE WHEN COALESCE(d.flow_stage, '') = 'deception' THEN 1 ELSE 0 END) AS deception_events,
+                SUM(CASE WHEN COALESCE(d.real_backend_touched, 0) = 1 THEN 1 ELSE 0 END) AS real_path_events,
+                AVG(COALESCE(d.deception_score, 0)) AS avg_deception_score,
+                SUM(CASE WHEN COALESCE(d.trust_level, '') = 'high' THEN 1 ELSE 0 END) AS high_trust_events,
+                SUM(CASE WHEN COALESCE(d.memory_hit, 0) = 1 THEN 1 ELSE 0 END) AS memory_hit_events
+            FROM traffic_logs t
+            LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+            WHERE t.request_at >= datetime('now', ?)
+            """,
+            (f"-{hours} hours",),
+        )
+        row = cursor.fetchone()
+
+    total_events = int(row["total_events"] or 0) if row else 0
+    deception_events = int(row["deception_events"] or 0) if row else 0
+    real_path_events = int(row["real_path_events"] or 0) if row else 0
+    high_trust_events = int(row["high_trust_events"] or 0) if row else 0
+    memory_hit_events = int(row["memory_hit_events"] or 0) if row else 0
+    avg_deception_score = round(float(row["avg_deception_score"] or 0.0), 2) if row else 0.0
+
+    deception_ratio = round((deception_events / total_events) * 100, 2) if total_events else 0.0
+    high_trust_ratio = round((high_trust_events / deception_events) * 100, 2) if deception_events else 0.0
+    memory_hit_ratio = round((memory_hit_events / deception_events) * 100, 2) if deception_events else 0.0
+
+    return {
+        "window_hours": hours,
+        "total_events": total_events,
+        "deception_events": deception_events,
+        "real_path_events": real_path_events,
+        "deception_ratio": deception_ratio,
+        "avg_deception_score": avg_deception_score,
+        "high_trust_events": high_trust_events,
+        "high_trust_ratio": high_trust_ratio,
+        "memory_hit_events": memory_hit_events,
+        "memory_hit_ratio": memory_hit_ratio,
+    }
 
 
 def auto_updates() -> dict[str, Any]:

@@ -455,3 +455,48 @@ async def get_deception_chain_replay(
     except Exception as exc:
         logger.error("回放攻擊鏈失敗: %r", exc)
         raise HTTPException(status_code=500, detail=f"回放攻擊鏈失敗: {exc}") from exc
+
+
+@router.get(
+    "/replay/session/{session_chain_id}",
+    summary="按 session_chain_id 回放攻擊鏈",
+    description="以 session_chain_id 還原單次攻擊/互動鏈，供 SOC 驗證 Mirage 成效。",
+)
+async def get_deception_chain_replay_by_session(
+    session_chain_id: str = Path(..., min_length=8, max_length=64),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+):
+    verify_api_key(x_api_key)
+    try:
+        result = ws.get_deception_chain_by_session(session_chain_id)
+        if "error" in result and result.get("chain_length", 0) == 0:
+            raise HTTPException(status_code=404, detail="查無該 session chain 事件")
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("按 session 回放攻擊鏈失敗: %r", exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"按 session 回放攻擊鏈失敗: {exc}",
+        ) from exc
+
+
+@router.get(
+    "/statistics/deception_effectiveness",
+    summary="Mirage 成效統計",
+    description="提供 deception ratio、平均分數、trust/memory 命中率等 P1 監控指標。",
+)
+async def get_deception_effectiveness(
+    hours: int = Query(24, ge=1, le=168, description="統計時間範圍（小時）"),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+):
+    verify_api_key(x_api_key)
+    try:
+        return ws.get_deception_effectiveness_summary(hours)
+    except Exception as exc:
+        logger.error("取得 Mirage 成效統計失敗: %r", exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"取得 Mirage 成效統計失敗: {exc}",
+        ) from exc
