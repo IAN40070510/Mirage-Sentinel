@@ -26,8 +26,8 @@
 #### 現況
 
 - 主入口目前會先將請求代理到 `vuln-bank-main`，之後才記錄事件與計算 `should_intercept`。
-- 目前 `should_intercept` 只影響 event log 欄位，沒有真正改寫回應路徑。
-- `Mirage` 生成模組尚未接入銀行代理主流程，因此高風險流量仍可能直接得到上游真實回應。
+- 專案其實已存在一條「部分幻象回應」路徑：當 `should_intercept=true` 時，主流程會嘗試呼叫 `core.ai_agent_orchestrator`，並以 AI 或 fallback fake data 改寫回應。
+- 但這條路徑啟動得太晚，因為 upstream request 仍已先送到 `vuln-bank-main`，所以目前仍不能視為真正的前置攔截或安全分流。
 - 偵測輸入面目前以 `path + query + body` 為主，對 header、cookie、auth token、multipart、GraphQL 結構等面向覆蓋不足。
 
 #### 已有基礎
@@ -39,7 +39,7 @@
 #### 主要缺口
 
 - `Sentinel` 仍偏向旁路觀測，未真正成為前置決策器。
-- 高風險流量未穩定導入 Mirage 回應支線。
+- 高風險流量雖然可在部分情況下被改寫為 Mirage/AI 回應，但時序上仍可能已命中真實 `vuln-bank-main`。
 - 缺少針對 `vuln-bank-main` 常見攻擊入口的端點級欺敵策略。
 
 #### 下個驗收點
@@ -56,6 +56,118 @@
    - `route_after`
    - `deception_reason`
    - `policy_hit`
+
+#### P0 細部實作任務
+
+##### P0-1：前置分流重構
+
+- 在 `_proxy_banking_request()` 中將流程拆成兩段：
+  1. `pre_upstream_risk_decision`
+  2. `upstream_or_mirage_response`
+- 規則為：
+  - 若 `should_intercept=false`，才允許送往 `vuln-bank-main`
+  - 若 `should_intercept=true`，直接走 Mirage/AI deception path
+- 驗收：
+  - 不再出現「先打上游，再改寫回應」的時序
+  - 攻擊攔截決策發生在發送 upstream request 之前
+
+##### P0-2：攻擊分類到回應模板映射
+
+- 先以目前已能攔截的 attack vector 建立第一版映射，不等待完整 LLM 幻象。
+- 建議最小映射：
+  - `sqli` -> 假查詢錯誤、假交易資料、延遲型資料頁
+  - `xss` -> 假表單回顯、假 preview 頁、可追蹤回應片段
+  - `lfi/path-traversal` -> 假設定檔、假路徑清單、假錯誤堆疊
+  - `cmdi/rce` -> 假 shell 執行結果、假 job 狀態、假 admin task queue
+  - `rate_limit/replication/anomalous_amount` -> 假風控審查、假 OTP、假人工覆核流程
+- 驗收：
+  - 不同 attack vector 至少回不同 Mirage payload family
+  - 不再只回單一 generic fallback JSON
+
+##### P0-3：高價值端點欺敵模板
+
+- 先針對以下端點實作靜態但可狀態化的 Mirage 回應：
+  - `/login`
+  - `/transfer`
+  - `/balance`
+  - `/admin`
+  - `/graphql`
+- 這些回應應來自 `mirage_memory.db` 或可拋棄 feature store，而非真實業務資料。
+- 驗收：
+  - 同一 `client_ip + query_id` 後續可得到連貫回應
+  - 攻擊者可在假流程中繼續互動至少 2 到 3 步
+
+##### P0-4：擴充偵測輸入面
+
+- 將 `detection_target` 從 `path + query + body` 擴充為標準化特徵封包，至少納入：
+  - path
+  - query
+  - body
+  - headers
+  - cookies
+  - auth header/token
+  - content-type
+  - multipart filename
+  - GraphQL query/mutation 文字
+- 驗收：
+  - 同一攻擊若僅藏在 header/cookie/token，也能被 Sentinel 納入判斷
+
+##### P0-5：分流證據欄位
+
+- 每一筆事件都要能回答「這次到底有沒有真的進 Mirage」。
+- 建議新增欄位：
+  - `decision_source`：`rule` / `ml` / `hybrid`
+  - `upstream_attempted`：`true/false`
+  - `upstream_status_code`
+  - `deception_engaged`：`true/false`
+  - `deception_mode`：`ai_deception` / `template_deception` / `fallback_deception`
+  - `real_backend_touched`：`true/false`
+  - `response_origin`：`vuln_bank_main` / `mirage` / `sandbox_ai`
+- 驗收：
+  - SOC 可直接區分「已成功導入幻象」與「仍打到真實上游」
+
+##### P0-6：最小回歸測試
+
+- 新增 smoke/integration 檢查：
+  - 可疑 SQLi 請求不得觸發 upstream
+  - 正常查詢仍可正常代理到 `vuln-bank-main`
+  - 幻象回應必須帶有可辨識的 `response_origin=mirage|sandbox_ai`
+- 驗收：
+  - PR 或本地 smoke 能直接看出 P0 是否退化
+
+#### Mirage 是否可先根據目前已攔截的攻擊做出回應
+
+可以，而且應該先這樣做。
+
+- 目前系統已經具備：
+  - `Sentinel` 規則檢測
+  - AI Sentinel 模型分數
+  - `ai_agent_orchestrator`
+  - `core.mirage` / fallback fake data
+- 代表 Mirage 不需要等到「完整理解所有 `vuln-bank-main` 漏洞」才開始上線。
+- 正確做法是先針對「目前已經能攔截的 attack vector」建立對應回應模板，先做到：
+  - 能攔
+  - 能假回
+  - 能持續互動
+  - 能被 SOC 驗證是否成功
+
+#### SOC 如何區分幻象成功與否
+
+SOC 必須以事件欄位明確區分兩件事：
+
+1. 這次請求是否曾真正打到 `vuln-bank-main`
+2. 最終回給攻擊者的是 Mirage 還是真實上游回應
+
+最低可用判斷規則如下：
+
+- `real_backend_touched=false` 且 `response_origin in {mirage, sandbox_ai}`
+  - 視為「成功進入幻象」
+- `real_backend_touched=true` 且 `response_origin=vuln_bank_main`
+  - 視為「打到真實上游」
+- `real_backend_touched=true` 且 `response_origin in {mirage, sandbox_ai}`
+  - 視為「晚攔截」，不可算成功前置欺敵
+
+這一點必須寫進 SOC 事件模型，否則資安人員無法核對 Mirage 的真實成效。
 
 ### P1：SOC 完整落地
 
