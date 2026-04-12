@@ -112,7 +112,6 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - PORT=8000
-      - API_KEY=${API_KEY}
       - ENABLE_DASHBOARD=false
       - DASHBOARD_INTERNAL_ONLY=true
       - SANDBOX_API_URL=http://sandbox:8001/simulate_attack
@@ -145,7 +144,6 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - PORT=8000
-      - API_KEY=${API_KEY}
       - ENABLE_DASHBOARD=true
       - DASHBOARD_INTERNAL_ONLY=true
       - SANDBOX_API_URL=http://sandbox:8001/simulate_attack
@@ -178,7 +176,6 @@ services:
       - .env.oracle.soc
     environment:
       - PORT=3000
-      - API_KEY=${API_KEY}
       - BACKEND_API_BASE_URL=http://backend_soc:8000/api/v1/dashboard
     command: ["node", "soc-server.js"]
     depends_on:
@@ -200,7 +197,6 @@ services:
       - .env.oracle.public
     environment:
       - PORT=3001
-      - API_KEY=${API_KEY}
       - BANKING_API_BASE_URL=http://backend_public:8000/api/v1/banking
     command: ["node", "customer-server.js"]
     depends_on:
