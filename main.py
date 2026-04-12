@@ -618,7 +618,43 @@ async def _proxy_banking_request(
     response_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
     should_intercept = (is_attack and confidence > 0.75) or bool(risk_reasons)
-    
+
+    event_payload = {
+        "request_at": request_at,
+        "response_at": response_at,
+        "process_ms": process_ms,
+        "client_ip": client_ip,
+        "location": "banking:proxy",
+        "is_proxy": detect_proxy(request),
+        "user_agent": user_agent,
+        "tls_fingerprint": tls_fingerprint,
+        "raw_payload": detection_target,
+        "query_id": query_id,
+        "method": request.method,
+        "endpoint": f"/{upstream_path.lstrip('/')}",
+        "referer": referer,
+        "header_entropy": header_entropy,
+        "req_interval_ms": req_interval_ms,
+        "req_time_var": req_time_var,
+        "device_id": device_id,
+        "user_device_ratio": graph_metrics.user_device_ratio,
+        "device_user_ratio": graph_metrics.device_user_ratio,
+        "req_rate_5m": graph_metrics.req_rate_5m,
+        "graph_feature_source": graph_metrics.source,
+        "mouse_entropy": mouse_entropy,
+        "mouse_source": mouse_source,
+        "amount_value": amount_value,
+        "amount_deviation": amount_deviation,
+        "attack_vector": attack_vector if should_intercept else None,
+        "risk_level": int(confidence * 100) if is_attack else 0,
+        "is_attack": 1 if should_intercept else 0,
+        "response_payload": None,
+        "hits": 0,
+        "interaction_depth": 0,
+        "dwell_time": 0.0,
+        "mitigation_status": "normal" if not should_intercept else "observed",
+    }
+
     # 如果檢測到攻擊，使用沙盒AI Agent處理
     if should_intercept:
         try:
@@ -663,40 +699,6 @@ async def _proxy_banking_request(
     else:
         # 非攻擊請求，正常代理到上游
         pass
-        "request_at": request_at,
-        "response_at": response_at,
-        "process_ms": process_ms,
-        "client_ip": client_ip,
-        "location": "banking:proxy",
-        "is_proxy": detect_proxy(request),
-        "user_agent": user_agent,
-        "tls_fingerprint": tls_fingerprint,
-        "raw_payload": detection_target,
-        "query_id": query_id,
-        "method": request.method,
-        "endpoint": f"/{upstream_path.lstrip('/')}",
-        "referer": referer,
-        "header_entropy": header_entropy,
-        "req_interval_ms": req_interval_ms,
-        "req_time_var": req_time_var,
-        "device_id": device_id,
-        "user_device_ratio": graph_metrics.user_device_ratio,
-        "device_user_ratio": graph_metrics.device_user_ratio,
-        "req_rate_5m": graph_metrics.req_rate_5m,
-        "graph_feature_source": graph_metrics.source,
-        "mouse_entropy": mouse_entropy,
-        "mouse_source": mouse_source,
-        "amount_value": amount_value,
-        "amount_deviation": amount_deviation,
-        "attack_vector": attack_vector if should_intercept else None,
-        "risk_level": int(confidence * 100) if is_attack else 0,
-        "is_attack": 1 if should_intercept else 0,
-        "response_payload": None,
-        "hits": 0,
-        "interaction_depth": 0,
-        "dwell_time": 0.0,
-        "mitigation_status": "normal" if not should_intercept else "observed",
-    }
 
     if background_tasks:
         background_tasks.add_task(log_traffic_event, event_payload)
