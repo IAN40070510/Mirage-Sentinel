@@ -323,7 +323,7 @@ def _log_traffic_event_once(data: dict[str, Any]) -> None:
                 deception_engaged, deception_mode, real_backend_touched, response_origin,
                 flow_stage, deception_score, trust_level, memory_hit,
                 query_string, authorization, content_type, content_length, header_count, all_headers
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 traffic_log_id,
