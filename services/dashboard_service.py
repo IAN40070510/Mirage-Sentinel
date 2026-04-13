@@ -228,7 +228,15 @@ def _is_public_ip(ip: str) -> bool:
 
 
 def _resolve_ip_region(ip: str, fallback_location: str | None = None) -> str:
-    """將 IP 轉成地區字串，失敗時回退既有 location 或 Unknown。"""
+    """將 IP 轉成國家字串，失敗時回退既有 location 或 Unknown。"""
+
+    def _country_only(value: str) -> str:
+        text = (value or "").strip()
+        if not text:
+            return ""
+        # 舊資料可能為 "Country/Region/City"，目前戰情室僅保留國家層級。
+        return text.split("/", 1)[0].strip()
+
     normalized_fallback = (fallback_location or "").strip()
     # 某些舊資料把路由占位值或 endpoint path 寫入 location，需忽略後重算。
     fallback_looks_like_endpoint = normalized_fallback.startswith("/")
@@ -240,7 +248,7 @@ def _resolve_ip_region(ip: str, fallback_location: str | None = None) -> str:
     } or ":" in normalized_fallback
 
     if normalized_fallback and not fallback_looks_like_endpoint and not fallback_is_placeholder:
-        return normalized_fallback
+        return _country_only(normalized_fallback) or "Unknown"
 
     if not _is_public_ip(ip):
         return "Private/Local"
@@ -253,35 +261,19 @@ def _resolve_ip_region(ip: str, fallback_location: str | None = None) -> str:
     geo_url = (
         "http://ip-api.com/json/"
         f"{parse.quote(ip)}"
-        "?fields=status,country,regionName,city,message"
+        "?fields=status,country,message"
     )
     try:
         with request.urlopen(geo_url, timeout=1.8) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
 
         if payload.get("status") == "success":
-            parts = [
-                payload.get("country"),
-                payload.get("regionName"),
-                payload.get("city"),
-            ]
-            dedup_parts: list[str] = []
-            seen_parts: set[str] = set()
-            for part in parts:
-                value = (part or "").strip()
-                if not value:
-                    continue
-                key = value.casefold()
-                if key in seen_parts:
-                    continue
-                seen_parts.add(key)
-                dedup_parts.append(value)
-            region = "/".join(dedup_parts) or "Unknown"
+            region = _country_only(str(payload.get("country") or "")) or "Unknown"
         else:
             region = "Unknown"
     except Exception as exc:
         logger.debug("IP 地理解析失敗 ip=%s error=%r", ip, exc)
-        region = normalized_fallback or "Unknown"
+        region = _country_only(normalized_fallback) or "Unknown"
 
     _ip_geo_cache[ip] = (region, now)
     return region
