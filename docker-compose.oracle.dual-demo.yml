@@ -121,8 +121,7 @@ services:
       - DB_INIT_RETRY_INTERVAL=2
     volumes:
       - ./data:/app/data
-      - ./scripts/upgrade_attack_details_schema.py:/docker-entrypoint-initdb.d/upgrade_attack_details_schema.py:ro
-    entrypoint: ["/bin/sh", "-c", "python /docker-entrypoint-initdb.d/upgrade_attack_details_schema.py && exec uvicorn main:app --host 0.0.0.0 --port 8000"]
+    entrypoint: ["/bin/sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port 8000"]
     depends_on:
       postgres:
         condition: service_healthy
