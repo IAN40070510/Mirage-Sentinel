@@ -10,4 +10,5 @@ COPY . .
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+# 啟動 SOC Dashboard 代理
+CMD ["node", "soc-server.js"]
