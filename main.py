@@ -32,7 +32,7 @@ import statistics
 import json
 import re
 import hashlib
-from typing import Any
+from typing import Any, cast
 import pandas as pd
 import httpx
 from datetime import datetime
@@ -791,13 +791,28 @@ async def _proxy_banking_request(
     graph_metrics = feature_store.get_metrics(user_id=principal_id, device_id=device_id)
     mouse_entropy, mouse_source = _parse_mouse_entropy(request)
 
-    (
-        is_attack,
-        confidence,
-        attack_vector,
-        sentinel_decision,
-        sentinel_model_ready,
-    ) = analyze_intent(detection_target)
+    intent_result = analyze_intent(detection_target)
+    if isinstance(intent_result, tuple):
+        intent_values = cast(tuple[Any, ...], intent_result)
+    else:
+        intent_values = ()
+
+    if len(intent_values) >= 5:
+        (
+            is_attack,
+            confidence,
+            attack_vector,
+            sentinel_decision,
+            sentinel_model_ready,
+        ) = intent_values[:5]
+    elif len(intent_values) >= 3:
+        is_attack, confidence, attack_vector = intent_values[:3]
+        sentinel_decision = "BLOCK" if is_attack else "PASS"
+        sentinel_model_ready = bool(ai_sentinel)
+    else:
+        is_attack, confidence, attack_vector = False, 0.0, "None"
+        sentinel_decision = "PASS"
+        sentinel_model_ready = bool(ai_sentinel)
     attack_vector = _normalize_attack_vector(attack_vector)
     risk_reasons: list[str] = []
 
