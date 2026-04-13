@@ -265,7 +265,18 @@ def _resolve_ip_region(ip: str, fallback_location: str | None = None) -> str:
                 payload.get("regionName"),
                 payload.get("city"),
             ]
-            region = "/".join([part for part in parts if part]) or "Unknown"
+            dedup_parts: list[str] = []
+            seen_parts: set[str] = set()
+            for part in parts:
+                value = (part or "").strip()
+                if not value:
+                    continue
+                key = value.casefold()
+                if key in seen_parts:
+                    continue
+                seen_parts.add(key)
+                dedup_parts.append(value)
+            region = "/".join(dedup_parts) or "Unknown"
         else:
             region = "Unknown"
     except Exception as exc:
@@ -473,6 +484,13 @@ def fetch_recent_traffic(limit: int = 100, mode: str = "all") -> dict[str, Any]:
     rows = core_get_recent_traffic(limit)
     if mode == "attacks":
         rows = [row for row in rows if int(row.get("is_attack") or 0) == 1]
+
+    for row in rows:
+        client_ip = str(row.get("client_ip") or "").strip()
+        resolved = _resolve_ip_region(client_ip, row.get("location"))
+        row["location"] = resolved
+        row["country"] = resolved
+
     return {"recent_traffic": rows}
 
 
