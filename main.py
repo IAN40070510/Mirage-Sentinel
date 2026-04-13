@@ -63,14 +63,15 @@ from api import dashboard
 from api.db.session import init_db, create_tables, seed_banking_demo_data
 
 # 暫時停用模型載入，保留啟動流程。
-from model.ai_sentinel import load_sentinel_model
+# Mirage-Sentinel 模型路徑重構
+from model.Sentinel.XGBoost.ai_sentinel import load_sentinel_model
 
-# from model.llama import generate_fake_data_llama
+# from model.Mirage.Llama.llama import generate_fake_data_llama
 # sys.modules["__main__"].SentinelModule = model.SentinelModule
 # sys.modules["__main__"].SecurityExtractor = model.SecurityExtractor
 from fastapi.middleware.cors import CORSMiddleware
 
-# from model.distilbert import load_bert_sentinel
+# from model.Sentinel.DistilBERT.distilbert_sentinel import load_bert_sentinel
 # distilbert_model = load_bert_sentinel()
 distilbert_model = None
 # 載入 .env（讓 API_KEY / SANDBOX_API_URL 等配置可由環境管理）
@@ -667,11 +668,12 @@ async def _execute_deception_response(
     except Exception as ai_exc:
         logger.error("[AI AGENT] 前置分流失敗，改用本機 Mirage 備援: %s", ai_exc)
 
-    fallback_payload = _local_deception_payload(
-        principal_id=principal_id,
-        attack_vector=attack_vector,
-        client_ip=client_ip,
-        upstream_path=detection_target.split(" ", 1)[0],
+    # 使用新版 Mirage 假資料生成，傳入端點與攻擊向量
+    from core.mirage import generate_fake_data
+
+    endpoint = detection_target.split(" ", 1)[0] if detection_target else ""
+    fallback_payload = generate_fake_data(
+        principal_id, endpoint=endpoint, attack_vector=attack_vector
     )
     return (
         json.dumps(fallback_payload).encode("utf-8"),
@@ -755,11 +757,13 @@ async def _proxy_banking_request(
     effective_risk_reasons = risk_reasons if not render_critical_path else []
     decision_source = _decision_source(is_attack, effective_risk_reasons)
     risk_level = max(int(confidence * 100), 80 if effective_risk_reasons else 0)
-    flow_stage, deception_score, trust_level, memory_hit = _compute_deception_effectiveness(
-        should_intercept=should_intercept,
-        risk_level=risk_level,
-        confidence=confidence,
-        risk_reasons_count=len(effective_risk_reasons),
+    flow_stage, deception_score, trust_level, memory_hit = (
+        _compute_deception_effectiveness(
+            should_intercept=should_intercept,
+            risk_level=risk_level,
+            confidence=confidence,
+            risk_reasons_count=len(effective_risk_reasons),
+        )
     )
 
     event_payload = {
@@ -801,9 +805,11 @@ async def _proxy_banking_request(
         "decision_source": decision_source,
         "route_before": "banking_proxy",
         "route_after": "mirage" if should_intercept else "vuln_bank_main",
-        "deception_reason": ", ".join(effective_risk_reasons)
-        if effective_risk_reasons
-        else attack_vector,
+        "deception_reason": (
+            ", ".join(effective_risk_reasons)
+            if effective_risk_reasons
+            else attack_vector
+        ),
         "policy_hit": attack_vector if should_intercept else None,
         "upstream_attempted": 0,
         "upstream_status_code": None,
@@ -836,8 +842,12 @@ async def _proxy_banking_request(
         )
         event_payload.update(deception_meta)
         event_payload["flow_stage"] = "deception"
-        event_payload["deception_score"] = max(event_payload.get("deception_score", 0), 70)
-        event_payload["trust_level"] = "high" if event_payload.get("deception_score", 0) >= 80 else "medium"
+        event_payload["deception_score"] = max(
+            event_payload.get("deception_score", 0), 70
+        )
+        event_payload["trust_level"] = (
+            "high" if event_payload.get("deception_score", 0) >= 80 else "medium"
+        )
     else:
         upstream_url = f"{VULN_BANK_BASE_URL}/{upstream_path.lstrip('/')}"
         if query_text:
