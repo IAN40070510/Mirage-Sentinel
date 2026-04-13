@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 # ===== 核心模組匯入 =====
 # sentinel：攻擊意圖偵測（目前改為本機 AI 模型主判斷）
-# deception_db：欺敵記憶讀寫（同 IP + query_id 的持續欺敵）
+# deception_db：欺敵記憶讀寫
 # deception_engine：互動深度/漏斗層級評分
 # traffic_db：全量流量事件落地
 # sandbox：惡意流量導向沙盒/降級假資料
@@ -62,17 +62,11 @@ from core.sentinel import (
 from api import dashboard
 from api.db.session import init_db, create_tables, seed_banking_demo_data
 
-# 暫時停用模型載入，保留啟動流程。
 # Mirage-Sentinel 模型路徑重構
 from model.Sentinel.XGBoost.ai_sentinel import load_sentinel_model
 
-# from model.Mirage.Llama.llama import generate_fake_data_llama
-# sys.modules["__main__"].SentinelModule = model.SentinelModule
-# sys.modules["__main__"].SecurityExtractor = model.SecurityExtractor
 from fastapi.middleware.cors import CORSMiddleware
 
-# from model.Sentinel.DistilBERT.distilbert_sentinel import load_bert_sentinel
-# distilbert_model = load_bert_sentinel()
 distilbert_model = None
 # 載入 .env（讓 API_KEY / SANDBOX_API_URL 等配置可由環境管理）
 load_dotenv()

@@ -87,6 +87,12 @@ def setup_traffic_db():
         is_attack INTEGER DEFAULT 0,
         location TEXT,
         is_proxy INTEGER DEFAULT 0,
+        query_string TEXT,
+        authorization TEXT,
+        content_type TEXT,
+        content_length TEXT,
+        header_count INTEGER,
+        all_headers TEXT,
         FOREIGN KEY(client_id) REFERENCES clients(id),
         FOREIGN KEY(fingerprint_id) REFERENCES fingerprints(id)
     )
@@ -120,10 +126,29 @@ def setup_traffic_db():
         deception_score INTEGER,
         trust_level TEXT,
         memory_hit INTEGER DEFAULT 0,
+        query_string TEXT,
+        authorization TEXT,
+        content_type TEXT,
+        content_length TEXT,
+        header_count INTEGER,
+        all_headers TEXT,
         FOREIGN KEY(traffic_log_id) REFERENCES traffic_logs(id)
     )
     """
     )
+    # 兼容既有 DB，補齊新欄位
+    _ensure_column(conn, "traffic_logs", "query_string TEXT")
+    _ensure_column(conn, "traffic_logs", "authorization TEXT")
+    _ensure_column(conn, "traffic_logs", "content_type TEXT")
+    _ensure_column(conn, "traffic_logs", "content_length TEXT")
+    _ensure_column(conn, "traffic_logs", "header_count INTEGER")
+    _ensure_column(conn, "traffic_logs", "all_headers TEXT")
+    _ensure_column(conn, "attack_details", "query_string TEXT")
+    _ensure_column(conn, "attack_details", "authorization TEXT")
+    _ensure_column(conn, "attack_details", "content_type TEXT")
+    _ensure_column(conn, "attack_details", "content_length TEXT")
+    _ensure_column(conn, "attack_details", "header_count INTEGER")
+    _ensure_column(conn, "attack_details", "all_headers TEXT")
 
     cursor.execute(
         "CREATE INDEX IF NOT EXISTS idx_traffic_logs_is_attack ON traffic_logs(is_attack)"
@@ -207,7 +232,9 @@ def log_traffic_event(data: dict[str, Any]) -> None:
     fingerprint_id = cursor.fetchone()["id"]
 
     route_before = data.get("route_before") or "banking_proxy"
-    route_after = data.get("route_after") or ("mirage" if is_attack else "vuln_bank_main")
+    route_after = data.get("route_after") or (
+        "mirage" if is_attack else "vuln_bank_main"
+    )
     response_origin = data.get("response_origin") or (
         "sandbox_ai" if is_attack else "vuln_bank_main"
     )
@@ -228,8 +255,9 @@ def log_traffic_event(data: dict[str, Any]) -> None:
             request_at, response_at, process_ms, method, endpoint, client_id, fingerprint_id,
             principal_id, session_chain_id, query_id, device_id, referer, header_entropy, req_interval_ms, req_time_var,
             user_device_ratio, device_user_ratio, req_rate_5m, graph_feature_source,
-            mouse_entropy, mouse_source, amount_value, amount_deviation, is_attack, location, is_proxy
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            mouse_entropy, mouse_source, amount_value, amount_deviation, is_attack, location, is_proxy,
+            query_string, authorization, content_type, content_length, header_count, all_headers
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             data.get("request_at"),
@@ -258,6 +286,16 @@ def log_traffic_event(data: dict[str, Any]) -> None:
             is_attack,
             data.get("location"),
             is_proxy,
+            data.get("query_string"),
+            data.get("authorization"),
+            data.get("content_type"),
+            data.get("content_length"),
+            data.get("header_count"),
+            (
+                json.dumps(data.get("all_headers"), ensure_ascii=False)
+                if data.get("all_headers")
+                else None
+            ),
         ),
     )
 
@@ -271,8 +309,9 @@ def log_traffic_event(data: dict[str, Any]) -> None:
             decision_source, route_before, route_after, deception_reason,
             policy_hit, upstream_attempted, upstream_status_code,
             deception_engaged, deception_mode, real_backend_touched, response_origin,
-            flow_stage, deception_score, trust_level, memory_hit
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            flow_stage, deception_score, trust_level, memory_hit,
+            query_string, authorization, content_type, content_length, header_count, all_headers
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             traffic_log_id,
@@ -303,6 +342,16 @@ def log_traffic_event(data: dict[str, Any]) -> None:
             deception_score,
             trust_level,
             1 if data.get("memory_hit") else 0,
+            data.get("query_string"),
+            data.get("authorization"),
+            data.get("content_type"),
+            data.get("content_length"),
+            data.get("header_count"),
+            (
+                json.dumps(data.get("all_headers"), ensure_ascii=False)
+                if data.get("all_headers")
+                else None
+            ),
         ),
     )
 
@@ -315,19 +364,23 @@ def get_recent_traffic(limit: int = 100) -> list[dict[str, Any]]:
     cursor = conn.cursor()
     cursor.execute(
         """
-        SELECT t.*, c.ip AS client_ip, f.user_agent, f.tls_fingerprint, d.attack_vector,
-               d.risk_level, d.hits, d.interaction_depth, d.dwell_time, d.mitigation_status,
+        SELECT t.*, c.ip AS client_ip, f.user_agent, f.tls_fingerprint,
+               d.attack_vector, d.risk_level, d.hits, d.interaction_depth, d.dwell_time, d.mitigation_status,
                d.decision_source, d.route_before, d.route_after, d.deception_reason,
                d.policy_hit, d.upstream_attempted, d.upstream_status_code,
-             d.deception_engaged, d.deception_mode, d.real_backend_touched, d.response_origin,
-             d.flow_stage, d.deception_score, d.trust_level, d.memory_hit
+               d.deception_engaged, d.deception_mode, d.real_backend_touched, d.response_origin,
+               d.flow_stage, d.deception_score, d.trust_level, d.memory_hit,
+               t.query_string, t.authorization, t.content_type, t.content_length, t.header_count, t.all_headers,
+               d.query_string AS attack_query_string, d.authorization AS attack_authorization,
+               d.content_type AS attack_content_type, d.content_length AS attack_content_length,
+               d.header_count AS attack_header_count, d.all_headers AS attack_all_headers
         FROM traffic_logs t
         JOIN clients c ON t.client_id = c.id
         LEFT JOIN fingerprints f ON t.fingerprint_id = f.id
         LEFT JOIN attack_details d ON d.traffic_log_id = t.id
         ORDER BY t.request_at DESC
         LIMIT ?
-    """,
+        """,
         (limit,),
     )
     rows = cursor.fetchall()
