@@ -132,6 +132,7 @@ def setup_traffic_db():
         content_length TEXT,
         header_count INTEGER,
         all_headers TEXT,
+        dummy_padding TEXT,
         FOREIGN KEY(traffic_log_id) REFERENCES traffic_logs(id)
     )
     """
@@ -149,6 +150,7 @@ def setup_traffic_db():
     _ensure_column(conn, "attack_details", "content_length TEXT")
     _ensure_column(conn, "attack_details", "header_count INTEGER")
     _ensure_column(conn, "attack_details", "all_headers TEXT")
+    _ensure_column(conn, "attack_details", "dummy_padding TEXT")
 
     cursor.execute(
         "CREATE INDEX IF NOT EXISTS idx_traffic_logs_is_attack ON traffic_logs(is_attack)"
