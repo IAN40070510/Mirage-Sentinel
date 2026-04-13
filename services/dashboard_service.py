@@ -230,13 +230,16 @@ def _is_public_ip(ip: str) -> bool:
 def _resolve_ip_region(ip: str, fallback_location: str | None = None) -> str:
     """將 IP 轉成地區字串，失敗時回退既有 location 或 Unknown。"""
     normalized_fallback = (fallback_location or "").strip()
-    # 某些舊資料把 endpoint path 寫入 location，例如 /api/v1/user，需忽略後重算。
+    # 某些舊資料把路由占位值或 endpoint path 寫入 location，需忽略後重算。
     fallback_looks_like_endpoint = normalized_fallback.startswith("/")
-    if (
-        normalized_fallback
-        and normalized_fallback != "-"
-        and not fallback_looks_like_endpoint
-    ):
+    fallback_is_placeholder = normalized_fallback.lower() in {
+        "-",
+        "unknown",
+        "banking:proxy",
+        "private/local",
+    } or ":" in normalized_fallback
+
+    if normalized_fallback and not fallback_looks_like_endpoint and not fallback_is_placeholder:
         return normalized_fallback
 
     if not _is_public_ip(ip):
