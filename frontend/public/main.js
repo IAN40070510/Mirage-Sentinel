@@ -6,33 +6,56 @@ async function loadRecentTraffic() {
   try {
     const data = await fetchJson(`${API_BASE}/recent_traffic?limit=30`);
     const logs = Array.isArray(data.recent_traffic) ? data.recent_traffic : [];
-    recentTrafficList.innerHTML = logs.map(log => {
+    recentTrafficList.innerHTML = logs.map((log, idx) => {
       // 解析 all_headers 欄位（JSON 轉字串）
-      let allHeadersStr = "";
+      let allHeadersStr = "-";
+      let allHeadersObj = null;
       try {
         if (log.all_headers) {
           if (typeof log.all_headers === "string") {
-            allHeadersStr = JSON.stringify(JSON.parse(log.all_headers), null, 2);
+            allHeadersObj = JSON.parse(log.all_headers);
+            allHeadersStr = JSON.stringify(allHeadersObj, null, 2);
           } else {
-            allHeadersStr = JSON.stringify(log.all_headers, null, 2);
+            allHeadersObj = log.all_headers;
+            allHeadersStr = JSON.stringify(allHeadersObj, null, 2);
           }
         }
       } catch (e) {
-        allHeadersStr = String(log.all_headers);
+        allHeadersStr = String(log.all_headers || "-");
       }
 
+      // 重要欄位顏色與 icon
+      const riskColor = log.risk_level > 0 ? '#ff4d4f' : '#00ffa2';
+      const riskIcon = log.risk_level > 0 ? '⚠️' : '';
+      const endpoint = escapeHtml(log.endpoint || "-");
+      const payload = escapeHtml(log.raw_payload || "-");
+      const query = escapeHtml(log.query_string || "-");
+      const authorization = escapeHtml(log.authorization || "-");
+      const contentType = escapeHtml(log.content_type || "-");
+      const contentLength = escapeHtml(log.content_length || "-");
+      const headerCount = escapeHtml(String(log.header_count ?? "-"));
+      const time = escapeHtml(log.request_at || "-");
+
+      // headers 摺疊
+      const headersId = `headers-${idx}`;
+
       return `
-      <div class="log-item${log.risk_level > 0 ? ' attack' : ''}">
-        <div><span class="log-label">時間</span>: <span class="log-time">${escapeHtml(log.request_at || "")}</span></div>
-        <div><span class="log-label">端點</span>: <span class="log-ep">${escapeHtml(log.endpoint || "")}</span></div>
-        <div><span class="log-label">Payload</span>: <span class="log-payload">${escapeHtml(log.raw_payload || "")}</span></div>
-        <div><span class="log-label">Query</span>: <span class="log-query">${escapeHtml(log.query_string || "")}</span></div>
-        <div><span class="log-label">Authorization</span>: <span class="log-auth">${escapeHtml(log.authorization || "")}</span></div>
-        <div><span class="log-label">Content-Type</span>: <span class="log-ct">${escapeHtml(log.content_type || "")}</span></div>
-        <div><span class="log-label">Content-Length</span>: <span class="log-cl">${escapeHtml(log.content_length || "")}</span></div>
-        <div><span class="log-label">Header Count</span>: <span class="log-hc">${escapeHtml(String(log.header_count ?? ""))}</span></div>
-        <div><span class="log-label">All Headers</span>: <pre class="log-headers">${escapeHtml(allHeadersStr)}</pre></div>
-        <div><span class="log-label">風險</span>: <span class="log-risk">${log.risk_level > 0 ? "⚠️" : ""}</span></div>
+      <div class="log-item log-card${log.risk_level > 0 ? ' attack' : ''}" style="border:1px solid #1affb2; border-radius:8px; margin-bottom:1.2em; background:rgba(0,32,32,0.22); padding:1em 1.2em;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span class="log-label" style="font-weight:bold;">${time}</span>
+          <span class="log-risk" style="color:${riskColor};font-weight:bold;">${riskIcon} ${log.risk_level > 0 ? 'RISK' : 'NORMAL'}</span>
+        </div>
+        <div><span class="log-label" style="font-weight:bold;">端點</span>: <span style="color:#00ffa2;">${endpoint}</span></div>
+        <div><span class="log-label">Payload</span>: <span style="color:#ffd700;">${payload}</span></div>
+        <div><span class="log-label">Query</span>: ${query}</div>
+        <div><span class="log-label">Authorization</span>: ${authorization}</div>
+        <div><span class="log-label">Content-Type</span>: ${contentType}</div>
+        <div><span class="log-label">Content-Length</span>: ${contentLength}</div>
+        <div><span class="log-label">Header Count</span>: ${headerCount}</div>
+        <div><span class="log-label">All Headers</span>:
+          <button onclick="const el=document.getElementById('${headersId}');el.style.display=el.style.display==='none'?'block':'none';this.textContent=el.style.display==='none'?'展開':'收合';" style="margin-left:0.5em;font-size:0.9em;">展開</button>
+          <pre id="${headersId}" class="log-headers" style="display:none;background:rgba(0,0,0,0.18);color:#baffff;padding:0.5em 0.7em;border-radius:4px;max-height:180px;overflow:auto;">${escapeHtml(allHeadersStr)}</pre>
+        </div>
       </div>
       `;
     }).join("") || "<div class='system-empty'>目前沒有攔截紀錄</div>";
