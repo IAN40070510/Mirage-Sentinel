@@ -696,7 +696,12 @@ async def _proxy_banking_request(
     start_perf = time.perf_counter()
     request_epoch_ms = int(time.time() * 1000)
     request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    client_ip = request.client.host if request.client else ""
+    # 支援 X-Forwarded-For，確保取得真實來源 IP
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        client_ip = xff.split(",")[0].strip()
+    else:
+        client_ip = request.client.host if request.client else ""
     user_agent = request.headers.get("user-agent", "Unknown")
     referer = request.headers.get("referer")
     tls_fingerprint = request.headers.get("X-JA3-Fingerprint", "N/A")
@@ -706,6 +711,12 @@ async def _proxy_banking_request(
     body_bytes = await request.body()
     body_text = body_bytes.decode("utf-8", errors="ignore") if body_bytes else ""
     query_text = request.url.query or ""
+    # 補強：完整擷取所有 header
+    headers_dict = {k.lower(): v for k, v in request.headers.items()}
+    header_count = len(headers_dict)
+    content_type = headers_dict.get("content-type", "")
+    content_length = headers_dict.get("content-length", "")
+    authorization = headers_dict.get("authorization", "")
     # principal_id 表示「互動主體識別」，目前優先對應到 vuln-bank-main 的
     # X-User-Id / CIF / customer id。若缺失則回退成 proxy:<client_ip>。
     # query_id 為歷史命名，暫時保留作為相容欄位。
@@ -770,17 +781,23 @@ async def _proxy_banking_request(
         "request_at": request_at,
         "response_at": None,
         "process_ms": 0,
-        "client_ip": client_ip,
+        "client_ip": client_ip,  # 真實來源 IP（支援 X-Forwarded-For）
         "location": "banking:proxy",
         "is_proxy": detect_proxy(request),
         "user_agent": user_agent,
         "tls_fingerprint": tls_fingerprint,
-        "raw_payload": detection_target,
+        "raw_payload": body_text,  # 完整未解析的原始負載
         "principal_id": principal_id,
         "session_chain_id": session_chain_id,
         "query_id": query_id,
-        "method": request.method,
-        "endpoint": f"/{upstream_path.lstrip('/')}",
+        "method": request.method,  # 請求方法
+        "endpoint": f"/{upstream_path.lstrip('/')}",  # 完整目標路徑
+        "query_string": query_text,  # 查詢參數原文
+        "authorization": authorization,  # 身分驗證憑證原文
+        "content_type": content_type,  # 內容類型宣告
+        "content_length": content_length,  # 內容長度宣告
+        "header_count": header_count,  # 標頭總數量
+        "all_headers": headers_dict,  # 所有 header（for 鑑識/除錯，可選）
         "referer": referer,
         "header_entropy": header_entropy,
         "req_interval_ms": req_interval_ms,
