@@ -115,7 +115,7 @@ async function loadRecentTraffic() {
     recentTrafficList.innerHTML = "<div class='system-empty'>無法取得攔截紀錄</div>";
   }
 }
-let API_BASE = "/api/dashboard";
+let API_BASE = "/api/v1/dashboard";
 const AUTO_REFRESH_MS = 5000;
 
 let selectedIp = null;
