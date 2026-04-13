@@ -36,12 +36,17 @@ async function loadRecentTraffic() {
       const headerCount = escapeHtml(String(log.header_count ?? "-"));
       const time = escapeHtml(log.request_at || "-");
       const method = escapeHtml(log.method || "-");
-      const sentinelScore = Number.isFinite(Number(log.sentinel_score))
-        ? Number(log.sentinel_score).toFixed(4)
+      const xgboostScoreRaw = log.xgboost_score ?? log.sentinel_score;
+      const xgboostDecisionRaw = log.xgboost_decision ?? log.sentinel_decision;
+      const xgboostAttackTypeRaw = log.xgboost_attack_type ?? log.sentinel_attack_type;
+      const xgboostModelReadyRaw = log.xgboost_model_ready ?? log.sentinel_model_ready;
+
+      const sentinelScore = Number.isFinite(Number(xgboostScoreRaw))
+        ? Number(xgboostScoreRaw).toFixed(4)
         : "0.0000";
-      const sentinelDecision = escapeHtml(log.sentinel_decision || "PASS");
-      const sentinelAttackType = escapeHtml(log.sentinel_attack_type || "normal");
-      const sentinelModelReady = Number(log.sentinel_model_ready || 0) === 1 ? "ready" : "fallback";
+      const sentinelDecision = escapeHtml(xgboostDecisionRaw || "PASS");
+      const sentinelAttackType = escapeHtml(xgboostAttackTypeRaw || "normal");
+      const sentinelModelReady = Number(xgboostModelReadyRaw || 0) === 1 ? "ready" : "fallback";
 
       // 來源地區顯示（國家名稱＋國旗）
       let country = log.location || log.country || "-";
@@ -114,7 +119,7 @@ async function loadRecentTraffic() {
           <button onclick="const el=document.getElementById('${detailId}');el.style.display=el.style.display==='none'?'block':'none';this.textContent=el.style.display==='none'?'詳情':'收合';" style="font-size:0.85em;">詳情</button>
         </div>
         <div style="margin-top:2px;"><span class="log-label">Payload</span>: <span style="color:#ffd700;">${shortPayload}</span></div>
-        <div style="margin-top:2px;"><span class="log-label">Sentinel</span>: <span style="color:#8bd3ff;">${sentinelDecision}</span> | score <span style="color:#8bd3ff;">${sentinelScore}</span> | type <span style="color:#8bd3ff;">${sentinelAttackType}</span> | model <span style="color:#8bd3ff;">${sentinelModelReady}</span></div>
+        <div style="margin-top:2px;"><span class="log-label">XGBoost</span>: <span style="color:#8bd3ff;">${sentinelDecision}</span> | score <span style="color:#8bd3ff;">${sentinelScore}</span> | type <span style="color:#8bd3ff;">${sentinelAttackType}</span> | model <span style="color:#8bd3ff;">${sentinelModelReady}</span></div>
 
         <div id="${detailId}" style="display:none;margin-top:6px;">
           <div><span class="log-label">Query</span>: ${query}</div>

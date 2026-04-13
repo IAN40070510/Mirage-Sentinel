@@ -482,6 +482,10 @@ def fetch_recent_traffic(limit: int = 100, mode: str = "all") -> dict[str, Any]:
         resolved = _resolve_ip_region(client_ip, row.get("location"))
         row["location"] = resolved
         row["country"] = resolved
+        row["xgboost_score"] = row.get("sentinel_score")
+        row["xgboost_attack_type"] = row.get("sentinel_attack_type")
+        row["xgboost_decision"] = row.get("sentinel_decision")
+        row["xgboost_model_ready"] = row.get("sentinel_model_ready")
 
     return {"recent_traffic": rows}
 

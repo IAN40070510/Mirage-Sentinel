@@ -814,6 +814,7 @@ async def _proxy_banking_request(
         sentinel_decision = "PASS"
         sentinel_model_ready = bool(ai_sentinel)
     attack_vector = _normalize_attack_vector(attack_vector)
+    model_attack_type = attack_vector
     risk_reasons: list[str] = []
 
     replication_risk, replication_reason = detect_replication_risk(
@@ -889,7 +890,7 @@ async def _proxy_banking_request(
         "amount_value": amount_value,
         "amount_deviation": amount_deviation,
         "sentinel_score": round(confidence, 6),
-        "sentinel_attack_type": attack_vector,
+        "sentinel_attack_type": model_attack_type,
         "sentinel_decision": sentinel_decision,
         "sentinel_model_ready": 1 if sentinel_model_ready else 0,
         "attack_vector": attack_vector if should_intercept else None,
