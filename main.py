@@ -25,6 +25,7 @@ import uvicorn
 import time
 import os
 import logging
+import importlib
 import ipaddress
 import math
 import statistics
@@ -62,8 +63,26 @@ from core.sentinel import (
 from api import dashboard
 from api.db.session import init_db, create_tables, seed_banking_demo_data
 
-# Mirage-Sentinel 模型路徑重構
-from model.Sentinel.XGBoost.ai_sentinel import load_sentinel_model
+def _resolve_model_loader():
+    """模型路徑相容：優先新路徑，失敗時回退舊路徑。"""
+    module_candidates = (
+        "model.Sentinel.XGBoost.ai_sentinel",
+        "model.ai_sentinel",
+    )
+    for module_name in module_candidates:
+        try:
+            module = importlib.import_module(module_name)
+            loader = getattr(module, "load_sentinel_model", None)
+            if callable(loader):
+                return loader
+        except Exception:
+            continue
+
+    logger.warning("AI 模型載入器不可用，將回退簽名規則模式。")
+    return lambda: None
+
+
+load_sentinel_model = _resolve_model_loader()
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -105,6 +124,31 @@ def _is_private_or_loopback_ip(ip_text: str) -> bool:
         return ip_obj.is_private or ip_obj.is_loopback
     except Exception:
         return False
+
+
+def _is_valid_ip(ip_text: str) -> bool:
+    try:
+        ipaddress.ip_address((ip_text or "").strip())
+        return True
+    except Exception:
+        return False
+
+
+def _extract_client_ip(request: Request) -> str:
+    """擷取可信來源 IP：僅在上游是私網代理時才信任轉發標頭。"""
+    peer_ip = request.client.host if request.client else ""
+    if _is_private_or_loopback_ip(peer_ip):
+        xff = request.headers.get("x-forwarded-for", "")
+        if xff:
+            forwarded_ip = xff.split(",")[0].strip()
+            if _is_valid_ip(forwarded_ip):
+                return forwarded_ip
+
+        x_real_ip = request.headers.get("x-real-ip", "").strip()
+        if _is_valid_ip(x_real_ip):
+            return x_real_ip
+
+    return peer_ip
 
 
 async def verify_dashboard_access(
@@ -586,8 +630,17 @@ def _build_upstream_headers(request: Request) -> dict[str, str]:
         k: v for k, v in request.headers.items() if k.lower() not in drop_headers
     }
     headers["x-forwarded-proto"] = request.headers.get("x-forwarded-proto", "http")
-    headers["x-real-ip"] = request.client.host if request.client else ""
+    headers["x-real-ip"] = _extract_client_ip(request)
     return headers
+
+
+def _normalize_attack_vector(attack_vector: str | None) -> str:
+    normalized = (attack_vector or "").strip()
+    if not normalized:
+        return ""
+    if normalized.lower() in {"none", "null", "unknown"}:
+        return ""
+    return normalized
 
 
 def _decision_source(is_attack: bool, risk_reasons: list[str]) -> str:
@@ -690,12 +743,7 @@ async def _proxy_banking_request(
     start_perf = time.perf_counter()
     request_epoch_ms = int(time.time() * 1000)
     request_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    # 支援 X-Forwarded-For，確保取得真實來源 IP
-    xff = request.headers.get("x-forwarded-for")
-    if xff:
-        client_ip = xff.split(",")[0].strip()
-    else:
-        client_ip = request.client.host if request.client else ""
+    client_ip = _extract_client_ip(request)
     user_agent = request.headers.get("user-agent", "Unknown")
     referer = request.headers.get("referer")
     tls_fingerprint = request.headers.get("X-JA3-Fingerprint", "N/A")
@@ -735,6 +783,7 @@ async def _proxy_banking_request(
     mouse_entropy, mouse_source = _parse_mouse_entropy(request)
 
     is_attack, confidence, attack_vector = analyze_intent(detection_target)
+    attack_vector = _normalize_attack_vector(attack_vector)
     risk_reasons: list[str] = []
 
     replication_risk, replication_reason = detect_replication_risk(
