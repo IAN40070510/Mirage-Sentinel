@@ -825,7 +825,9 @@ async def _proxy_banking_request(
         "response_at": None,
         "process_ms": 0,
         "client_ip": client_ip,  # 真實來源 IP（支援 X-Forwarded-For）
-        "location": "banking:proxy",
+        "location": request.headers.get("CF-IPCountry")
+        or request.headers.get("X-Country")
+        or request.headers.get("X-Country-Code"),
         "is_proxy": detect_proxy(request),
         "user_agent": user_agent,
         "tls_fingerprint": tls_fingerprint,

@@ -3,8 +3,11 @@ import os
 import json
 import logging
 import time
+import ipaddress
 from datetime import datetime, timezone
 from typing import Any, cast
+from urllib import parse as url_parse
+from urllib import request as url_request
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +18,66 @@ DB_PATH = os.path.join(PROJECT_ROOT, "data", "traffic_logs.db")
 SQLITE_TIMEOUT_SECONDS = 15.0
 SQLITE_BUSY_TIMEOUT_MS = 15000
 SQLITE_MAX_WRITE_RETRIES = 4
+IP_GEO_CACHE_TTL_SECONDS = 1800
+_IP_GEO_CACHE: dict[str, tuple[str, float]] = {}
+
+
+def _is_public_ip(ip: str) -> bool:
+    try:
+        ip_obj = ipaddress.ip_address(ip)
+        return not (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_reserved
+            or ip_obj.is_multicast
+            or ip_obj.is_link_local
+        )
+    except Exception:
+        return False
+
+
+def _normalize_location_fallback(location: str | None) -> str | None:
+    value = (location or "").strip()
+    if not value:
+        return None
+    lowered = value.lower()
+    if lowered in {"-", "unknown", "banking:proxy", "private/local"}:
+        return None
+    if ":" in value:
+        return None
+    return value
+
+
+def _resolve_country_from_ip(client_ip: str, fallback: str | None = None) -> str:
+    normalized_fallback = _normalize_location_fallback(fallback)
+    if not client_ip:
+        return normalized_fallback or "Unknown"
+
+    if not _is_public_ip(client_ip):
+        return "Private/Local"
+
+    now = time.time()
+    cached = _IP_GEO_CACHE.get(client_ip)
+    if cached and now - cached[1] <= IP_GEO_CACHE_TTL_SECONDS:
+        return cached[0]
+
+    geo_url = (
+        "http://ip-api.com/json/"
+        f"{url_parse.quote(client_ip)}"
+        "?fields=status,country,countryCode,message"
+    )
+    try:
+        with url_request.urlopen(geo_url, timeout=1.8) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        if payload.get("status") == "success":
+            country = (payload.get("country") or "").strip() or "Unknown"
+        else:
+            country = normalized_fallback or "Unknown"
+    except Exception:
+        country = normalized_fallback or "Unknown"
+
+    _IP_GEO_CACHE[client_ip] = (country, now)
+    return country
 
 
 def get_connection():
@@ -216,6 +279,8 @@ def _log_traffic_event_once(data: dict[str, Any]) -> None:
         if not client_ip:
             raise ValueError("log_traffic_event requires 'client_ip' in data")
 
+        location = _resolve_country_from_ip(client_ip, data.get("location"))
+
         if not data.get("request_at"):
             data["request_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
@@ -296,7 +361,7 @@ def _log_traffic_event_once(data: dict[str, Any]) -> None:
                 data.get("amount_value"),
                 data.get("amount_deviation"),
                 is_attack,
-                data.get("location"),
+                location,
                 is_proxy,
                 data.get("query_string"),
                 data.get("authorization"),
