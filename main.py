@@ -32,6 +32,7 @@ import statistics
 import json
 import re
 import hashlib
+from typing import Any
 import pandas as pd
 import httpx
 from datetime import datetime
@@ -94,7 +95,7 @@ feature_store = get_feature_store()
 # ===== API Key 設定 =====
 # API_KEY 主要用於 Dashboard 驗證；當 Dashboard 關閉時，允許以警告模式啟動。
 API_KEY = os.getenv("API_KEY", "").strip()
-ai_sentinel = load_sentinel_model()
+ai_sentinel: Any = load_sentinel_model()
 
 
 def _is_placeholder_secret(secret: str) -> bool:
@@ -185,14 +186,21 @@ async def verify_dashboard_access(
 def analyze_intent(text: str):
     """
     使用本機 AI Sentinel 作為主判斷引擎，回傳格式與舊介面相容。
-    回傳: (is_attack, confidence, attack_vector)
+    回傳: (is_attack, confidence, attack_vector, sentinel_decision, sentinel_model_ready)
     """
     if not text or not str(text).strip():
-        return False, 0.0, "None"
+        return False, 0.0, "None", "PASS", bool(ai_sentinel)
 
     if not ai_sentinel:
         # 模型未載入時回退到簽名規則引擎，避免入口完全失明。
-        return signature_analyze_intent(text)
+        is_attack, confidence, attack_vector = signature_analyze_intent(text)
+        return (
+            is_attack,
+            confidence,
+            attack_vector,
+            "BLOCK" if is_attack else "PASS",
+            False,
+        )
 
     try:
         df_input = pd.DataFrame({"payload": [str(text).lower().strip()]})
@@ -200,12 +208,13 @@ def analyze_intent(text: str):
 
         confidence = float(judgment["attack_score"])
         attack_vector = str(judgment["top_attack_type"])
+        sentinel_decision = str(judgment.get("decision", "PASS") or "PASS")
         is_attack = confidence > 0.3
 
-        return is_attack, confidence, attack_vector
+        return is_attack, confidence, attack_vector, sentinel_decision, True
     except Exception as exc:
         logger.error(f"AI Sentinel 判斷失敗: {exc}")
-        return False, 0.0, "None"
+        return False, 0.0, "None", "PASS", bool(ai_sentinel)
 
 
 @asynccontextmanager
@@ -782,7 +791,13 @@ async def _proxy_banking_request(
     graph_metrics = feature_store.get_metrics(user_id=principal_id, device_id=device_id)
     mouse_entropy, mouse_source = _parse_mouse_entropy(request)
 
-    is_attack, confidence, attack_vector = analyze_intent(detection_target)
+    (
+        is_attack,
+        confidence,
+        attack_vector,
+        sentinel_decision,
+        sentinel_model_ready,
+    ) = analyze_intent(detection_target)
     attack_vector = _normalize_attack_vector(attack_vector)
     risk_reasons: list[str] = []
 
@@ -805,7 +820,9 @@ async def _proxy_banking_request(
     if risk_reasons:
         attack_vector = ", ".join(filter(None, [attack_vector, *risk_reasons]))
 
-    should_intercept = (is_attack and confidence > 0.75) or (
+    should_intercept = (
+        is_attack and (sentinel_decision == "BLOCK" or confidence > 0.75)
+    ) or (
         bool(risk_reasons) and not render_critical_path
     )
     effective_risk_reasons = risk_reasons if not render_critical_path else []
@@ -856,6 +873,10 @@ async def _proxy_banking_request(
         "mouse_source": mouse_source,
         "amount_value": amount_value,
         "amount_deviation": amount_deviation,
+        "sentinel_score": round(confidence, 6),
+        "sentinel_attack_type": attack_vector,
+        "sentinel_decision": sentinel_decision,
+        "sentinel_model_ready": 1 if sentinel_model_ready else 0,
         "attack_vector": attack_vector if should_intercept else None,
         "risk_level": risk_level if should_intercept else 0,
         "is_attack": 1 if should_intercept else 0,

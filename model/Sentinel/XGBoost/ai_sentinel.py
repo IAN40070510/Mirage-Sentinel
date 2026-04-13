@@ -1,5 +1,7 @@
 import argparse
 import json
+import logging
+import os
 import re
 from collections import Counter
 from math import log2
@@ -12,6 +14,9 @@ import pandas as pd
 import scipy.sparse as sp
 from sklearn.base import BaseEstimator, TransformerMixin
 from xgboost import XGBClassifier  # type: ignore[import-not-found]
+
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_LABELS = {
@@ -185,6 +190,27 @@ class SentinelXGBInference:
                 "payload": payload_series.values,
             }
         )
+
+
+def _resolve_model_dir(explicit_model_dir: str | Path | None = None) -> Path:
+    if explicit_model_dir:
+        return Path(explicit_model_dir).expanduser().resolve()
+
+    env_model_dir = os.getenv("SENTINEL_MODEL_DIR", "").strip()
+    if env_model_dir:
+        return Path(env_model_dir).expanduser().resolve()
+
+    return Path(__file__).resolve().parent
+
+
+def load_sentinel_model(model_dir: str | Path | None = None) -> SentinelXGBInference | None:
+    """Load Sentinel model for API runtime; returns None when artifacts are unavailable."""
+    resolved_dir = _resolve_model_dir(model_dir)
+    try:
+        return SentinelXGBInference(resolved_dir)
+    except Exception as exc:
+        logger.warning("Sentinel model unavailable at %s: %s", resolved_dir, exc)
+        return None
 
 
 def _read_inputs(input_text: str | None, input_file: str | None, payload_col: str) -> pd.DataFrame:

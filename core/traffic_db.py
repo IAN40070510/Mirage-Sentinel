@@ -177,6 +177,10 @@ def setup_traffic_db():
         response_payload TEXT,
         attack_vector TEXT,
         risk_level INTEGER,
+        sentinel_score REAL,
+        sentinel_attack_type TEXT,
+        sentinel_decision TEXT,
+        sentinel_model_ready INTEGER DEFAULT 0,
         hits INTEGER,
         interaction_depth INTEGER,
         dwell_time REAL,
@@ -263,6 +267,10 @@ def setup_traffic_db():
     _ensure_column(conn, "attack_details", "deception_score INTEGER")
     _ensure_column(conn, "attack_details", "trust_level TEXT")
     _ensure_column(conn, "attack_details", "memory_hit INTEGER DEFAULT 0")
+    _ensure_column(conn, "attack_details", "sentinel_score REAL")
+    _ensure_column(conn, "attack_details", "sentinel_attack_type TEXT")
+    _ensure_column(conn, "attack_details", "sentinel_decision TEXT")
+    _ensure_column(conn, "attack_details", "sentinel_model_ready INTEGER DEFAULT 0")
 
     conn.commit()
     conn.close()
@@ -382,13 +390,14 @@ def _log_traffic_event_once(data: dict[str, Any]) -> None:
             """
             INSERT OR REPLACE INTO attack_details (
                 traffic_log_id, raw_payload, response_payload, attack_vector,
-                risk_level, hits, interaction_depth, dwell_time, mitigation_status,
+                risk_level, sentinel_score, sentinel_attack_type, sentinel_decision, sentinel_model_ready,
+                hits, interaction_depth, dwell_time, mitigation_status,
                 decision_source, route_before, route_after, deception_reason,
                 policy_hit, upstream_attempted, upstream_status_code,
                 deception_engaged, deception_mode, real_backend_touched, response_origin,
                 flow_stage, deception_score, trust_level, memory_hit,
                 query_string, authorization, content_type, content_length, header_count, all_headers
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 traffic_log_id,
@@ -400,6 +409,10 @@ def _log_traffic_event_once(data: dict[str, Any]) -> None:
                 ),
                 data.get("attack_vector") if is_attack else None,
                 risk_level,
+                float(data.get("sentinel_score") or 0.0),
+                data.get("sentinel_attack_type"),
+                data.get("sentinel_decision") or ("BLOCK" if is_attack else "PASS"),
+                1 if data.get("sentinel_model_ready") else 0,
                 data.get("hits") if is_attack else 0,
                 data.get("interaction_depth") if is_attack else 0,
                 data.get("dwell_time") if is_attack else 0.0,
@@ -470,7 +483,9 @@ def get_recent_traffic(limit: int = 100) -> list[dict[str, Any]]:
     cursor.execute(
         """
         SELECT t.*, c.ip AS client_ip, f.user_agent, f.tls_fingerprint,
-               d.attack_vector, d.risk_level, d.hits, d.interaction_depth, d.dwell_time, d.mitigation_status,
+             d.attack_vector, d.risk_level, d.sentinel_score, d.sentinel_attack_type,
+             d.sentinel_decision, d.sentinel_model_ready,
+             d.hits, d.interaction_depth, d.dwell_time, d.mitigation_status,
                d.decision_source, d.route_before, d.route_after, d.deception_reason,
                d.policy_hit, d.upstream_attempted, d.upstream_status_code,
                d.deception_engaged, d.deception_mode, d.real_backend_touched, d.response_origin,
