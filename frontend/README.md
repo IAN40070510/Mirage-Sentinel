@@ -1,9 +1,12 @@
 # Mirage-Sentinel | 視覺化監控儀表板 (Frontend)
 
-這是 **Mirage-Sentinel** 網路安全監控系統的前端模組。本模組已拆分成兩個入口：
+
+這是 **Mirage-Sentinel** 網路安全監控系統的前端模組。現行架構已拆分成：
 
 - **SOC 前端**：`http://127.0.0.1:3000`，負責監看惡意流量、欺敵紀錄與攻擊時間軸。
-- **客戶前端**：`http://127.0.0.1:3001`，負責正常銀行操作展示。
+- **銀行 Demo（vuln-bank-main）**：首頁 (`http://127.0.0.1/` 或 `http://localhost/`) 直接由 vuln-bank-main（Flask app）提供，作為正常銀行操作展示。
+
+> ⚠️ 注意：原本的 Node.js customer-server.js 客戶前端已廢除，銀行 demo 現由 vuln-bank-main（Flask app）獨立運行，並由 nginx 80 port 反向代理首頁。
 
 ## 資料夾結構說明
 
@@ -21,14 +24,17 @@ Mirage-Sentinel/
 ├── data/                  # [數據存儲層] 實體資料檔案
 │   └── traffic_logs.db    # 存儲攻擊事件的 SQLite 資料庫檔案
 │
-├── frontend/              # [前端展示層] 視覺化介面
-│   ├── public/            # 靜態資源存放處
-│   │   ├── index.html     # 儀表板主入口
+├── frontend/              # [前端展示層] SOC Dashboard 視覺化介面
+│   ├── public/            # SOC Dashboard 靜態資源
+│   │   ├── index.html     # SOC 儀表板主入口
 │   │   ├── main.js        # 調用 API (fetch) 與渲染數據
 │   │   └── style.css      # 介面視覺樣式
-│   ├── package.json       # 前端環境設定
-│   ├── soc-server.js      # SOC 前端託管伺服器
-│   └── customer-server.js  # 客戶前端託管伺服器
+│   ├── package.json       # SOC 前端環境設定
+│   └── soc-server.js      # SOC 前端託管伺服器
+├── vuln-bank-main/        # [銀行 Demo] Flask app，首頁即由此服務提供
+│   ├── app.py             # Flask 主程式
+│   ├── static/            # 銀行前端靜態資源
+│   └── templates/         # 銀行前端模板
 │
 └── main.py                # [系統總入口] 啟動後端並掛載所有 API 路由
 ```
@@ -49,8 +55,9 @@ Mirage-Sentinel/
 # SOC 前端
 npm --prefix frontend run start:soc
 
-# 客戶前端
-npm --prefix frontend run start:customer
+
+# 銀行 Demo（vuln-bank-main）
+由 docker-compose 啟動，首頁即為 Flask app，無需額外前端啟動指令。
 ```
 
 ---
@@ -64,7 +71,8 @@ npm --prefix frontend run start:customer
 5. **攻擊指令熱區圖**： 系統自動統計所有攔截日誌，實時計算並動態展示 **前 10 名最常被輸入** 的惡意指令（如 SQLi 字串、RCE 指令），協助管理員掌握熱門攻擊手法。
 6. **自動更新**： 前端儀表板採用異步輪詢技術，每 **5 秒** 自動向後端 API 請求最新數據並更新頁面內容，確保監控介面維持在「零延遲」的實時監控狀態。
 7. **顯示個別IP的詳細資訊**： 支援「數據下鑽」功能，點擊單一 IP 即可獲取該攻擊者的詳細情資，包含來源地區、使用的工具 (User-Agent)、Payload 細節及風險評分。
-8. **實際流量分析**： 建立雙軌對比圖表，將「正常用戶數據」與「攻擊行為資訊」進行視覺化對照，幫助管理員快速判斷當前系統受威脅的比例與影響範圍。
+	8. **實際流量分析**： 建立雙軌對比圖表，將「正常用戶數據」與「攻擊行為資訊」進行視覺化對照，幫助管理員快速判斷當前系統受威脅的比例與影響範圍。
+	9. **銀行 Demo 首頁**：首頁 (`/`) 由 vuln-bank-main（Flask app）直接提供，支援完整銀行操作與攻擊模擬。
 9. **分類系統**： 具備高度自定義能力，管理員可自訂攻擊類別名稱（如「高危指令」、「零時差威脅」），並透過 UI 勾選特定 Payload 將其快速歸納入指定類別。
 10. **指令系統**： 內建管理員控制台（Easter Egg/Admin CLI），支援輸入特定自訂指令（如 `get_hacker_info`）後，系統即時從後端資料庫提取並輸出該駭客的全方位取證數據。
 11. **資料庫建立**： 採用 **SQLite3** 作為系統核心存儲引擎，確保資料庫結構具備輕量化、高效能查詢以及易於備份與轉移的特性。
