@@ -1,0 +1,14 @@
+{
+  "labels": {
+    "0": "normal",
+    "1": "sqli",
+    "2": "xss",
+    "3": "lfi",
+    "4": "ssti",
+    "5": "cmdi",
+    "6": "path-traversal",
+    "7": "anomaly and other attacks"
+  },
+  "block_threshold": 0.7,
+  "review_threshold": 0.3
+}
