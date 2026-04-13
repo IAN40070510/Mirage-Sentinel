@@ -42,9 +42,8 @@ jobs:
               compose_env_arg=""
             fi
 
-            export COMPOSE_PROFILES=demo-ui
-            $COMPOSE_CMD $compose_env_arg -f docker-compose.oracle.dual-demo.yml restart backend_public backend_soc
-            $COMPOSE_CMD $compose_env_arg -f docker-compose.oracle.dual-demo.yml restart frontend_soc frontend_customer
+            $COMPOSE_CMD --profile demo-ui $compose_env_arg -f docker-compose.oracle.dual-demo.yml restart backend_public backend_soc
+            $COMPOSE_CMD --profile demo-ui $compose_env_arg -f docker-compose.oracle.dual-demo.yml restart frontend_soc frontend_customer
 
             curl -fsS http://127.0.0.1/banking/ >/dev/null
 

@@ -2,6 +2,7 @@ import sqlite3
 import os
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Any, cast
 
@@ -11,12 +12,18 @@ logger = logging.getLogger(__name__)
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
 DB_PATH = os.path.join(PROJECT_ROOT, "data", "traffic_logs.db")
+SQLITE_TIMEOUT_SECONDS = 15.0
+SQLITE_BUSY_TIMEOUT_MS = 15000
+SQLITE_MAX_WRITE_RETRIES = 4
 
 
 def get_connection():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=SQLITE_TIMEOUT_SECONDS)
     conn.row_factory = sqlite3.Row
+    conn.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
     return conn
 
 
@@ -199,166 +206,197 @@ def setup_traffic_db():
     logger.info(f"Traffic Log Engine Ready: {DB_PATH}")
 
 
-def log_traffic_event(data: dict[str, Any]) -> None:
-    """寫入全流量紀錄（包含正常 / 攻擊），攻擊進一步寫入 attack_details"""
+def _log_traffic_event_once(data: dict[str, Any]) -> None:
+    """單次寫入全流量紀錄（包含正常 / 攻擊）。"""
     conn = get_connection()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    client_ip = data.get("client_ip")
-    if not client_ip:
-        raise ValueError("log_traffic_event requires 'client_ip' in data")
+        client_ip = data.get("client_ip")
+        if not client_ip:
+            raise ValueError("log_traffic_event requires 'client_ip' in data")
 
-    if not data.get("request_at"):
-        data["request_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        if not data.get("request_at"):
+            data["request_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
-    user_agent = data.get("user_agent")
-    tls_fingerprint = data.get("tls_fingerprint")
-    is_proxy = 1 if data.get("is_proxy") else 0
-    is_attack = 1 if data.get("is_attack") else 0
+        user_agent = data.get("user_agent")
+        tls_fingerprint = data.get("tls_fingerprint")
+        is_proxy = 1 if data.get("is_proxy") else 0
+        is_attack = 1 if data.get("is_attack") else 0
 
-    cursor.execute(
-        "INSERT OR IGNORE INTO clients (ip, polluted_status) VALUES (?, ?)",
-        (client_ip, is_proxy),
-    )
-    cursor.execute("SELECT id FROM clients WHERE ip = ?", (client_ip,))
-    client_id = cursor.fetchone()["id"]
+        cursor.execute(
+            "INSERT OR IGNORE INTO clients (ip, polluted_status) VALUES (?, ?)",
+            (client_ip, is_proxy),
+        )
+        cursor.execute("SELECT id FROM clients WHERE ip = ?", (client_ip,))
+        client_id = cursor.fetchone()["id"]
 
-    cursor.execute(
-        "INSERT OR IGNORE INTO fingerprints (user_agent, tls_fingerprint) VALUES (?, ?)",
-        (user_agent, tls_fingerprint),
-    )
-    cursor.execute(
-        "SELECT id FROM fingerprints WHERE user_agent = ? AND tls_fingerprint = ?",
-        (user_agent, tls_fingerprint),
-    )
-    fingerprint_id = cursor.fetchone()["id"]
+        cursor.execute(
+            "INSERT OR IGNORE INTO fingerprints (user_agent, tls_fingerprint) VALUES (?, ?)",
+            (user_agent, tls_fingerprint),
+        )
+        cursor.execute(
+            "SELECT id FROM fingerprints WHERE user_agent = ? AND tls_fingerprint = ?",
+            (user_agent, tls_fingerprint),
+        )
+        fingerprint_id = cursor.fetchone()["id"]
 
-    route_before = data.get("route_before") or "banking_proxy"
-    route_after = data.get("route_after") or (
-        "mirage" if is_attack else "vuln_bank_main"
-    )
-    response_origin = data.get("response_origin") or (
-        "sandbox_ai" if is_attack else "vuln_bank_main"
-    )
-    flow_stage = data.get("flow_stage") or ("deception" if is_attack else "upstream")
-    deception_score = data.get("deception_score")
-    trust_level = data.get("trust_level") or ("medium" if is_attack else "low")
-    real_backend_touched = 1 if data.get("real_backend_touched") else 0
-    deception_engaged = 1 if data.get("deception_engaged") else 0
-    upstream_attempted = 1 if data.get("upstream_attempted") else 0
-    risk_level = int(data.get("risk_level") or 0)
-    if not is_attack:
-        deception_score = 0
-        risk_level = 0
+        route_before = data.get("route_before") or "banking_proxy"
+        route_after = data.get("route_after") or (
+            "mirage" if is_attack else "vuln_bank_main"
+        )
+        response_origin = data.get("response_origin") or (
+            "sandbox_ai" if is_attack else "vuln_bank_main"
+        )
+        flow_stage = data.get("flow_stage") or (
+            "deception" if is_attack else "upstream"
+        )
+        deception_score = data.get("deception_score")
+        trust_level = data.get("trust_level") or ("medium" if is_attack else "low")
+        real_backend_touched = 1 if data.get("real_backend_touched") else 0
+        deception_engaged = 1 if data.get("deception_engaged") else 0
+        upstream_attempted = 1 if data.get("upstream_attempted") else 0
+        risk_level = int(data.get("risk_level") or 0)
+        if not is_attack:
+            deception_score = 0
+            risk_level = 0
 
-    cursor.execute(
-        """
-        INSERT INTO traffic_logs (
-            request_at, response_at, process_ms, method, endpoint, client_id, fingerprint_id,
-            principal_id, session_chain_id, query_id, device_id, referer, header_entropy, req_interval_ms, req_time_var,
-            user_device_ratio, device_user_ratio, req_rate_5m, graph_feature_source,
-            mouse_entropy, mouse_source, amount_value, amount_deviation, is_attack, location, is_proxy,
-            query_string, authorization, content_type, content_length, header_count, all_headers
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            data.get("request_at"),
-            data.get("response_at"),
-            data.get("process_ms"),
-            data.get("method"),
-            data.get("endpoint"),
-            client_id,
-            fingerprint_id,
-            data.get("principal_id", data.get("query_id")),
-            data.get("session_chain_id"),
-            data.get("query_id"),
-            data.get("device_id"),
-            data.get("referer"),
-            data.get("header_entropy"),
-            data.get("req_interval_ms"),
-            data.get("req_time_var"),
-            data.get("user_device_ratio"),
-            data.get("device_user_ratio"),
-            data.get("req_rate_5m"),
-            data.get("graph_feature_source"),
-            data.get("mouse_entropy"),
-            data.get("mouse_source"),
-            data.get("amount_value"),
-            data.get("amount_deviation"),
-            is_attack,
-            data.get("location"),
-            is_proxy,
-            data.get("query_string"),
-            data.get("authorization"),
-            data.get("content_type"),
-            data.get("content_length"),
-            data.get("header_count"),
+        cursor.execute(
+            """
+            INSERT INTO traffic_logs (
+                request_at, response_at, process_ms, method, endpoint, client_id, fingerprint_id,
+                principal_id, session_chain_id, query_id, device_id, referer, header_entropy, req_interval_ms, req_time_var,
+                user_device_ratio, device_user_ratio, req_rate_5m, graph_feature_source,
+                mouse_entropy, mouse_source, amount_value, amount_deviation, is_attack, location, is_proxy,
+                query_string, authorization, content_type, content_length, header_count, all_headers
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
             (
-                json.dumps(data.get("all_headers"), ensure_ascii=False)
-                if data.get("all_headers")
-                else None
+                data.get("request_at"),
+                data.get("response_at"),
+                data.get("process_ms"),
+                data.get("method"),
+                data.get("endpoint"),
+                client_id,
+                fingerprint_id,
+                data.get("principal_id", data.get("query_id")),
+                data.get("session_chain_id"),
+                data.get("query_id"),
+                data.get("device_id"),
+                data.get("referer"),
+                data.get("header_entropy"),
+                data.get("req_interval_ms"),
+                data.get("req_time_var"),
+                data.get("user_device_ratio"),
+                data.get("device_user_ratio"),
+                data.get("req_rate_5m"),
+                data.get("graph_feature_source"),
+                data.get("mouse_entropy"),
+                data.get("mouse_source"),
+                data.get("amount_value"),
+                data.get("amount_deviation"),
+                is_attack,
+                data.get("location"),
+                is_proxy,
+                data.get("query_string"),
+                data.get("authorization"),
+                data.get("content_type"),
+                data.get("content_length"),
+                data.get("header_count"),
+                (
+                    json.dumps(data.get("all_headers"), ensure_ascii=False)
+                    if data.get("all_headers")
+                    else None
+                ),
             ),
-        ),
-    )
+        )
 
-    traffic_log_id = cursor.lastrowid
+        traffic_log_id = cursor.lastrowid
 
-    cursor.execute(
-        """
-        INSERT OR REPLACE INTO attack_details (
-            traffic_log_id, raw_payload, response_payload, attack_vector,
-            risk_level, hits, interaction_depth, dwell_time, mitigation_status,
-            decision_source, route_before, route_after, deception_reason,
-            policy_hit, upstream_attempted, upstream_status_code,
-            deception_engaged, deception_mode, real_backend_touched, response_origin,
-            flow_stage, deception_score, trust_level, memory_hit,
-            query_string, authorization, content_type, content_length, header_count, all_headers
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            traffic_log_id,
-            data.get("raw_payload"),
+        cursor.execute(
+            """
+            INSERT OR REPLACE INTO attack_details (
+                traffic_log_id, raw_payload, response_payload, attack_vector,
+                risk_level, hits, interaction_depth, dwell_time, mitigation_status,
+                decision_source, route_before, route_after, deception_reason,
+                policy_hit, upstream_attempted, upstream_status_code,
+                deception_engaged, deception_mode, real_backend_touched, response_origin,
+                flow_stage, deception_score, trust_level, memory_hit,
+                query_string, authorization, content_type, content_length, header_count, all_headers
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
             (
-                json.dumps(data.get("response_payload"), ensure_ascii=False)
-                if data.get("response_payload") is not None
-                else None
+                traffic_log_id,
+                data.get("raw_payload"),
+                (
+                    json.dumps(data.get("response_payload"), ensure_ascii=False)
+                    if data.get("response_payload") is not None
+                    else None
+                ),
+                data.get("attack_vector") if is_attack else None,
+                risk_level,
+                data.get("hits") if is_attack else 0,
+                data.get("interaction_depth") if is_attack else 0,
+                data.get("dwell_time") if is_attack else 0.0,
+                data.get("mitigation_status"),
+                data.get("decision_source") if is_attack else "normal_flow",
+                route_before,
+                route_after,
+                data.get("deception_reason") if is_attack else None,
+                data.get("policy_hit") if is_attack else None,
+                upstream_attempted,
+                data.get("upstream_status_code"),
+                deception_engaged,
+                data.get("deception_mode") if is_attack else None,
+                real_backend_touched,
+                response_origin,
+                flow_stage,
+                deception_score,
+                trust_level,
+                1 if data.get("memory_hit") else 0,
+                data.get("query_string"),
+                data.get("authorization"),
+                data.get("content_type"),
+                data.get("content_length"),
+                data.get("header_count"),
+                (
+                    json.dumps(data.get("all_headers"), ensure_ascii=False)
+                    if data.get("all_headers")
+                    else None
+                ),
             ),
-            data.get("attack_vector") if is_attack else None,
-            risk_level,
-            data.get("hits") if is_attack else 0,
-            data.get("interaction_depth") if is_attack else 0,
-            data.get("dwell_time") if is_attack else 0.0,
-            data.get("mitigation_status"),
-            data.get("decision_source") if is_attack else "normal_flow",
-            route_before,
-            route_after,
-            data.get("deception_reason") if is_attack else None,
-            data.get("policy_hit") if is_attack else None,
-            upstream_attempted,
-            data.get("upstream_status_code"),
-            deception_engaged,
-            data.get("deception_mode") if is_attack else None,
-            real_backend_touched,
-            response_origin,
-            flow_stage,
-            deception_score,
-            trust_level,
-            1 if data.get("memory_hit") else 0,
-            data.get("query_string"),
-            data.get("authorization"),
-            data.get("content_type"),
-            data.get("content_length"),
-            data.get("header_count"),
-            (
-                json.dumps(data.get("all_headers"), ensure_ascii=False)
-                if data.get("all_headers")
-                else None
-            ),
-        ),
-    )
+        )
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def log_traffic_event(data: dict[str, Any]) -> None:
+    """寫入流量事件，遇到 SQLite 鎖衝突時重試並保持請求流程不崩潰。"""
+    for attempt in range(SQLITE_MAX_WRITE_RETRIES):
+        try:
+            _log_traffic_event_once(data)
+            return
+        except sqlite3.OperationalError as exc:
+            message = str(exc).lower()
+            locked = "database is locked" in message or "database table is locked" in message
+            if not locked:
+                logger.exception("log_traffic_event failed (non-lock operational error)")
+                return
+
+            if attempt == SQLITE_MAX_WRITE_RETRIES - 1:
+                logger.error(
+                    "log_traffic_event dropped after retries due to sqlite lock: %s",
+                    exc,
+                )
+                return
+
+            # 短暫退避，避免大量背景寫入在同一個鎖窗口內重撞。
+            time.sleep(0.05 * (2**attempt))
+        except Exception:
+            logger.exception("log_traffic_event failed unexpectedly")
+            return
 
 
 def get_recent_traffic(limit: int = 100) -> list[dict[str, Any]]:
