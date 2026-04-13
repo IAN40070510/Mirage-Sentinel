@@ -35,6 +35,7 @@ async function loadRecentTraffic() {
       const contentLength = escapeHtml(log.content_length || "-");
       const headerCount = escapeHtml(String(log.header_count ?? "-"));
       const time = escapeHtml(log.request_at || "-");
+      const method = escapeHtml(log.method || "-");
 
       // 來源地區顯示（國家名稱＋國旗）
       let country = log.location || log.country || "-";
@@ -89,24 +90,35 @@ async function loadRecentTraffic() {
 
       // headers 摺疊
       const headersId = `headers-${idx}`;
+      const detailId = `traffic-detail-${idx}`;
+      const shortPayload = payload.length > 80 ? `${payload.slice(0, 80)}...` : payload;
 
       return `
-      <div class="log-item log-card${log.risk_level > 0 ? ' attack' : ''}" style="border:1px solid #1affb2; border-radius:8px; margin-bottom:1.2em; background:rgba(0,32,32,0.22); padding:1em 1.2em;">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div class="log-item log-card${log.risk_level > 0 ? ' attack' : ''}" style="border:1px solid #1affb2; border-radius:8px; margin-bottom:0.7em; background:rgba(0,32,32,0.22); padding:0.65em 0.8em;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
           <span class="log-label" style="font-weight:bold;">${time}</span>
-          <span class="log-risk" style="color:${riskColor};font-weight:bold;">${riskIcon} ${log.risk_level > 0 ? 'RISK' : 'NORMAL'}</span>
+          <span class="log-risk" style="color:${riskColor};font-weight:bold;white-space:nowrap;">${riskIcon} ${log.risk_level > 0 ? 'RISK' : 'NORMAL'}</span>
         </div>
-        <div><span class="log-label" style="font-weight:bold;">來源地區</span>: <span style="color:#00ffa2;">${countryFlag ? countryFlag + ' ' : ''}${countryDisplay}</span></div>
-        <div><span class="log-label" style="font-weight:bold;">端點</span>: <span style="color:#00ffa2;">${endpoint}</span></div>
-        <div><span class="log-label">Payload</span>: <span style="color:#ffd700;">${payload}</span></div>
-        <div><span class="log-label">Query</span>: ${query}</div>
-        <div><span class="log-label">Authorization</span>: ${authorization}</div>
-        <div><span class="log-label">Content-Type</span>: ${contentType}</div>
-        <div><span class="log-label">Content-Length</span>: ${contentLength}</div>
-        <div><span class="log-label">Header Count</span>: ${headerCount}</div>
-        <div><span class="log-label">All Headers</span>:
-          <button onclick="const el=document.getElementById('${headersId}');el.style.display=el.style.display==='none'?'block':'none';this.textContent=el.style.display==='none'?'展開':'收合';" style="margin-left:0.5em;font-size:0.9em;">展開</button>
-          <pre id="${headersId}" class="log-headers" style="display:none;background:rgba(0,0,0,0.18);color:#baffff;padding:0.5em 0.7em;border-radius:4px;max-height:180px;overflow:auto;">${escapeHtml(allHeadersStr)}</pre>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <span style="color:#7ef2d3;">${method}</span>
+          <span style="color:#00ffa2;word-break:break-all;">${endpoint}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:2px;">
+          <span><span class="log-label" style="font-weight:bold;">來源地區</span>: <span style="color:#00ffa2;">${countryFlag ? countryFlag + ' ' : ''}${countryDisplay}</span></span>
+          <button onclick="const el=document.getElementById('${detailId}');el.style.display=el.style.display==='none'?'block':'none';this.textContent=el.style.display==='none'?'詳情':'收合';" style="font-size:0.85em;">詳情</button>
+        </div>
+        <div style="margin-top:2px;"><span class="log-label">Payload</span>: <span style="color:#ffd700;">${shortPayload}</span></div>
+
+        <div id="${detailId}" style="display:none;margin-top:6px;">
+          <div><span class="log-label">Query</span>: ${query}</div>
+          <div><span class="log-label">Authorization</span>: ${authorization}</div>
+          <div><span class="log-label">Content-Type</span>: ${contentType}</div>
+          <div><span class="log-label">Content-Length</span>: ${contentLength}</div>
+          <div><span class="log-label">Header Count</span>: ${headerCount}</div>
+          <div><span class="log-label">All Headers</span>:
+            <button onclick="const el=document.getElementById('${headersId}');el.style.display=el.style.display==='none'?'block':'none';this.textContent=el.style.display==='none'?'展開':'收合';" style="margin-left:0.5em;font-size:0.9em;">展開</button>
+            <pre id="${headersId}" class="log-headers" style="display:none;background:rgba(0,0,0,0.18);color:#baffff;padding:0.5em 0.7em;border-radius:4px;max-height:180px;overflow:auto;">${escapeHtml(allHeadersStr)}</pre>
+          </div>
         </div>
       </div>
       `;
