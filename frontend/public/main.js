@@ -36,6 +36,57 @@ async function loadRecentTraffic() {
       const headerCount = escapeHtml(String(log.header_count ?? "-"));
       const time = escapeHtml(log.request_at || "-");
 
+      // 來源地區顯示（國家名稱＋國旗）
+      let country = log.location || log.country || "-";
+      let countryDisplay = "-";
+      let countryFlag = "";
+      // 排除 banking:proxy、Private/Local、- 等無效地區
+      if (country && typeof country === "string") {
+        const lower = country.toLowerCase();
+        if (lower === "private/local" || lower === "-" || lower.includes("proxy") || lower.startsWith("/")) {
+          countryDisplay = "-";
+        } else {
+          // 國家名稱與國旗
+          // 支援格式: "Taiwan", "United States", "Japan", "China", "Hong Kong", "Singapore" ...
+          // 以 ISO 3166-1 alpha-2 對應 emoji
+          const countryMap = {
+            "taiwan": {name: "台灣", code: "TW"},
+            "japan": {name: "日本", code: "JP"},
+            "china": {name: "中國", code: "CN"},
+            "united states": {name: "美國", code: "US"},
+            "singapore": {name: "新加坡", code: "SG"},
+            "hong kong": {name: "香港", code: "HK"},
+            "south korea": {name: "南韓", code: "KR"},
+            "france": {name: "法國", code: "FR"},
+            "germany": {name: "德國", code: "DE"},
+            "russia": {name: "俄羅斯", code: "RU"},
+            "india": {name: "印度", code: "IN"},
+            "united kingdom": {name: "英國", code: "GB"},
+            "canada": {name: "加拿大", code: "CA"},
+            "australia": {name: "澳洲", code: "AU"},
+            "netherlands": {name: "荷蘭", code: "NL"},
+            "malaysia": {name: "馬來西亞", code: "MY"},
+            "vietnam": {name: "越南", code: "VN"},
+            "thailand": {name: "泰國", code: "TH"},
+            "indonesia": {name: "印尼", code: "ID"},
+            "philippines": {name: "菲律賓", code: "PH"},
+            "unknown": {name: "未知", code: ""}
+          };
+          let key = lower.trim();
+          if (countryMap[key]) {
+            countryDisplay = countryMap[key].name;
+            if (countryMap[key].code) {
+              // 國旗 emoji
+              const code = countryMap[key].code.toUpperCase();
+              countryFlag = code.replace(/./g, c => String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65));
+            }
+          } else {
+            // fallback: 顯示原始名稱
+            countryDisplay = country;
+          }
+        }
+      }
+
       // headers 摺疊
       const headersId = `headers-${idx}`;
 
@@ -45,6 +96,7 @@ async function loadRecentTraffic() {
           <span class="log-label" style="font-weight:bold;">${time}</span>
           <span class="log-risk" style="color:${riskColor};font-weight:bold;">${riskIcon} ${log.risk_level > 0 ? 'RISK' : 'NORMAL'}</span>
         </div>
+        <div><span class="log-label" style="font-weight:bold;">來源地區</span>: <span style="color:#00ffa2;">${countryFlag ? countryFlag + ' ' : ''}${countryDisplay}</span></div>
         <div><span class="log-label" style="font-weight:bold;">端點</span>: <span style="color:#00ffa2;">${endpoint}</span></div>
         <div><span class="log-label">Payload</span>: <span style="color:#ffd700;">${payload}</span></div>
         <div><span class="log-label">Query</span>: ${query}</div>
