@@ -5,6 +5,20 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
+
+# 兼容舊 SOC 前端路由 alias（必須放在 app 實例建立之後）
+@app.get("/api/v1/dashboard/command_heatmap")
+async def dashboard_command_heatmap(request: Request):
+    require_api_key(request)
+    return get_command_heatmap()
+
+
+@app.get("/api/v1/dashboard/traffic_compare")
+async def dashboard_traffic_compare(request: Request):
+    require_api_key(request)
+    return compare_traffic()
+
+
 # 與新版 API 相容的 alias 路由，供 SOC 前端存取
 from fastapi import APIRouter
 
@@ -154,7 +168,9 @@ async def dashboard_events_by_risk_score(
     limit: int = 100,
 ):
     require_api_key(request)
-    return get_events_by_risk_score(min_score=min_score, max_score=max_score, limit=limit)
+    return get_events_by_risk_score(
+        min_score=min_score, max_score=max_score, limit=limit
+    )
 
 
 @app.get("/api/v1/dashboard/replay/{query_id}")
@@ -592,48 +608,75 @@ def get_events_by_route(
 
             # 以分流證據欄位判斷 real/deception，而非僅依賴 is_attack。
             if route == "deception":
-                where_clause = """
-                    (COALESCE(d.route_after, '') = 'mirage'
-                     OR COALESCE(d.deception_engaged, 0) = 1
-                     OR COALESCE(d.response_origin, '') IN ('mirage', 'sandbox_ai'))
-                """
+                cursor.execute(
+                    """
+                    SELECT
+                        t.id,
+                        t.request_at,
+                        c.ip AS client_ip,
+                        COALESCE(t.principal_id, t.query_id) AS principal_id,
+                        t.session_chain_id,
+                        t.query_id,
+                        t.location,
+                        d.response_payload,
+                        d.risk_level,
+                        d.attack_vector,
+                        d.route_before,
+                        d.route_after,
+                        d.response_origin,
+                        d.real_backend_touched,
+                        d.deception_score,
+                        d.trust_level,
+                        d.memory_hit,
+                        d.flow_stage
+                    FROM traffic_logs t
+                    JOIN clients c ON t.client_id = c.id
+                    LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+                    WHERE (
+                        COALESCE(d.route_after, '') = 'mirage'
+                        OR COALESCE(d.deception_engaged, 0) = 1
+                        OR COALESCE(d.response_origin, '') IN ('mirage', 'sandbox_ai')
+                    )
+                    ORDER BY t.request_at DESC
+                    LIMIT ? OFFSET ?
+                    """,
+                    (limit, offset),
+                )
             else:
-                where_clause = """
-                    (COALESCE(d.real_backend_touched, 0) = 1
-                     OR COALESCE(d.response_origin, '') = 'vuln_bank_main'
-                     OR (t.is_attack = 0 AND COALESCE(d.route_after, '') != 'mirage'))
-                """
-
-            cursor.execute(
-                f"""
-                SELECT
-                    t.id,
-                    t.request_at,
-                    c.ip AS client_ip,
-                    COALESCE(t.principal_id, t.query_id) AS principal_id,
-                    t.session_chain_id,
-                    t.query_id,
-                    t.location,
-                    d.response_payload,
-                    d.risk_level,
-                    d.attack_vector,
-                    d.route_before,
-                    d.route_after,
-                    d.response_origin,
-                    d.real_backend_touched,
-                    d.deception_score,
-                    d.trust_level,
-                    d.memory_hit,
-                    d.flow_stage
-                FROM traffic_logs t
-                JOIN clients c ON t.client_id = c.id
-                LEFT JOIN attack_details d ON d.traffic_log_id = t.id
-                WHERE {where_clause}
-                ORDER BY t.request_at DESC
-                LIMIT ? OFFSET ?
-                """,
-                (limit, offset),
-            )
+                cursor.execute(
+                    """
+                    SELECT
+                        t.id,
+                        t.request_at,
+                        c.ip AS client_ip,
+                        COALESCE(t.principal_id, t.query_id) AS principal_id,
+                        t.session_chain_id,
+                        t.query_id,
+                        t.location,
+                        d.response_payload,
+                        d.risk_level,
+                        d.attack_vector,
+                        d.route_before,
+                        d.route_after,
+                        d.response_origin,
+                        d.real_backend_touched,
+                        d.deception_score,
+                        d.trust_level,
+                        d.memory_hit,
+                        d.flow_stage
+                    FROM traffic_logs t
+                    JOIN clients c ON t.client_id = c.id
+                    LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+                    WHERE (
+                        COALESCE(d.real_backend_touched, 0) = 1
+                        OR COALESCE(d.response_origin, '') = 'vuln_bank_main'
+                        OR (t.is_attack = 0 AND COALESCE(d.route_after, '') != 'mirage')
+                    )
+                    ORDER BY t.request_at DESC
+                    LIMIT ? OFFSET ?
+                    """,
+                    (limit, offset),
+                )
             rows = cursor.fetchall()
 
         events = []
@@ -1003,11 +1046,23 @@ def get_deception_effectiveness_summary(hours: int = 24) -> dict[str, Any]:
     real_path_events = int(row["real_path_events"] or 0) if row else 0
     high_trust_events = int(row["high_trust_events"] or 0) if row else 0
     memory_hit_events = int(row["memory_hit_events"] or 0) if row else 0
-    avg_deception_score = round(float(row["avg_deception_score"] or 0.0), 2) if row else 0.0
+    avg_deception_score = (
+        round(float(row["avg_deception_score"] or 0.0), 2) if row else 0.0
+    )
 
-    deception_ratio = round((deception_events / total_events) * 100, 2) if total_events else 0.0
-    high_trust_ratio = round((high_trust_events / deception_events) * 100, 2) if deception_events else 0.0
-    memory_hit_ratio = round((memory_hit_events / deception_events) * 100, 2) if deception_events else 0.0
+    deception_ratio = (
+        round((deception_events / total_events) * 100, 2) if total_events else 0.0
+    )
+    high_trust_ratio = (
+        round((high_trust_events / deception_events) * 100, 2)
+        if deception_events
+        else 0.0
+    )
+    memory_hit_ratio = (
+        round((memory_hit_events / deception_events) * 100, 2)
+        if deception_events
+        else 0.0
+    )
 
     return {
         "window_hours": hours,
