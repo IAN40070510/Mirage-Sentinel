@@ -6,14 +6,36 @@ async function loadRecentTraffic() {
   try {
     const data = await fetchJson(`${API_BASE}/recent_traffic?limit=30`);
     const logs = Array.isArray(data.recent_traffic) ? data.recent_traffic : [];
-    recentTrafficList.innerHTML = logs.map(log => `
+    recentTrafficList.innerHTML = logs.map(log => {
+      // 解析 all_headers 欄位（JSON 轉字串）
+      let allHeadersStr = "";
+      try {
+        if (log.all_headers) {
+          if (typeof log.all_headers === "string") {
+            allHeadersStr = JSON.stringify(JSON.parse(log.all_headers), null, 2);
+          } else {
+            allHeadersStr = JSON.stringify(log.all_headers, null, 2);
+          }
+        }
+      } catch (e) {
+        allHeadersStr = String(log.all_headers);
+      }
+
+      return `
       <div class="log-item${log.risk_level > 0 ? ' attack' : ''}">
-        <span class="log-time">${escapeHtml(log.request_at || "")}</span>
-        <span class="log-ep">${escapeHtml(log.endpoint || "")}</span>
-        <span class="log-payload">${escapeHtml(log.raw_payload || "")}</span>
-        <span class="log-risk">${log.risk_level > 0 ? "⚠️" : ""}</span>
+        <div><span class="log-label">時間</span>: <span class="log-time">${escapeHtml(log.request_at || "")}</span></div>
+        <div><span class="log-label">端點</span>: <span class="log-ep">${escapeHtml(log.endpoint || "")}</span></div>
+        <div><span class="log-label">Payload</span>: <span class="log-payload">${escapeHtml(log.raw_payload || "")}</span></div>
+        <div><span class="log-label">Query</span>: <span class="log-query">${escapeHtml(log.query_string || "")}</span></div>
+        <div><span class="log-label">Authorization</span>: <span class="log-auth">${escapeHtml(log.authorization || "")}</span></div>
+        <div><span class="log-label">Content-Type</span>: <span class="log-ct">${escapeHtml(log.content_type || "")}</span></div>
+        <div><span class="log-label">Content-Length</span>: <span class="log-cl">${escapeHtml(log.content_length || "")}</span></div>
+        <div><span class="log-label">Header Count</span>: <span class="log-hc">${escapeHtml(String(log.header_count ?? ""))}</span></div>
+        <div><span class="log-label">All Headers</span>: <pre class="log-headers">${escapeHtml(allHeadersStr)}</pre></div>
+        <div><span class="log-label">風險</span>: <span class="log-risk">${log.risk_level > 0 ? "⚠️" : ""}</span></div>
       </div>
-    `).join("") || "<div class='system-empty'>目前沒有攔截紀錄</div>";
+      `;
+    }).join("") || "<div class='system-empty'>目前沒有攔截紀錄</div>";
   } catch (e) {
     recentTrafficList.innerHTML = "<div class='system-empty'>無法取得攔截紀錄</div>";
   }
