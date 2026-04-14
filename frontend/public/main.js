@@ -102,7 +102,7 @@ async function loadRecentTraffic() {
       // headers 摺疊
       const headersId = `headers-${idx}`;
       const detailId = `traffic-detail-${idx}`;
-      const shortPayload = payload.length > 80 ? `${payload.slice(0, 80)}...` : payload;
+      const shortPayload = payload;
 
       return `
       <div class="log-item log-card${log.risk_level > 0 ? ' attack' : ''}" style="border:1px solid #1affb2; border-radius:8px; margin-bottom:0.7em; background:rgba(0,32,32,0.22); padding:0.65em 0.8em;">
