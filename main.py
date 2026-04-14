@@ -33,6 +33,7 @@ import json
 import re
 import hashlib
 from typing import Any, cast
+from urllib.parse import parse_qsl
 import pandas as pd
 import httpx
 from datetime import datetime
@@ -662,6 +663,54 @@ def _decision_source(is_attack: bool, risk_reasons: list[str]) -> str:
     return "none"
 
 
+def _extract_login_credentials_text(
+    upstream_path: str,
+    query_text: str,
+    body_text: str,
+    content_type: str,
+) -> str:
+    """Extract username/password-like fields for login routes to ensure SOC/XGBoost visibility."""
+    normalized_path = "/" + upstream_path.lstrip("/")
+    if normalized_path not in {"/login", "/banking/login"}:
+        return ""
+
+    login_keys = {
+        "username",
+        "password",
+        "user",
+        "email",
+        "account",
+    }
+    collected: list[str] = []
+
+    for key, value in parse_qsl(query_text, keep_blank_values=True):
+        if key.lower() in login_keys:
+            collected.append(f"{key}={value}")
+
+    body_content_type = (content_type or "").lower()
+
+    if body_text:
+        if "application/json" in body_content_type:
+            try:
+                payload = json.loads(body_text)
+                if isinstance(payload, dict):
+                    for key, value in payload.items():
+                        if str(key).lower() in login_keys:
+                            collected.append(f"{key}={value}")
+            except Exception:
+                pass
+
+        if (
+            "application/x-www-form-urlencoded" in body_content_type
+            or ("=" in body_text and "&" in body_text)
+        ):
+            for key, value in parse_qsl(body_text, keep_blank_values=True):
+                if key.lower() in login_keys:
+                    collected.append(f"{key}={value}")
+
+    return "&".join(collected)
+
+
 def _local_deception_payload(
     principal_id: str,
     attack_vector: str,
@@ -781,7 +830,16 @@ async def _proxy_banking_request(
     )
     normalized_upstream_path = "/" + upstream_path.lstrip("/")
     render_critical_path = _is_render_critical_path(normalized_upstream_path)
-    detection_target = f"{upstream_path} {query_text} {body_text}".strip()[:2000]
+    login_credentials_text = _extract_login_credentials_text(
+        upstream_path=upstream_path,
+        query_text=query_text,
+        body_text=body_text,
+        content_type=content_type,
+    )
+    raw_payload_text = body_text or login_credentials_text
+    detection_target = (
+        f"{upstream_path} {query_text} {body_text} {login_credentials_text}".strip()
+    )
 
     req_interval_ms, req_time_var = _compute_timing_features(principal_id)
     amount_value = _extract_amount_value(body_text, None)
@@ -864,7 +922,7 @@ async def _proxy_banking_request(
         "is_proxy": detect_proxy(request),
         "user_agent": user_agent,
         "tls_fingerprint": tls_fingerprint,
-        "raw_payload": body_text,  # 完整未解析的原始負載
+        "raw_payload": raw_payload_text,  # 完整未解析的原始負載
         "principal_id": principal_id,
         "session_chain_id": session_chain_id,
         "query_id": query_id,
