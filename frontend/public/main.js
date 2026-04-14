@@ -221,10 +221,20 @@ function formatTaipeiTimestamp(value, withSeconds = true) {
     dateObj = new Date(value);
   } else {
     const raw = String(value).trim();
-    const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/.test(raw)
-      ? `${raw.replace(" ", "T")}Z`
-      : raw;
-    dateObj = new Date(normalized);
+    const isNaiveTs = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/.test(raw);
+    if (isNaiveTs) {
+      const isoLocal = raw.replace(" ", "T");
+      const asLocal = new Date(isoLocal);
+      const asUtc = new Date(`${isoLocal}Z`);
+
+      // Backend timestamp is timezone-naive; pick the interpretation closer to "now".
+      const nowMs = Date.now();
+      const localDiff = Math.abs(nowMs - asLocal.getTime());
+      const utcDiff = Math.abs(nowMs - asUtc.getTime());
+      dateObj = localDiff <= utcDiff ? asLocal : asUtc;
+    } else {
+      dateObj = new Date(raw);
+    }
   }
 
   if (Number.isNaN(dateObj.getTime())) return String(value);
