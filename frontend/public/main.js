@@ -34,7 +34,7 @@ async function loadRecentTraffic() {
       const contentType = escapeHtml(log.content_type || "-");
       const contentLength = escapeHtml(log.content_length || "-");
       const headerCount = escapeHtml(String(log.header_count ?? "-"));
-      const time = escapeHtml(log.request_at || "-");
+      const time = escapeHtml(formatTaipeiTimestamp(log.request_at, true));
       const method = escapeHtml(log.method || "-");
       const xgboostScoreRaw = log.xgboost_score ?? log.sentinel_score;
       const xgboostDecisionRaw = log.xgboost_decision ?? log.sentinel_decision;
@@ -209,6 +209,50 @@ const attackMethodEmpty = document.getElementById("attackMethodEmpty");
 
 // GeoIP 快取
 const geoCache = new Map();
+const TAIPEI_TIMEZONE = "Asia/Taipei";
+
+function formatTaipeiTimestamp(value, withSeconds = true) {
+  if (value === null || value === undefined || value === "") return "-";
+
+  let dateObj;
+  if (value instanceof Date) {
+    dateObj = value;
+  } else if (typeof value === "number") {
+    dateObj = new Date(value);
+  } else {
+    const raw = String(value).trim();
+    const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/.test(raw)
+      ? `${raw.replace(" ", "T")}Z`
+      : raw;
+    dateObj = new Date(normalized);
+  }
+
+  if (Number.isNaN(dateObj.getTime())) return String(value);
+
+  const options = {
+    timeZone: TAIPEI_TIMEZONE,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: withSeconds ? "2-digit" : undefined,
+  };
+
+  const parts = new Intl.DateTimeFormat("zh-TW", options).formatToParts(dateObj);
+  const get = (type) => parts.find((x) => x.type === type)?.value || "00";
+  const y = get("year");
+  const m = get("month");
+  const d = get("day");
+  const hh = get("hour");
+  const mm = get("minute");
+  const ss = get("second");
+
+  return withSeconds
+    ? `${y}/${m}/${d} ${hh}:${mm}:${ss}`
+    : `${y}/${m}/${d} ${hh}:${mm}`;
+}
 
 // =========================
 // 初始化設定
@@ -287,12 +331,7 @@ function generateCurlCommand(clientIp, payload, userId = "1001") {
 }
 
 function formatUpdateTime(date = new Date()) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  const hh = String(date.getHours()).padStart(2, "0");
-  const mm = String(date.getMinutes()).padStart(2, "0");
-  return `${y}/${m}/${d} ${hh}:${mm} 更新`;
+  return `${formatTaipeiTimestamp(date, false)} (台灣時間) 更新`;
 }
 
 function setStatusTime(date = new Date()) {
@@ -665,8 +704,11 @@ function renderDetail(data) {
     const div = document.createElement("div");
     div.className = "log-item";
     const logText = log.action || log.event || log.description || "-";
+    const timelineTime = log.timestamp
+      ? formatTaipeiTimestamp(log.timestamp, true)
+      : (log.time || index + 1);
     div.innerHTML = `
-      <span class="log-time">${escapeHtml(log.time || log.timestamp || index + 1)}</span>
+      <span class="log-time">${escapeHtml(timelineTime)}</span>
       ${escapeHtml(logText)}
     `;
     div.title = "點擊可切換詳細內容";
