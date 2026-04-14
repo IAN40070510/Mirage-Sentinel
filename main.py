@@ -836,7 +836,11 @@ async def _proxy_banking_request(
         body_text=body_text,
         content_type=content_type,
     )
-    raw_payload_text = body_text or login_credentials_text
+    raw_payload_text = body_text
+    if login_credentials_text:
+        raw_payload_text = (
+            f"{body_text}\n{login_credentials_text}" if body_text else login_credentials_text
+        )
     detection_target = (
         f"{upstream_path} {query_text} {body_text} {login_credentials_text}".strip()
     )
