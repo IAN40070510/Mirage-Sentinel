@@ -898,11 +898,8 @@ async def _proxy_banking_request(
     if risk_reasons:
         attack_vector = ", ".join(filter(None, [attack_vector, *risk_reasons]))
 
-    should_intercept = (
-        is_attack and (sentinel_decision == "BLOCK" or confidence > 0.75)
-    ) or (
-        bool(risk_reasons) and not render_critical_path
-    )
+    ml_intercept = is_attack and (sentinel_decision == "BLOCK" or confidence > 0.75)
+    should_intercept = (ml_intercept or bool(risk_reasons)) and not render_critical_path
     effective_risk_reasons = risk_reasons if not render_critical_path else []
     decision_source = _decision_source(is_attack, effective_risk_reasons)
     risk_level = max(int(confidence * 100), 80 if effective_risk_reasons else 0)
