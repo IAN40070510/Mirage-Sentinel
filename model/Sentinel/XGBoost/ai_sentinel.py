@@ -193,14 +193,21 @@ class SentinelXGBInference:
 
 
 def _resolve_model_dir(explicit_model_dir: str | Path | None = None) -> Path:
+    def _select_dir(base: Path) -> Path:
+        # Prefer ./model when artifact bundle is stored under XGBoost/model.
+        candidate = base / "model"
+        if (candidate / "meta.json").exists() and (candidate / "xgb.json").exists():
+            return candidate
+        return base
+
     if explicit_model_dir:
-        return Path(explicit_model_dir).expanduser().resolve()
+        return _select_dir(Path(explicit_model_dir).expanduser().resolve())
 
     env_model_dir = os.getenv("SENTINEL_MODEL_DIR", "").strip()
     if env_model_dir:
-        return Path(env_model_dir).expanduser().resolve()
+        return _select_dir(Path(env_model_dir).expanduser().resolve())
 
-    return Path(__file__).resolve().parent
+    return _select_dir(Path(__file__).resolve().parent)
 
 
 def load_sentinel_model(model_dir: str | Path | None = None) -> SentinelXGBInference | None:
