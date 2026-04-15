@@ -1,3 +1,12 @@
+// 攔截流量紀錄按鈕跳轉
+document.addEventListener("DOMContentLoaded", () => {
+  const btn = document.getElementById("trafficLogsBtn");
+  if (btn) {
+    btn.addEventListener("click", () => {
+      window.location.href = "./traffic-logs.html";
+    });
+  }
+});
 // 攔截流量紀錄 DOM
 const recentTrafficList = document.getElementById("recentTrafficList");
 
