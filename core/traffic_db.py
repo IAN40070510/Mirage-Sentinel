@@ -348,7 +348,7 @@ def _log_traffic_event_once(data: dict[str, Any]) -> None:
                 mouse_entropy, mouse_source, amount_value, amount_deviation, is_attack, location, is_proxy,
                 query_string, authorization, content_type, content_length, header_count, all_headers
                 , input_string
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data.get("request_at"),
@@ -498,9 +498,9 @@ def get_recent_traffic(limit: int = 100) -> list[dict[str, Any]]:
                d.policy_hit, d.upstream_attempted, d.upstream_status_code,
                d.deception_engaged, d.deception_mode, d.real_backend_touched, d.response_origin,
                d.flow_stage, d.deception_score, d.trust_level, d.memory_hit,
-                             t.query_string, t.authorization, t.content_type, t.content_length, t.header_count, t.all_headers,
-                             t.input_string,
-               d.input_string AS attack_input_string,
+                               t.query_string, t.authorization, t.content_type, t.content_length, t.header_count, t.all_headers,
+                               t.input_string,
+                               t.input_string AS attack_input_string,
                d.query_string AS attack_query_string, d.authorization AS attack_authorization,
                d.content_type AS attack_content_type, d.content_length AS attack_content_length,
                d.header_count AS attack_header_count, d.all_headers AS attack_all_headers
@@ -534,7 +534,7 @@ def get_recent_transactions_by_user(
 
     cursor.execute(
         """
-        SELECT t.*, c.ip AS client_ip, d.raw_payload, d.response_payload, d.attack_vector, d.input_string
+        SELECT t.*, c.ip AS client_ip, d.raw_payload, d.response_payload, d.attack_vector, t.input_string
         FROM traffic_logs t
         JOIN clients c ON t.client_id = c.id
         LEFT JOIN attack_details d ON d.traffic_log_id = t.id
@@ -596,7 +596,7 @@ def get_transaction_amounts_by_user(
     # 查詢所有轉帳請求（不只是攻擊），從 traffic_logs 和 response_payload 提取金額
     cursor.execute(
         """
-        SELECT d.response_payload, d.raw_payload, d.input_string
+        SELECT d.response_payload, d.raw_payload, t.input_string
         FROM traffic_logs t
         LEFT JOIN attack_details d ON d.traffic_log_id = t.id
         WHERE t.query_id = ? AND t.request_at > ?
