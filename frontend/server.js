@@ -16,6 +16,11 @@ const DASHBOARD_API_KEY =
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+// 額外顯式註冊 traffic-logs.html 路由，確保可直接存取
+app.get("/traffic-logs.html", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "traffic-logs.html"));
+});
+
 // 首頁
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
