@@ -1,9 +1,8 @@
 /* 讓主介面預設縮放 67%，適合大螢幕展示 */
 body {
-  transform: scale(0.67);
-  transform-origin: top left;
-  width: 149.25vw; /* 100vw / 0.67 */
-  min-width: 149.25vw;
+  /* 移除強制縮放，改為響應式，讓內容自動填滿 */
+  width: 100vw;
+  min-width: 100vw;
   background-size: cover;
 }
 /* Mac 風格攔截流量紀錄按鈕左下角 */
