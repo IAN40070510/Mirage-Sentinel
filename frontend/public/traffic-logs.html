@@ -8,14 +8,83 @@
   <script src="./main.js" defer></script>
 </head>
 <body>
-  <div class="window" style="max-width:900px;margin:2em auto 0 auto;box-shadow:0 0 24px #0ff4;">
-    <div class="window-header" style="justify-content:space-between;align-items:center;display:flex;">
+  <div class="window traffic-logs-window">
+    <div class="window-header traffic-logs-header">
       <div class="window-title">攔截流量紀錄</div>
-      <a href="./index.html" style="color:#00ffa2;text-decoration:none;font-weight:bold;">返回主頁</a>
+      <a href="./index.html" class="back-link">返回主頁</a>
     </div>
-    <div class="window-body" style="min-height:60vh;">
+    <div class="window-body traffic-logs-body">
       <div class="log-list" id="recentTrafficList"></div>
     </div>
   </div>
+  <style>
+    html, body {
+      height: 100%;
+      width: 100%;
+      min-height: 100%;
+      min-width: 100%;
+      overflow-x: hidden;
+      overflow-y: auto;
+      background:
+        radial-gradient(circle at center, rgba(0, 255, 120, 0.12) 0%, rgba(0, 0, 0, 0) 55%),
+        linear-gradient(180deg, #0a3f31 0%, #03100c 100%);
+    }
+    .traffic-logs-window {
+      width: 96vw;
+      max-width: 900px;
+      min-width: 0;
+      margin: 2em auto 0 auto;
+      box-shadow: 0 0 24px #0ff4;
+      border-radius: 12px;
+      background: var(--panel, rgba(12,42,32,0.92));
+      display: flex;
+      flex-direction: column;
+      min-height: 70vh;
+    }
+    .traffic-logs-header {
+      justify-content: space-between;
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1em;
+    }
+    .traffic-logs-body {
+      min-height: 60vh;
+      width: 100%;
+      overflow-x: auto;
+      overflow-y: visible;
+      padding: 12px 8px;
+    }
+    .back-link {
+      color: #00ffa2;
+      text-decoration: none;
+      font-weight: bold;
+      font-size: 1em;
+      border: 1.5px solid #00ffa2;
+      border-radius: 6px;
+      padding: 0.3em 1.1em;
+      background: rgba(0,255,136,0.07);
+      transition: background 0.18s;
+    }
+    .back-link:hover {
+      background: rgba(0,255,136,0.18);
+    }
+    @media (max-width: 600px) {
+      .traffic-logs-window {
+        max-width: 100vw;
+        width: 100vw;
+        margin: 0;
+        border-radius: 0;
+        min-height: 100vh;
+        box-shadow: none;
+      }
+      .traffic-logs-header {
+        padding: 10px 8px;
+      }
+      .traffic-logs-body {
+        padding: 10px 2px;
+      }
+    }
+  </style>
 </body>
 </html>
