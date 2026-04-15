@@ -9,10 +9,6 @@
   <script src="./main.js" defer></script>
 </head>
 <body data-layout-mode="layout-17">
-
-  <!-- Matrix 字母雨背景層 -->
-  <canvas id="matrixCanvas" style="position:fixed;inset:0;z-index:0;pointer-events:none;opacity:0.22;"></canvas>
-
   <div class="screen">
     <div class="glow"></div>
     <div class="stream-layer" id="streamLayer"></div>
@@ -406,39 +402,9 @@
         <button id="commandSendBtn" class="cmd-btn" type="button">EXEC</button>
       </div>
     </div>
+
+    <!-- Matrix 字母雨背景層（優化：更細緻、低干擾、效能佳）-->
+    <canvas id="matrixCanvas" style="position:fixed;inset:0;z-index:0;pointer-events:none;opacity:0.13;"></canvas>
   </div>
 </body>
-<script>
-// Matrix 字母雨動畫（配色維持 index.html 主題，不用 1.html 的藍橘色）
-const canvas = document.getElementById('matrixCanvas');
-const ctx = canvas.getContext('2d');
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
-const charList = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789$+-*/=%&#!?<>'.split('');
-const fontSize = 18;
-let columns = Math.floor(canvas.width / fontSize);
-let drops = Array(columns).fill(1);
-function drawMatrix() {
-  // 使用 index.html 主色調（綠色 #00ffa2），偶爾白色
-  ctx.fillStyle = 'rgba(0,32,32,0.09)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  for(let i = 0; i < drops.length; i++) {
-    const text = charList[Math.floor(Math.random() * charList.length)];
-    const rand = Math.random();
-    if (rand > 0.985) ctx.fillStyle = '#fff'; // 偶爾白色
-    else ctx.fillStyle = '#00ffa2'; // 主色調綠
-    ctx.font = `bold ${fontSize}px monospace`;
-    ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-    if(drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
-      drops[i] = 0;
-    }
-    drops[i]++;
-  }
-}
-setInterval(drawMatrix, 33);
-</script>
 </html>
