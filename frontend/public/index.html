@@ -355,12 +355,8 @@
 
     <!-- 攔截流量紀錄按鈕 -->
     <button id="trafficLogsBtn" class="mac-btn">
-      <span class="mac-btn-dots">
-        <span class="mac-dot mac-dot-red"></span>
-        <span class="mac-dot mac-dot-yellow"></span>
-        <span class="mac-dot mac-dot-green"></span>
-      </span>
-      <span class="mac-btn-label">攔截流量紀錄 &rarr;</span>
+      <span class="window-dots"><span></span><span></span><span></span></span>
+      <span class="window-title" style="font-size:1.08em;letter-spacing:0.04em;">攔截流量紀錄 &rarr;</span>
     </button>
         .mac-btn {
           position: fixed;
@@ -532,6 +528,8 @@
     const canvas = document.getElementById('matrixCanvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    // 黑色背景
+    canvas.style.background = '#000';
     // 資安/攻擊相關指令字串
     const charList = [
       'nmap', 'sqlmap', 'hydra', 'curl', 'wget', 'nc', 'ssh', 'ftp', 'telnet',
@@ -600,7 +598,7 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
     function drawMatrix() {
-      ctx.fillStyle = 'rgba(0,32,32,0.09)';
+      ctx.fillStyle = 'rgba(0,0,0,0.13)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.font = `bold ${fontSize}px monospace`;
       for(let i = 0; i < drops.length; i++) {
@@ -615,7 +613,7 @@
         drops[i]++;
       }
     }
-    setInterval(drawMatrix, 33);
+    setInterval(drawMatrix, 60);
   });
   </script>
   </div>
