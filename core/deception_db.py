@@ -20,6 +20,19 @@ def _migrate_attacker_ip_to_client_ip(conn: sqlite3.Connection):
         )
 
 
+def _migrate_query_id_to_principal_id(conn: sqlite3.Connection):
+    """將舊版 query_id 欄位遷移為 principal_id，相容伺服器上的既有資料庫。"""
+    cursor = conn.execute("PRAGMA table_info(deception_memory)")
+    columns = {row[1] for row in cursor.fetchall()}
+    if "principal_id" not in columns and "query_id" in columns:
+        # 先刪除依賴舊欄位名稱的唯一索引（若存在），再重命名欄位
+        conn.execute("DROP INDEX IF EXISTS idx_deception_memory_client_query")
+        conn.execute(
+            "ALTER TABLE deception_memory RENAME COLUMN query_id TO principal_id"
+        )
+        logger.info("[deception_db] Migrated column query_id -> principal_id.")
+
+
 def _ensure_unique_memory_key(conn: sqlite3.Connection):
     # 清理重複紀錄後建立唯一鍵，確保同一 client_ip + principal_id 只有一筆狀態
     conn.execute(
@@ -57,6 +70,7 @@ def setup_deception_db():
         """
         )
         _migrate_attacker_ip_to_client_ip(conn)
+        _migrate_query_id_to_principal_id(conn)
         _ensure_unique_memory_key(conn)
     logger.info(f"Deception Memory Engine Ready: {DB_PATH}")
 
