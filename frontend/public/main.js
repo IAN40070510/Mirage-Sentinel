@@ -962,9 +962,7 @@ function drawAttackMethodRankChart(items) {
         },
         y: {
           ticks: {
-            color: function(context) {
-              return barColors[context.index % barColors.length];
-            },
+            color: '#fff',
             font: { weight: 'bold', size: 15 }
           },
           grid: { display: false }

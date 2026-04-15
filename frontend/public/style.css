@@ -545,7 +545,7 @@ body::after {
 .log-item {
   border-left: 2px solid rgba(0, 255, 136, 0.32);
   padding-left: 10px;
-  color: rgba(255, 255, 255, 0.88);
+  color: #fff;
   font-size: 13px;
   line-height: 1.6;
 }
