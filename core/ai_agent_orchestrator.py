@@ -2,7 +2,7 @@ import logging
 import httpx
 import asyncio
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -13,7 +13,9 @@ class AIAgentOrchestrator:
 
     def __init__(self):
         self.sandbox_url = os.getenv("SANDBOX_API_URL", "http://sandbox:8001")
-        self.ai_token = os.getenv("SANDBOX_AI_TOKEN", "mirage_sentinel_sandbox_token_2024")
+        self.ai_token = os.getenv(
+            "SANDBOX_AI_TOKEN", "mirage_sentinel_sandbox_token_2024"
+        )
         self.timeout = 10  # AI agent執行超時時間
 
     async def execute_ai_agent(
@@ -21,8 +23,8 @@ class AIAgentOrchestrator:
         client_ip: str,
         query_id: str,
         raw_payload: str,
-        attack_vector: str = None,
-        risk_level: int = 0
+        attack_vector: Optional[str] = None,
+        risk_level: int = 0,
     ) -> Dict[str, Any]:
         """在沙盒中執行AI Agent，處理攻擊請求並生成回應
 
@@ -48,16 +50,20 @@ class AIAgentOrchestrator:
                         "raw_payload": raw_payload,
                         "attack_vector": attack_vector,
                         "risk_level": risk_level,
-                        "token": self.ai_token
-                    }
+                        "token": self.ai_token,
+                    },
                 )
 
                 if response.status_code == 200:
                     result = response.json()
-                    logger.info(f"[AI ORCHESTRATOR] AI Agent執行成功: {result.get('ai_decision', {}).get('action')}")
+                    logger.info(
+                        f"[AI ORCHESTRATOR] AI Agent執行成功: {result.get('ai_decision', {}).get('action')}"
+                    )
                     return result
                 else:
-                    logger.warning(f"[AI ORCHESTRATOR] AI Agent執行失敗: {response.status_code} {response.text}")
+                    logger.warning(
+                        f"[AI ORCHESTRATOR] AI Agent執行失敗: {response.status_code} {response.text}"
+                    )
                     # 返回備用回應
                     return await self._fallback_response(query_id, raw_payload)
 
@@ -65,7 +71,9 @@ class AIAgentOrchestrator:
             logger.error(f"[AI ORCHESTRATOR] AI Agent調用失敗: {e}")
             return await self._fallback_response(query_id, raw_payload)
 
-    async def _fallback_response(self, query_id: str, raw_payload: str) -> Dict[str, Any]:
+    async def _fallback_response(
+        self, query_id: str, raw_payload: str
+    ) -> Dict[str, Any]:
         """AI Agent失敗時的備用回應"""
         from core.mirage import generate_fake_data
 
@@ -77,15 +85,15 @@ class AIAgentOrchestrator:
             "ai_decision": {
                 "action": "fallback_response",
                 "confidence": 0.0,
-                "risk_level": 5
+                "risk_level": 5,
             },
             "fake_data": fake_data,
             "ai_log": {
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
                 "query_id": query_id,
                 "ai_action": "fallback",
-                "sandbox_isolation": "maintained"
-            }
+                "sandbox_isolation": "maintained",
+            },
         }
 
 
@@ -97,8 +105,8 @@ async def execute_sandbox_ai_agent(
     client_ip: str,
     query_id: str,
     raw_payload: str,
-    attack_vector: str = None,
-    risk_level: int = 0
+    attack_vector: Optional[str] = None,
+    risk_level: int = 0,
 ) -> Dict[str, Any]:
     """便捷函數：執行沙盒AI Agent"""
     return await ai_orchestrator.execute_ai_agent(

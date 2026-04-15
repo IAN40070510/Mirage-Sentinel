@@ -207,6 +207,7 @@ logger = logging.getLogger(__name__)
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
 DB_PATH = os.path.join(PROJECT_ROOT, "data", "traffic_logs.db")
+FEATURE_DB_PATH = os.path.join(PROJECT_ROOT, "data", "feature_store.db")
 ERROR_LOG_DIR = os.path.join(PROJECT_ROOT, "data", "error_log")
 IP_GEO_CACHE_TTL = int(os.getenv("IP_GEO_CACHE_TTL", "3600"))
 _ip_geo_cache: dict[str, tuple[str, float]] = {}
@@ -240,14 +241,22 @@ def _resolve_ip_region(ip: str, fallback_location: str | None = None) -> str:
     normalized_fallback = (fallback_location or "").strip()
     # 某些舊資料把路由占位值或 endpoint path 寫入 location，需忽略後重算。
     fallback_looks_like_endpoint = normalized_fallback.startswith("/")
-    fallback_is_placeholder = normalized_fallback.lower() in {
-        "-",
-        "unknown",
-        "banking:proxy",
-        "private/local",
-    } or ":" in normalized_fallback
+    fallback_is_placeholder = (
+        normalized_fallback.lower()
+        in {
+            "-",
+            "unknown",
+            "banking:proxy",
+            "private/local",
+        }
+        or ":" in normalized_fallback
+    )
 
-    if normalized_fallback and not fallback_looks_like_endpoint and not fallback_is_placeholder:
+    if (
+        normalized_fallback
+        and not fallback_looks_like_endpoint
+        and not fallback_is_placeholder
+    ):
         return _country_only(normalized_fallback) or "Unknown"
 
     if not _is_public_ip(ip):
@@ -259,9 +268,7 @@ def _resolve_ip_region(ip: str, fallback_location: str | None = None) -> str:
         return cached[0]
 
     geo_url = (
-        "http://ip-api.com/json/"
-        f"{parse.quote(ip)}"
-        "?fields=status,country,message"
+        "http://ip-api.com/json/" f"{parse.quote(ip)}" "?fields=status,country,message"
     )
     try:
         with request.urlopen(geo_url, timeout=1.8) as resp:
@@ -283,6 +290,8 @@ def get_db_connection():
     """取得 SQLite 連線並套用基本最佳化。"""
     conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    if os.path.exists(FEATURE_DB_PATH):
+        conn.execute(f"ATTACH DATABASE '{FEATURE_DB_PATH}' AS fs")
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA cache_size=-64000")
@@ -413,14 +422,15 @@ def get_ip_all_traffic_logs(client_ip: str) -> list[dict[str, Any]]:
                 COALESCE(d.attack_vector, '-') AS attack_vector,
                 COALESCE(d.risk_level, 0) AS risk_level,
                 COALESCE(d.raw_payload, '-') AS raw_payload,
-                COALESCE(d.sentinel_decision, '-') AS sentinel_decision,
-                COALESCE(d.sentinel_score, 0) AS sentinel_score,
-                COALESCE(d.sentinel_attack_type, '-') AS sentinel_attack_type,
+                COALESCE(fs_df.sentinel_decision, '-') AS sentinel_decision,
+                COALESCE(fs_df.sentinel_score, 0) AS sentinel_score,
+                COALESCE(fs_df.sentinel_attack_type, '-') AS sentinel_attack_type,
                 COALESCE(d.response_origin, '-') AS response_origin,
                 COALESCE(d.flow_stage, '-') AS flow_stage
             FROM traffic_logs t
             JOIN clients c ON c.id = t.client_id
             LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+            LEFT JOIN fs.derived_features fs_df ON fs_df.traffic_log_id = t.id
             WHERE c.ip = ?
             ORDER BY t.request_at DESC
             """,
@@ -700,13 +710,14 @@ def get_events_by_route(
                         d.route_after,
                         d.response_origin,
                         d.real_backend_touched,
-                        d.deception_score,
-                        d.trust_level,
-                        d.memory_hit,
+                        fs_df.deception_score,
+                        fs_df.trust_level,
+                        fs_df.memory_hit,
                         d.flow_stage
                     FROM traffic_logs t
                     JOIN clients c ON t.client_id = c.id
                     LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+                    LEFT JOIN fs.derived_features fs_df ON fs_df.traffic_log_id = t.id
                     WHERE (
                         COALESCE(d.route_after, '') = 'mirage'
                         OR COALESCE(d.deception_engaged, 0) = 1
@@ -735,13 +746,14 @@ def get_events_by_route(
                         d.route_after,
                         d.response_origin,
                         d.real_backend_touched,
-                        d.deception_score,
-                        d.trust_level,
-                        d.memory_hit,
+                        fs_df.deception_score,
+                        fs_df.trust_level,
+                        fs_df.memory_hit,
                         d.flow_stage
                     FROM traffic_logs t
                     JOIN clients c ON t.client_id = c.id
                     LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+                    LEFT JOIN fs.derived_features fs_df ON fs_df.traffic_log_id = t.id
                     WHERE (
                         COALESCE(d.real_backend_touched, 0) = 1
                         OR COALESCE(d.response_origin, '') = 'vuln_bank_main'
@@ -901,19 +913,20 @@ def get_deception_chain(query_id: str) -> dict[str, Any]:
                     d.raw_payload,
                     d.risk_level,
                     d.attack_vector,
-                    d.interaction_depth,
-                    d.dwell_time,
+                    fs_df.interaction_depth,
+                    fs_df.dwell_time,
                     d.route_before,
                     d.route_after,
                     d.response_origin,
                     d.real_backend_touched,
                     d.flow_stage,
-                    d.deception_score,
-                    d.trust_level,
-                    d.memory_hit
+                    fs_df.deception_score,
+                    fs_df.trust_level,
+                    fs_df.memory_hit
                 FROM traffic_logs t
                 JOIN clients c ON t.client_id = c.id
                 LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+                LEFT JOIN fs.derived_features fs_df ON fs_df.traffic_log_id = t.id
                 WHERE t.query_id = ?
                 ORDER BY t.request_at ASC
                 """,
@@ -1027,12 +1040,13 @@ def get_deception_chain_by_session(session_chain_id: str) -> dict[str, Any]:
                     d.response_origin,
                     d.real_backend_touched,
                     d.flow_stage,
-                    d.deception_score,
-                    d.trust_level,
-                    d.memory_hit
+                    fs_df.deception_score,
+                    fs_df.trust_level,
+                    fs_df.memory_hit
                 FROM traffic_logs t
                 JOIN clients c ON t.client_id = c.id
                 LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+                LEFT JOIN fs.derived_features fs_df ON fs_df.traffic_log_id = t.id
                 WHERE t.session_chain_id = ?
                 ORDER BY t.request_at ASC
                 """,
@@ -1105,11 +1119,12 @@ def get_deception_effectiveness_summary(hours: int = 24) -> dict[str, Any]:
                           OR COALESCE(d.route_after, '') = 'vuln_bank_main'
                           OR COALESCE(d.real_backend_touched, 0) = 1
                          THEN 1 ELSE 0 END) AS real_path_events,
-                AVG(COALESCE(d.deception_score, 0)) AS avg_deception_score,
-                SUM(CASE WHEN COALESCE(d.trust_level, '') = 'high' THEN 1 ELSE 0 END) AS high_trust_events,
-                SUM(CASE WHEN COALESCE(d.memory_hit, 0) = 1 THEN 1 ELSE 0 END) AS memory_hit_events
+                AVG(COALESCE(fs_df.deception_score, 0)) AS avg_deception_score,
+                SUM(CASE WHEN COALESCE(fs_df.trust_level, '') = 'high' THEN 1 ELSE 0 END) AS high_trust_events,
+                SUM(CASE WHEN COALESCE(fs_df.memory_hit, 0) = 1 THEN 1 ELSE 0 END) AS memory_hit_events
             FROM traffic_logs t
             LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+            LEFT JOIN fs.derived_features fs_df ON fs_df.traffic_log_id = t.id
             WHERE t.request_at >= datetime('now', ?)
             """,
             (f"-{hours} hours",),
