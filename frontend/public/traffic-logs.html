@@ -9,13 +9,13 @@
 </head>
 <body>
   <div class="traffic-logs-outer">
-    <div class="window traffic-logs-window">
-      <div class="window-header traffic-logs-header">
-        <div class="window-title">攔截流量紀錄</div>
+    <div class="traffic-logs-window window">
+      <div class="traffic-logs-header window-header">
+        <div class="window-title" style="font-size:1.18em;letter-spacing:2px;">攔截流量紀錄</div>
         <a href="./index.html" class="back-link">返回主頁</a>
       </div>
-      <div class="window-body traffic-logs-body">
-        <div class="log-list traffic-logs-list" id="recentTrafficList"></div>
+      <div class="traffic-logs-body window-body">
+        <div class="traffic-logs-list" id="recentTrafficList"></div>
       </div>
     </div>
   </div>
@@ -39,19 +39,23 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      background: none;
     }
     .traffic-logs-window {
-      width: 96vw;
+      width: 98vw;
       max-width: 900px;
       min-width: 0;
       margin: 0 auto;
-      box-shadow: 0 0 24px #0ff4;
-      border-radius: 12px;
-      background: var(--panel, rgba(12,42,32,0.92));
+      box-shadow: 0 4px 32px #00ffa255, 0 0 0 1.5px #1affb2;
+      border-radius: 18px;
+      background: var(--panel, rgba(12,42,32,0.97));
       display: flex;
       flex-direction: column;
       min-height: 70vh;
-      max-height: 90vh;
+      max-height: 92vh;
+      border: 1.5px solid #00ffa2;
+      overflow: hidden;
+      transition: box-shadow 0.18s;
     }
     .traffic-logs-header {
       justify-content: space-between;
@@ -59,23 +63,42 @@
       display: flex;
       flex-wrap: wrap;
       gap: 1em;
+      padding: 18px 24px 10px 24px;
+      background: linear-gradient(90deg, rgba(0,255,136,0.08) 0%, rgba(0,32,32,0.12) 100%);
+      border-bottom: 1.5px solid #00ffa2;
     }
     .traffic-logs-body {
       flex: 1 1 auto;
       width: 100%;
-      padding: 12px 8px;
+      padding: 18px 18px 12px 18px;
       display: flex;
       flex-direction: column;
       height: 100%;
+      background: none;
     }
     .traffic-logs-list {
       flex: 1 1 auto;
-      max-height: 60vh;
+      max-height: 64vh;
       min-height: 40vh;
       overflow-y: auto;
       overflow-x: visible;
       width: 100%;
       padding-bottom: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.1em;
+      scroll-behavior: smooth;
+      scrollbar-width: thin;
+      scrollbar-color: #00ffa2 #0a3f31;
+    }
+    .traffic-logs-list::-webkit-scrollbar {
+      width: 8px;
+      background: #0a3f31;
+      border-radius: 8px;
+    }
+    .traffic-logs-list::-webkit-scrollbar-thumb {
+      background: #00ffa2bb;
+      border-radius: 8px;
     }
     .back-link {
       color: #00ffa2;
@@ -83,13 +106,45 @@
       font-weight: bold;
       font-size: 1em;
       border: 1.5px solid #00ffa2;
-      border-radius: 6px;
-      padding: 0.3em 1.1em;
-      background: rgba(0,255,136,0.07);
-      transition: background 0.18s;
+      border-radius: 8px;
+      padding: 0.38em 1.2em;
+      background: rgba(0,255,136,0.09);
+      transition: background 0.18s, box-shadow 0.18s;
+      box-shadow: 0 2px 8px #00ffa233;
     }
     .back-link:hover {
       background: rgba(0,255,136,0.18);
+      box-shadow: 0 4px 16px #00ffa244;
+    }
+    /* 卡片樣式優化 */
+    .log-item.log-card {
+      border: 1.5px solid #1affb2;
+      border-radius: 14px;
+      margin: 0;
+      background: linear-gradient(100deg, rgba(0,32,32,0.22) 60%, rgba(0,255,136,0.07) 100%);
+      padding: 0.85em 1.1em 0.85em 1.1em;
+      box-shadow: 0 2px 16px #00ffa21a;
+      transition: box-shadow 0.18s, border 0.18s;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5em;
+    }
+    .log-item.log-card.attack {
+      border-color: #ff4d4f;
+      box-shadow: 0 2px 18px #ff4d4f33;
+      background: linear-gradient(100deg, rgba(32,0,0,0.18) 60%, rgba(255,77,79,0.08) 100%);
+    }
+    .log-label {
+      color: #7ef2d3;
+      font-weight: bold;
+      font-size: 1.04em;
+      letter-spacing: 1.1px;
+    }
+    .log-risk {
+      font-size: 1.08em;
+      font-weight: bold;
+      letter-spacing: 1.2px;
+      padding-left: 0.5em;
     }
     @media (max-width: 600px) {
       .traffic-logs-outer {
@@ -104,9 +159,10 @@
         min-height: 100vh;
         max-height: 100vh;
         box-shadow: none;
+        border: none;
       }
       .traffic-logs-header {
-        padding: 10px 8px;
+        padding: 14px 8px 8px 8px;
       }
       .traffic-logs-body {
         padding: 10px 2px;
@@ -114,6 +170,9 @@
       .traffic-logs-list {
         max-height: 80vh;
         min-height: 50vh;
+      }
+      .log-item.log-card {
+        padding: 0.7em 0.5em;
       }
     }
   </style>
