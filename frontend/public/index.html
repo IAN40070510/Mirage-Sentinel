@@ -34,33 +34,24 @@
       </script>
       </body>
       <style>
-            /* --- Mac 風格主題 --- */
+            /* --- Mac 風格主題（僅細節美化，不覆蓋定位/寬度/響應式）--- */
             .main-window, .window, .sub-window {
-              min-width: 0 !important;
-              max-width: 100vw !important;
-              width: 99vw !important;
-              left: 0 !important;
-              right: 0 !important;
-              margin: 0 auto 18px auto !important;
-              position: static !important;
-              box-shadow: 0 8px 32px #0008, 0 1.5px 4px #00ffa233 !important;
-              border-radius: 16px !important;
-              background: #1a222a !important;
-              z-index: auto !important;
-              display: block !important;
-              border: 1.5px solid #222b33 !important;
+              border-radius: 16px;
+              box-shadow: 0 8px 32px #0008, 0 1.5px 4px #00ffa233;
+              border: 1.5px solid #222b33;
+              background: #1a222a;
             }
             .window-header {
-              font-size: 1.13em !important;
-              padding-top: 0.7em !important;
-              padding-bottom: 0.7em !important;
-              background: #232b33 !important;
-              border-radius: 16px 16px 0 0 !important;
+              font-size: 1.13em;
+              padding-top: 0.7em;
+              padding-bottom: 0.7em;
+              background: #232b33;
+              border-radius: 16px 16px 0 0;
               display: flex;
               align-items: center;
               justify-content: center;
               position: relative;
-              border-bottom: 1.5px solid #222b33 !important;
+              border-bottom: 1.5px solid #222b33;
             }
             .window-title {
               flex: 1;
@@ -78,8 +69,8 @@
               gap: 7px;
             }
             .window-dots span {
-              width: 11px !important;
-              height: 11px !important;
+              width: 11px;
+              height: 11px;
               border-radius: 50%;
               display: inline-block;
             }
@@ -87,44 +78,28 @@
             .window-dots span:nth-child(2) { background: #febc2e; border: 1.5px solid #dea123; }
             .window-dots span:nth-child(3) { background: #28c840; border: 1.5px solid #1aaf29; }
             .hud-box {
-              padding: 0.7em 0.7em;
-              font-size: 15px;
-              min-width: 0;
-              max-width: 100vw;
-              background: #232b33 !important;
-              border-radius: 14px !important;
-              margin-bottom: 10px !important;
-              box-shadow: 0 2px 12px #0003 !important;
-              border: 1.5px solid #222b33 !important;
-              color: #e6faff !important;
+              background: #232b33;
+              border-radius: 14px;
+              box-shadow: 0 2px 12px #0003;
+              border: 1.5px solid #222b33;
+              color: #e6faff;
               font-weight: 600;
               letter-spacing: 0.04em;
             }
             #trafficLogsBtn {
-              left: 8px !important;
-              right: auto !important;
-              bottom: 12px !important;
-              padding: 0.9em 1.2em !important;
-              font-size: 1.15em !important;
-              border-radius: 14px !important;
-              width: 97vw !important;
-              max-width: 99vw !important;
-              margin: 0 auto !important;
-              display: block !important;
-              position: fixed !important;
-              z-index: 1000;
-              box-shadow: 0 2px 12px #0006 !important;
-              background: #232b33 !important;
-              border: 1.5px solid #222b33 !important;
-              color: #e6faff !important;
-              font-weight: 600 !important;
-              letter-spacing: 0.04em !important;
+              border-radius: 14px;
+              box-shadow: 0 2px 12px #0006;
+              background: #232b33;
+              border: 1.5px solid #222b33;
+              color: #e6faff;
+              font-weight: 600;
+              letter-spacing: 0.04em;
               transition: background 0.2s, color 0.2s;
             }
             #trafficLogsBtn:hover {
-              background: #00ffa2 !important;
-              color: #1a222a !important;
-              border-color: #00ffa2 !important;
+              background: #00ffa2;
+              color: #1a222a;
+              border-color: #00ffa2;
             }
         .layout-box-pro { display: none !important; }
         @media (max-width: 900px) {
