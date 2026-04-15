@@ -1004,9 +1004,11 @@ async def _proxy_banking_request(
         )
     detection_target = f"{upstream_path} {business_context} {banking_action} {query_text} {body_text} {login_credentials_text} {transfer_details_text} {loan_details_text}".strip()
 
-    req_interval_ms, req_time_var = _compute_timing_features(principal_id)
+    # 先預設為 None，稍後根據是否攻擊流量決定來源
+    req_interval_ms = None
+    req_time_var = None
     amount_value = _extract_amount_value(body_text, None)
-    amount_deviation = _compute_amount_deviation(principal_id, amount_value)
+    amount_deviation = None
 
     feature_store.record_observation(user_id=principal_id, device_id=device_id)
     graph_metrics = feature_store.get_metrics(user_id=principal_id, device_id=device_id)
@@ -1034,6 +1036,16 @@ async def _proxy_banking_request(
         is_attack, confidence, attack_vector = False, 0.0, "None"
         sentinel_decision = "PASS"
         sentinel_model_ready = bool(ai_sentinel)
+
+    # 判斷攻擊流量前，先預設為安全值
+    import random
+
+    req_interval_ms = 0.0
+    req_time_var = 0.0
+    amount_deviation = 0.0
+
+    # 只有非攻擊流量才查詢真實資料庫
+    # (should_intercept 需在下方風險判斷後才有值，這裡先預設，稍後再覆蓋)
     attack_vector = _normalize_attack_vector(attack_vector)
     model_attack_type = attack_vector
     risk_reasons: list[str] = []
@@ -1070,6 +1082,16 @@ async def _proxy_banking_request(
             risk_reasons_count=len(effective_risk_reasons),
         )
     )
+
+    # 決定是否查詢真實資料庫
+    if not should_intercept:
+        req_interval_ms, req_time_var = _compute_timing_features(principal_id)
+        amount_deviation = _compute_amount_deviation(principal_id, amount_value)
+    else:
+        # Mirage 分流時，這些欄位給隨機或預設安全值
+        req_interval_ms = round(random.uniform(100, 1000), 3)
+        req_time_var = round(random.uniform(0, 10000), 3)
+        amount_deviation = round(random.uniform(0.8, 1.2), 3)
 
     event_payload = {
         "request_at": request_at,
