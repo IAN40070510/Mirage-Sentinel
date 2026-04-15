@@ -711,6 +711,89 @@ def _extract_login_credentials_text(
     return "&".join(collected)
 
 
+def _classify_banking_surface(upstream_path: str) -> tuple[str, str]:
+    """將銀行請求歸類為可觀測的業務面向，避免只剩地理 location 可用。"""
+    normalized_path = "/" + (upstream_path or "").lstrip("/")
+    lowered_path = normalized_path.lower()
+
+    if "/transfer" in lowered_path:
+        return "banking:transfers", "transfer"
+    if "/login" in lowered_path:
+        return "banking:auth", "login"
+    if "/balance" in lowered_path or "check_balance" in lowered_path:
+        return "banking:balance", "balance"
+    if "/graphql" in lowered_path:
+        return "banking:graphql", "graphql"
+    if "/payment" in lowered_path or "/bill" in lowered_path:
+        return "banking:payments", "payment"
+    if "/card" in lowered_path:
+        return "banking:cards", "card"
+    if "/admin" in lowered_path:
+        return "banking:admin", "admin"
+    return "banking:generic", "general"
+
+
+def _extract_transfer_details_text(
+    upstream_path: str,
+    query_text: str,
+    body_text: str,
+    content_type: str,
+) -> str:
+    """Extract transfer-like fields so SOC/XGBoost can see business context beyond raw payload."""
+    normalized_path = "/" + (upstream_path or "").lstrip("/")
+    lowered_path = normalized_path.lower()
+    if "transfer" not in lowered_path and "payment" not in lowered_path:
+        return ""
+
+    transfer_keys = {
+        "from_account",
+        "fromaccount",
+        "source_account",
+        "sourceaccount",
+        "to_account",
+        "toaccount",
+        "recipient",
+        "recipient_account",
+        "destination_account",
+        "amount",
+        "currency",
+        "memo",
+        "note",
+        "description",
+        "reference",
+        "transfer_id",
+        "beneficiary",
+    }
+    collected: list[str] = []
+
+    for key, value in parse_qsl(query_text, keep_blank_values=True):
+        if key.lower() in transfer_keys:
+            collected.append(f"{key}={value}")
+
+    body_content_type = (content_type or "").lower()
+
+    if body_text:
+        if "application/json" in body_content_type:
+            try:
+                payload = json.loads(body_text)
+                if isinstance(payload, dict):
+                    for key, value in payload.items():
+                        if str(key).lower() in transfer_keys:
+                            collected.append(f"{key}={value}")
+            except Exception:
+                pass
+
+        if (
+            "application/x-www-form-urlencoded" in body_content_type
+            or ("=" in body_text and "&" in body_text)
+        ):
+            for key, value in parse_qsl(body_text, keep_blank_values=True):
+                if key.lower() in transfer_keys:
+                    collected.append(f"{key}={value}")
+
+    return "&".join(collected)
+
+
 def _local_deception_payload(
     principal_id: str,
     attack_vector: str,
@@ -830,19 +913,29 @@ async def _proxy_banking_request(
     )
     normalized_upstream_path = "/" + upstream_path.lstrip("/")
     render_critical_path = _is_render_critical_path(normalized_upstream_path)
+    business_context, banking_action = _classify_banking_surface(upstream_path)
     login_credentials_text = _extract_login_credentials_text(
         upstream_path=upstream_path,
         query_text=query_text,
         body_text=body_text,
         content_type=content_type,
     )
+    transfer_details_text = _extract_transfer_details_text(
+        upstream_path=upstream_path,
+        query_text=query_text,
+        body_text=body_text,
+        content_type=content_type,
+    )
     raw_payload_text = body_text
-    if login_credentials_text:
+    payload_fragments = [
+        fragment for fragment in [login_credentials_text, transfer_details_text] if fragment
+    ]
+    if payload_fragments:
         raw_payload_text = (
-            f"{body_text}\n{login_credentials_text}" if body_text else login_credentials_text
-        )
+            f"{body_text}\n" if body_text else ""
+        ) + "\n".join(payload_fragments)
     detection_target = (
-        f"{upstream_path} {query_text} {body_text} {login_credentials_text}".strip()
+        f"{upstream_path} {business_context} {banking_action} {query_text} {body_text} {login_credentials_text} {transfer_details_text}".strip()
     )
 
     req_interval_ms, req_time_var = _compute_timing_features(principal_id)
@@ -936,6 +1029,9 @@ async def _proxy_banking_request(
         "header_count": header_count,  # 標頭總數量
         "all_headers": headers_dict,  # 所有 header（for 鑑識/除錯，可選）
         "referer": referer,
+        "business_context": business_context,
+        "banking_action": banking_action,
+        "banking_details": transfer_details_text or login_credentials_text or None,
         "header_entropy": header_entropy,
         "req_interval_ms": req_interval_ms,
         "req_time_var": req_time_var,
@@ -1027,6 +1123,36 @@ async def _proxy_banking_request(
                 upstream_response.content,
                 upstream_response.headers.get("content-type"),
             )
+            upstream_content_type = upstream_response.headers.get("content-type", "")
+            if "application/json" in upstream_content_type.lower():
+                try:
+                    parsed_upstream_payload = json.loads(
+                        upstream_response.content.decode("utf-8", errors="ignore")
+                    )
+                except Exception:
+                    parsed_upstream_payload = upstream_response.content.decode(
+                        "utf-8", errors="ignore"
+                    )
+                event_payload["response_payload"] = parsed_upstream_payload
+
+            if business_context == "banking:transfers":
+                transfer_details_map = dict(
+                    parse_qsl(transfer_details_text, keep_blank_values=True)
+                )
+                event_payload["response_payload"] = {
+                    "transaction": {
+                        "amount": amount_value,
+                        "to_account": transfer_details_map.get("to_account")
+                        or transfer_details_map.get("toaccount"),
+                        "from_account": transfer_details_map.get("from_account")
+                        or transfer_details_map.get("fromaccount"),
+                        "currency": transfer_details_map.get("currency"),
+                        "note": transfer_details_map.get("note")
+                        or transfer_details_map.get("memo"),
+                        "business_context": business_context,
+                    },
+                    "upstream_response": event_payload.get("response_payload"),
+                }
             response_headers = {
                 k: v
                 for k, v in upstream_response.headers.items()

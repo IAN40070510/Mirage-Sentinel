@@ -4,12 +4,13 @@ import importlib
 import sys
 import types
 import unittest
+from typing import Any
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 fake_ai_sentinel = types.ModuleType("model.ai_sentinel")
-fake_ai_sentinel.load_sentinel_model = lambda: None
+setattr(fake_ai_sentinel, "load_sentinel_model", lambda: None)
 sys.modules["model.ai_sentinel"] = fake_ai_sentinel
 
 main = importlib.import_module("main")
@@ -75,7 +76,7 @@ async def _fake_sandbox_ai_agent(**kwargs):
 
 
 class PreUpstreamInterceptionTests(unittest.TestCase):
-    def _base_patches(self) -> list[patch]:
+    def _base_patches(self) -> list[Any]:
         return [
             patch.object(main, "_compute_timing_features", return_value=(0.0, 0.0)),
             patch.object(main, "_compute_amount_deviation", return_value=0.0),
@@ -149,6 +150,39 @@ class PreUpstreamInterceptionTests(unittest.TestCase):
         self.assertEqual(captured_events[0]["upstream_attempted"], 1)
         self.assertEqual(captured_events[0]["real_backend_touched"], 1)
         self.assertEqual(captured_events[0]["response_origin"], "vuln_bank_main")
+
+    def test_transfer_request_is_classified_as_banking_transfer(self):
+        captured_events: list[dict[str, object]] = []
+        _UpstreamAsyncClient.called = False
+        _UpstreamAsyncClient.requested_url = ""
+        patches = self._base_patches() + [
+            patch.object(main, "analyze_intent", return_value=(False, 0.0, "None")),
+            patch.object(main, "detect_replication_risk", return_value=(False, "")),
+            patch.object(main, "detect_rate_limiting_risk", return_value=(False, "")),
+            patch.object(
+                main, "detect_anomalous_amount_risk", return_value=(False, "")
+            ),
+            patch.object(main.httpx, "AsyncClient", _UpstreamAsyncClient),
+            patch.object(main, "log_traffic_event", side_effect=captured_events.append),
+        ]
+
+        for started_patch in patches:
+            started_patch.start()
+        self.addCleanup(lambda: [p.stop() for p in reversed(patches)])
+
+        with TestClient(main.app) as client:
+            response = client.post(
+                "/api/transfer",
+                json={"to_account": "SIM-ACC-001", "amount": 1250, "note": "rent"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(_UpstreamAsyncClient.called)
+        self.assertIn("/api/transfer", _UpstreamAsyncClient.requested_url)
+        self.assertEqual(len(captured_events), 1)
+        self.assertEqual(captured_events[0]["business_context"], "banking:transfers")
+        self.assertEqual(captured_events[0]["banking_action"], "transfer")
+        self.assertIn("to_account=SIM-ACC-001", str(captured_events[0]["banking_details"]))
 
 
 if __name__ == "__main__":

@@ -40,6 +40,9 @@ async function loadRecentTraffic() {
       const xgboostDecisionRaw = log.xgboost_decision ?? log.sentinel_decision;
       const xgboostAttackTypeRaw = log.xgboost_attack_type ?? log.sentinel_attack_type;
       const xgboostModelReadyRaw = log.xgboost_model_ready ?? log.sentinel_model_ready;
+      const businessContext = escapeHtml(log.business_context || log.surface || "-");
+      const bankingAction = escapeHtml(log.banking_action || "-");
+      const bankingDetails = escapeHtml(log.banking_details || "-");
 
       const sentinelScore = Number.isFinite(Number(xgboostScoreRaw))
         ? Number(xgboostScoreRaw).toFixed(4)
@@ -114,11 +117,13 @@ async function loadRecentTraffic() {
           <span style="color:#7ef2d3;">${method}</span>
           <span style="color:#00ffa2;word-break:break-all;">${endpoint}</span>
         </div>
+        <div style="margin-top:2px;"><span class="log-label">Banking Surface</span>: <span style="color:#8bd3ff;">${businessContext}</span> / <span style="color:#8bd3ff;">${bankingAction}</span></div>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:2px;">
           <span><span class="log-label" style="font-weight:bold;">來源地區</span>: <span style="color:#00ffa2;">${countryFlag ? countryFlag + ' ' : ''}${countryDisplay}</span></span>
           <button onclick="const el=document.getElementById('${detailId}');el.style.display=el.style.display==='none'?'block':'none';this.textContent=el.style.display==='none'?'詳情':'收合';" style="font-size:0.85em;">詳情</button>
         </div>
         <div style="margin-top:2px;"><span class="log-label">Payload</span>: <span style="color:#ffd700;">${shortPayload}</span></div>
+        <div style="margin-top:2px;"><span class="log-label">Banking Detail</span>: <span style="color:#ffd700;">${bankingDetails}</span></div>
         <div style="margin-top:2px;"><span class="log-label">XGBoost</span>: <span style="color:#8bd3ff;">${sentinelDecision}</span> | score <span style="color:#8bd3ff;">${sentinelScore}</span> | type <span style="color:#8bd3ff;">${sentinelAttackType}</span> | model <span style="color:#8bd3ff;">${sentinelModelReady}</span></div>
 
         <div id="${detailId}" style="display:none;margin-top:6px;">
