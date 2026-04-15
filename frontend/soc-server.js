@@ -93,6 +93,7 @@ app.get("/", (req, res) => sendPublicFile(res, "index.html"));
 app.get("/index.html", (req, res) => sendPublicFile(res, "index.html"));
 app.get("/main.js", (req, res) => sendPublicFile(res, "main.js"));
 app.get("/style.css", (req, res) => sendPublicFile(res, "style.css"));
+app.get("/traffic-logs.html", (req, res) => sendPublicFile(res, "traffic-logs.html"));
 
 // SOC 入口不提供客戶頁檔案，避免同入口混用。
 app.get(["/banking_demo.html", "/banking_demo.js", "/banking_demo.css"], (req, res) => {
