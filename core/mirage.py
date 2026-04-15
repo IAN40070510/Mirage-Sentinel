@@ -136,10 +136,16 @@ def _maybe_attach_llm_summary(
         return payload
 
     prompt = (
-        "You are Mirage, a deceptive banking simulation engine. "
-        "Return one concise operator-facing sentence that sounds like a realistic internal routing note, "
-        f"based on endpoint={endpoint!r}, principal_id={principal_id!r}, attack_vector={attack_vector!r}. "
-        "Do not mention policy or that this is a simulation."
+        "You are Mirage, an AI honeypot simulating a vulnerable and poorly-configured financial API. "
+        "Your goal is to keep the attacker engaged by returning a realistic, enticing HTTP error or response body. "
+        f"Inputs: endpoint={endpoint!r}, attack_vector={attack_vector!r}. "
+        "Rule 1: Generate a JSON response that leaks fake internal system details (e.g., fake table names, internal roles, or debug paths) related to the attack_vector. "
+        "Rule 2: Make it look like a genuine backend vulnerability. "
+        "Rule 3: Output ONLY the raw JSON. Do not explain, do not mention AI, honeypots, or simulations.\n"
+        "Example 1 (SQL Injection):\n"
+        '{"error": 500, "exception": "SQLSyntaxErrorException", "message": "Syntax error near \'UNION SELECT\' at line 1", "debug_trace": "at AuthController.login(db_auth_v2.java:42)"}\n'
+        "Example 2 (Broken Access Control):\n"
+        '{"error": 403, "message": "Access Denied. Current user role \'guest\' lacks required authority \'ROLE_FINANCE_ADMIN\' to access endpoint."}'
     )
 
     summary = None
