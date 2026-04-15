@@ -494,6 +494,7 @@ function normalizeIpBundleResponse(data) {
   if (Array.isArray(obj.timeline)) timeline = obj.timeline;
   else if (Array.isArray(obj.full_trajectory)) timeline = obj.full_trajectory;
   else if (Array.isArray(obj.full_trajectory?.timeline)) timeline = obj.full_trajectory.timeline;
+  const trafficLogs = Array.isArray(obj.traffic_logs) ? obj.traffic_logs : [];
 
   const riskLevel = safeNumber(details.risk_level, 0);
 
@@ -508,6 +509,7 @@ function normalizeIpBundleResponse(data) {
     mouse_entropy: safeNumber(obj.mouse_entropy ?? details.mouse_entropy, 0),
     mouse_source: obj.mouse_source ?? details.mouse_source ?? "missing",
     payload: obj.payload ?? details.raw_payload ?? "",
+    traffic_logs: trafficLogs,
     timeline,
     details,
   };
@@ -650,6 +652,7 @@ function renderDetail(data) {
   const rawDetail = toObject(data);
   const mergedDetail = { ...detail.details, ...rawDetail.details, ...rawDetail, ...detail };
   const timeline = toArray(detail.timeline);
+  const ipTrafficLogs = toArray(detail.traffic_logs);
 
   if (detailIp) detailIp.textContent = detail.client_ip || "";
   if (detailRisk) detailRisk.textContent = detail.risk || "";
@@ -710,15 +713,25 @@ function renderDetail(data) {
   if (!detailRecentLogs) return;
   detailRecentLogs.innerHTML = "";
 
-  if (!timeline.length) {
+  const logsToRender = ipTrafficLogs.length ? ipTrafficLogs : timeline;
+
+  if (!logsToRender.length) {
     detailRecentLogs.innerHTML = `<div class="system-empty">目前沒有此 IP 的時間軸紀錄</div>`;
     return;
   }
 
-  timeline.slice(0, 5).forEach((log, index) => {
+  logsToRender.forEach((log, index) => {
     const div = document.createElement("div");
     div.className = "log-item";
-    const logText = log.action || log.event || log.description || "-";
+    const riskText = Number(log.risk_level || 0) > 0 ? `RISK=${log.risk_level}` : "NORMAL";
+    const methodText = log.method || "-";
+    const endpointText = log.endpoint || "-";
+    const vectorText = log.attack_vector || log.action || log.event || log.description || "-";
+    const decisionText = log.sentinel_decision || "-";
+    const scoreText = Number.isFinite(Number(log.sentinel_score))
+      ? Number(log.sentinel_score).toFixed(4)
+      : "0.0000";
+    const logText = `${methodText} ${endpointText} | ${riskText} | ${vectorText} | XGB=${decisionText}:${scoreText}`;
     const timelineTime = log.timestamp
       ? formatTaipeiTimestamp(log.timestamp, true)
       : (log.time || index + 1);

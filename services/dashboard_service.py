@@ -397,6 +397,62 @@ def get_attack_timeline(attacker_ip: str) -> dict[str, Any]:
     return {"ip": attacker_ip, "timeline": timeline}
 
 
+def get_ip_all_traffic_logs(client_ip: str) -> list[dict[str, Any]]:
+    """回傳指定 IP 的全流量事件（含正常/攻擊），供 SELECTED IP DETAIL 完整顯示。"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                t.request_at,
+                t.method,
+                t.endpoint,
+                t.query_id,
+                t.is_attack,
+                COALESCE(d.attack_vector, '-') AS attack_vector,
+                COALESCE(d.risk_level, 0) AS risk_level,
+                COALESCE(d.raw_payload, '-') AS raw_payload,
+                COALESCE(d.sentinel_decision, '-') AS sentinel_decision,
+                COALESCE(d.sentinel_score, 0) AS sentinel_score,
+                COALESCE(d.sentinel_attack_type, '-') AS sentinel_attack_type,
+                COALESCE(d.response_origin, '-') AS response_origin,
+                COALESCE(d.flow_stage, '-') AS flow_stage
+            FROM traffic_logs t
+            JOIN clients c ON c.id = t.client_id
+            LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+            WHERE c.ip = ?
+            ORDER BY t.request_at DESC
+            """,
+            (client_ip,),
+        )
+        rows = cursor.fetchall()
+
+    logs: list[dict[str, Any]] = []
+    for row in rows:
+        logs.append(
+            {
+                "timestamp": row["request_at"],
+                "method": row["method"] or "-",
+                "endpoint": row["endpoint"] or "-",
+                "query_id": row["query_id"] or "-",
+                "is_attack": int(row["is_attack"] or 0),
+                "attack_vector": row["attack_vector"] or "-",
+                "risk_level": int(row["risk_level"] or 0),
+                "raw_payload": row["raw_payload"] or "-",
+                "sentinel_decision": row["sentinel_decision"] or "-",
+                "sentinel_score": float(row["sentinel_score"] or 0.0),
+                "sentinel_attack_type": row["sentinel_attack_type"] or "-",
+                "response_origin": row["response_origin"] or "-",
+                "flow_stage": row["flow_stage"] or "-",
+                # 保持與舊前端欄位相容
+                "action": row["attack_vector"] or "-",
+                "time": _parse_ts(row["request_at"]).strftime("%H:%M"),
+            }
+        )
+
+    return logs
+
+
 def log_misjudgment(attacker_ip: str, reason: str) -> None:
     os.makedirs(ERROR_LOG_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1160,6 +1216,7 @@ def generate_hacker_pdf(client_ip: str) -> dict[str, Any]:
 def get_dashboard_ip_bundle(client_ip: str) -> dict[str, Any]:
     dwell = get_hacker_dwell_time(client_ip)
     timeline_data = get_attack_timeline(client_ip)
+    traffic_logs = get_ip_all_traffic_logs(client_ip)
     details = get_ip_details(client_ip)
 
     if not details:
@@ -1190,6 +1247,8 @@ def get_dashboard_ip_bundle(client_ip: str) -> dict[str, Any]:
         "behavior": attack_vector,
         "payload": raw_payload,
         "timeline": timeline_data.get("timeline", []),
+        "traffic_logs": traffic_logs,
+        "traffic_log_count": len(traffic_logs),
         "dwell_seconds": dwell.get("dwell_seconds", 0),
         "is_active": dwell.get("is_active", False),
         "mouse_entropy": details.get("mouse_entropy", 0.0),
