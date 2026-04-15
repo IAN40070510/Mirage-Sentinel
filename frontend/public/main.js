@@ -25,8 +25,10 @@ async function loadRecentTraffic() {
       }
 
       // 重要欄位顏色與 icon
-      const riskColor = log.risk_level > 0 ? '#ff4d4f' : '#00ffa2';
-      const riskIcon = log.risk_level > 0 ? '⚠️' : '';
+      const mitigationStatus = log.mitigation_status || log.details?.mitigation_status || "-";
+      const isNormal = mitigationStatus === "normal";
+      const riskColor = isNormal ? '#00ffa2' : '#ff4d4f';
+      const riskIcon = isNormal ? '' : '⚠️';
       const endpoint = escapeHtml(log.endpoint || "-");
       const payload = escapeHtml(log.raw_payload || "-");
       const query = escapeHtml(log.query_string || "-");
@@ -108,10 +110,10 @@ async function loadRecentTraffic() {
       const shortPayload = payload;
 
       return `
-      <div class="log-item log-card${log.risk_level > 0 ? ' attack' : ''}" style="border:1px solid #1affb2; border-radius:8px; margin-bottom:0.7em; background:rgba(0,32,32,0.22); padding:0.65em 0.8em;">
+      <div class="log-item log-card${isNormal ? '' : ' attack'}" style="border:1px solid #1affb2; border-radius:8px; margin-bottom:0.7em; background:rgba(0,32,32,0.22); padding:0.65em 0.8em;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
           <span class="log-label" style="font-weight:bold;">${time}</span>
-          <span class="log-risk" style="color:${riskColor};font-weight:bold;white-space:nowrap;">${riskIcon} ${log.risk_level > 0 ? 'RISK' : 'NORMAL'}</span>
+          <span class="log-risk" style="color:${riskColor};font-weight:bold;white-space:nowrap;">${riskIcon} ${isNormal ? 'NORMAL' : 'RISK'}</span>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <span style="color:#7ef2d3;">${method}</span>
