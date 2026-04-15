@@ -32,8 +32,66 @@
       window.addEventListener("resize", autoSetLayoutMode);
       window.addEventListener("DOMContentLoaded", autoSetLayoutMode);
       </script>
+      </body>
       <style>
         .layout-box-pro { display: none !important; }
+        @media (max-width: 900px) {
+          .hud {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+            left: 0;
+            right: 0;
+            padding: 0 4vw;
+          }
+          .hud-left {
+            flex-direction: column;
+            gap: 8px;
+            align-items: stretch;
+          }
+          .hud-box {
+            padding: 0.7em 0.7em;
+            font-size: 13px;
+          }
+          .main-window, .window, .sub-window {
+            min-width: 0;
+            max-width: 100vw;
+            left: 0 !important;
+            right: 0 !important;
+            margin: 0 auto !important;
+          }
+          .main-window {
+            width: 98vw !important;
+            min-width: 0 !important;
+            max-width: 100vw !important;
+          }
+          .window-header, .window-body {
+            padding-left: 8px !important;
+            padding-right: 8px !important;
+          }
+          .main-grid, .overview-card-grid {
+            grid-template-columns: 1fr 1fr !important;
+            gap: 8px !important;
+          }
+          .info-card, .analysis-card {
+            min-width: 0 !important;
+            font-size: 13px !important;
+          }
+          .cmd-bar {
+            left: 0 !important;
+            right: 0 !important;
+            width: 100vw !important;
+            padding: 0 4vw !important;
+          }
+          #trafficLogsBtn {
+            left: 8px !important;
+            right: auto !important;
+            bottom: 12px !important;
+            padding: 0.6em 1.1em !important;
+            font-size: 1em !important;
+            border-radius: 7px !important;
+          }
+        }
       </style>
       </div>
 
