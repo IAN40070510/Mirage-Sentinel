@@ -919,6 +919,14 @@ function drawAttackMethodRankChart(items) {
     attackMethodEmpty.style.display = "none";
   }
 
+  // Mac 風格主要攻擊手段長條圖配色
+  const barColors = [
+    '#00ffa2', // 綠
+    '#00cfff', // 藍
+    '#ffd700', // 黃
+    '#ff4d4f', // 紅
+    '#8bd3ff'  // 淺藍
+  ];
   attackMethodRankInstance = new Chart(attackMethodRankCanvas, {
     type: "bar",
     data: {
@@ -926,14 +934,8 @@ function drawAttackMethodRankChart(items) {
       datasets: [{
         label: "事件數",
         data: items.map((item) => item.count),
-        backgroundColor: [
-          "rgba(0,255,136,0.85)",
-          "rgba(0,255,136,0.72)",
-          "rgba(0,255,136,0.58)",
-          "rgba(0,255,136,0.44)",
-          "rgba(0,255,136,0.32)"
-        ],
-        borderColor: "rgba(0,255,136,0.95)",
+        backgroundColor: items.map((_, i) => barColors[i % barColors.length]),
+        borderColor: items.map((_, i) => barColors[i % barColors.length]),
         borderWidth: 1,
         borderRadius: 6,
       }]
@@ -943,15 +945,28 @@ function drawAttackMethodRankChart(items) {
       maintainAspectRatio: false,
       indexAxis: "y",
       plugins: {
-        legend: { display: false }
+        legend: { display: false },
+        datalabels: {
+          color: function(context) {
+            return barColors[context.dataIndex % barColors.length];
+          },
+          anchor: 'end',
+          align: 'end',
+          font: { weight: 'bold', size: 14 }
+        }
       },
       scales: {
         x: {
-          ticks: { color: "rgba(0,255,136,0.72)" },
+          ticks: { color: '#8bd3ff' },
           grid: { color: "rgba(0,255,136,0.08)" }
         },
         y: {
-          ticks: { color: "rgba(0,255,136,0.82)" },
+          ticks: {
+            color: function(context) {
+              return barColors[context.index % barColors.length];
+            },
+            font: { weight: 'bold', size: 15 }
+          },
           grid: { display: false }
         }
       }
@@ -978,19 +993,21 @@ function drawCountryPieChart(items) {
     countryPieEmpty.style.display = "none";
   }
 
+  // Pie chart 使用不同色系，與 bar chart 區分
+  const pieColors = [
+    '#4f8cff', // 藍
+    '#00ffa2', // 綠
+    '#ffd700', // 黃
+    '#ff4d4f', // 紅
+    '#a084ee'  // 紫
+  ];
   countryPieInstance = new Chart(countryPieCanvas, {
     type: "pie",
     data: {
       labels: items.map((item) => item.name),
       datasets: [{
         data: items.map((item) => item.count),
-        backgroundColor: [
-          "rgba(0,255,136,0.92)",
-          "rgba(0,255,136,0.72)",
-          "rgba(0,255,136,0.54)",
-          "rgba(0,255,136,0.38)",
-          "rgba(0,255,136,0.24)"
-        ],
+        backgroundColor: items.map((_, i) => pieColors[i % pieColors.length]),
         borderColor: "rgba(0,20,10,0.95)",
         borderWidth: 2
       }]
@@ -1002,7 +1019,7 @@ function drawCountryPieChart(items) {
         legend: {
           position: "bottom",
           labels: {
-            color: "rgba(0,255,136,0.82)",
+            color: "#8bd3ff",
             boxWidth: 14,
             padding: 14
           }
