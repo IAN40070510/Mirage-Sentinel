@@ -438,13 +438,13 @@ body::after {
 .ip-item:hover {
   border-color: #00ffa2;
   background: #232b33;
-  color: #00ffa2;
+  color: #fff;
 }
 
 .ip-item.active {
   border-color: #00ffa2;
   background: #1a222a;
-  color: #00ffa2;
+  color: #fff;
   box-shadow: 0 0 16px #00ffa233;
 }
 
