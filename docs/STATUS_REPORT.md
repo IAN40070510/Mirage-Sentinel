@@ -16,7 +16,7 @@
   - 目前在 banking proxy 中，優先對應 `X-User-Id`，通常就是 `vuln-bank-main` 的 CIF 或 customer id。
   - 若請求未帶主體識別，則退回 `proxy:<client_ip>`。
 
-- `query_id`
+- `principal_id`
   - 既有歷史命名。
   - 在目前程式裡實際上大多承載的是 `principal_id` 語意，而不是 query string id。
   - 現階段保留是為了相容既有資料表、回放 API 與分析函式；後續新功能應優先使用 `principal_id`。
@@ -111,7 +111,7 @@
   - `/graphql`
 - 這些回應應來自 `mirage_memory.db` 或可拋棄 feature store，而非真實業務資料。
 - 驗收：
-  - 同一 `client_ip + query_id` 後續可得到連貫回應
+  - 同一 `client_ip + principal_id` 後續可得到連貫回應
   - 攻擊者可在假流程中繼續互動至少 2 到 3 步
 
 ##### P0-4：擴充偵測輸入面

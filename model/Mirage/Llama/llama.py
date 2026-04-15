@@ -40,7 +40,7 @@ FALLBACK_NAMES = [
 converter = opencc.OpenCC("s2twp")
 
 
-def generate_fake_data_llama(query_id: str, attack_vector: str = "unknown") -> dict:
+def generate_fake_data_llama(principal_id: str, attack_vector: str = "unknown") -> dict:
     """
     使用本地 LLaMA 生成完整的虛假用戶資料 (JSON 格式)
     並嚴格校正 name 欄位為繁體中文三個字。
@@ -49,9 +49,9 @@ def generate_fake_data_llama(query_id: str, attack_vector: str = "unknown") -> d
     # 建立系統 Prompt，要求輸出與 mirage.py 相同的 JSON 格式
     strict_prompt = f"""
     你是一個網路安全欺敵系統。駭客正在進行攻擊。攻擊類型：{attack_vector}。
-    請為 user_id=\"{query_id}\" 生成一筆「虛假用戶資料」，嚴格遵守 JSON 格式：
+    請為 user_id=\"{principal_id}\" 生成一筆「虛假用戶資料」，嚴格遵守 JSON 格式：
     {{
-      "user_id": "{query_id}",
+      "user_id": "{principal_id}",
       "name": "隨機台灣人姓名，必須是繁體中文三個字",
       "email": "隨機Email",
       "balance": 隨機整數,
@@ -84,7 +84,7 @@ def generate_fake_data_llama(query_id: str, attack_vector: str = "unknown") -> d
             fake_data = json.loads(raw_content)
 
             # 2. 保險機制：確保 user_id 是對的
-            fake_data["user_id"] = str(query_id)
+            fake_data["user_id"] = str(principal_id)
 
             # 3. 針對 Name 進行嚴格校正 (簡轉繁 + 三字過濾)
             if "name" in fake_data:
@@ -105,7 +105,7 @@ def generate_fake_data_llama(query_id: str, attack_vector: str = "unknown") -> d
                 fake_data["balance"] = random.randint(1000, 50000)
 
             logger.info(
-                f"[Ollama] 成功生成完整誘餌資料：user_id={query_id}, name={fake_data['name']}"
+                f"[Ollama] 成功生成完整誘餌資料：user_id={principal_id}, name={fake_data['name']}"
             )
             return fake_data
 
@@ -117,9 +117,9 @@ def generate_fake_data_llama(query_id: str, attack_vector: str = "unknown") -> d
         now = datetime.now()
 
         fallback_data = {
-            "user_id": str(query_id),
+            "user_id": str(principal_id),
             "name": fallback_name,
-            "email": f"user.{query_id}@example.com",
+            "email": f"user.{principal_id}@example.com",
             "balance": random.randint(1000, 50000),
             "status": "Normal",
             "account_created": (

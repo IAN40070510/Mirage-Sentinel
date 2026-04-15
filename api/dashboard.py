@@ -73,12 +73,12 @@ async def get_hacker_analysis(
 @router.get("/interaction_depth/{client_ip}", summary="分析誘餌互動深度")
 async def get_interaction_depth(
     client_ip: str,
-    query_id: str = Query(..., description="指定查詢或互動識別碼"),
+    principal_id: str = Query(..., description="指定查詢或互動識別碼"),
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ):
     verify_api_key(x_api_key)
     try:
-        return ws.analyze_interaction_depth(client_ip, query_id)
+        return ws.analyze_interaction_depth(client_ip, principal_id)
     except Exception as exc:
         logger.error("分析互動深度失敗: %r", exc)
         raise HTTPException(status_code=500, detail=f"分析互動深度失敗: {exc}") from exc
@@ -434,19 +434,19 @@ async def get_events_by_risk_score(
 
 
 @router.get(
-    "/replay/{query_id}",
+    "/replay/{principal_id}",
     summary="回放攻擊鏈",
-    description="按 query_id 回放完整的一條攻擊鏈，包含時間軸、每步決策理由、風險評分。",
+    description="按 principal_id 回放完整的一條攻擊鏈，包含時間軸、每步決策理由、風險評分。",
 )
 async def get_deception_chain_replay(
-    query_id: str = Path(
+    principal_id: str = Path(
         ..., min_length=1, max_length=100, description="用戶識別碼或查詢 ID"
     ),
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ):
     verify_api_key(x_api_key)
     try:
-        result = ws.get_deception_chain(query_id)
+        result = ws.get_deception_chain(principal_id)
         if "error" in result and result.get("chain_length", 0) == 0:
             raise HTTPException(status_code=404, detail="查無該攻擊鏈事件")
         return result

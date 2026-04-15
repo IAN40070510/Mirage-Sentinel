@@ -432,7 +432,7 @@ function formatFakeResponse(fakeResponse) {
 }
 
 function inferTargetFromLog(log) {
-  return log.target_ip || log.target || log.query_id || log.user_id || "1001";
+  return log.target_ip || log.target || log.principal_id || log.user_id || "1001";
 }
 
 function hasUsableApiData() {
@@ -504,7 +504,7 @@ function normalizeIpBundleResponse(data) {
     traffic: safeNumber(obj.traffic ?? details.hits ?? 0, 0),
     risk: obj.risk ?? (riskLevel >= 70 ? "HIGH" : riskLevel > 0 ? "MEDIUM" : "LOW"),
     protocol: obj.protocol ?? details.tls_fingerprint ?? "-",
-    port: obj.port ?? details.query_id ?? "-",
+    port: obj.port ?? details.principal_id ?? "-",
     behavior: obj.behavior ?? details.attack_vector ?? details.mitigation_status ?? "-",
     mouse_entropy: safeNumber(obj.mouse_entropy ?? details.mouse_entropy, 0),
     mouse_source: obj.mouse_source ?? details.mouse_source ?? "missing",
@@ -695,7 +695,7 @@ function renderDetail(data) {
     const curlCmd = generateCurlCommand(
       detail.client_ip || "10.10.10.1",
       detail.payload || "../../../../etc/passwd",
-      String(mergedDetail.query_id || mergedDetail.details?.query_id || "1001")
+      String(mergedDetail.principal_id || mergedDetail.details?.principal_id || "1001")
     );
     detailCurl.textContent = curlCmd;
     detailCurl.onclick = () => {

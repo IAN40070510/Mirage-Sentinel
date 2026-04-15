@@ -1,4 +1,4 @@
-﻿# deception_db：欺敵記憶讀寫（同 IP + query_id 的持續欺敵）
+# deception_db：欺敵記憶讀寫（同 IP + principal_id 的持續欺敵）
 from core.deception_db import setup_deception_db
 
 """
@@ -65,6 +65,7 @@ from core.sentinel import (
 from api import dashboard
 from api.db.session import init_db, create_tables, seed_banking_demo_data
 
+
 def _resolve_model_loader():
     """模型路徑相容：優先新路徑，失敗時回退舊路徑。"""
     module_candidates = (
@@ -77,7 +78,8 @@ def _resolve_model_loader():
             loader = getattr(module, "load_sentinel_model", None)
             if callable(loader):
                 return loader
-        except Exception:
+        except ImportError:
+            # Module not found or failed to import, try next candidate
             continue
 
     logger.warning("AI 模型載入器不可用，將回退簽名規則模式。")
@@ -700,9 +702,8 @@ def _extract_login_credentials_text(
             except Exception:
                 pass
 
-        if (
-            "application/x-www-form-urlencoded" in body_content_type
-            or ("=" in body_text and "&" in body_text)
+        if "application/x-www-form-urlencoded" in body_content_type or (
+            "=" in body_text and "&" in body_text
         ):
             for key, value in parse_qsl(body_text, keep_blank_values=True):
                 if key.lower() in login_keys:
@@ -785,9 +786,8 @@ def _extract_transfer_details_text(
             except Exception:
                 pass
 
-        if (
-            "application/x-www-form-urlencoded" in body_content_type
-            or ("=" in body_text and "&" in body_text)
+        if "application/x-www-form-urlencoded" in body_content_type or (
+            "=" in body_text and "&" in body_text
         ):
             for key, value in parse_qsl(body_text, keep_blank_values=True):
                 if key.lower() in transfer_keys:
@@ -842,9 +842,8 @@ def _extract_loan_details_text(
             except Exception:
                 pass
 
-        if (
-            "application/x-www-form-urlencoded" in body_content_type
-            or ("=" in body_text and "&" in body_text)
+        if "application/x-www-form-urlencoded" in body_content_type or (
+            "=" in body_text and "&" in body_text
         ):
             for key, value in parse_qsl(body_text, keep_blank_values=True):
                 if key.lower() in loan_keys:
@@ -889,7 +888,7 @@ async def _execute_deception_response(
 
         ai_response = await execute_sandbox_ai_agent(
             client_ip=client_ip,
-            query_id=principal_id,
+            principal_id=principal_id,
             raw_payload=detection_target,
             attack_vector=attack_vector,
             risk_level=max(1, risk_level // 10),
@@ -961,9 +960,7 @@ async def _proxy_banking_request(
     authorization = headers_dict.get("authorization", "")
     # principal_id 表示「互動主體識別」，目前優先對應到 vuln-bank-main 的
     # X-User-Id / CIF / customer id。若缺失則回退成 proxy:<client_ip>。
-    # query_id 為歷史命名，暫時保留作為相容欄位。
     principal_id = request.headers.get("X-User-Id", "").strip() or f"proxy:{client_ip}"
-    query_id = principal_id
     session_chain_id = _derive_session_chain_id(
         client_ip=client_ip,
         principal_id=principal_id,
@@ -994,16 +991,18 @@ async def _proxy_banking_request(
     raw_payload_text = body_text
     payload_fragments = [
         fragment
-        for fragment in [login_credentials_text, transfer_details_text, loan_details_text]
+        for fragment in [
+            login_credentials_text,
+            transfer_details_text,
+            loan_details_text,
+        ]
         if fragment
     ]
     if payload_fragments:
-        raw_payload_text = (
-            f"{body_text}\n" if body_text else ""
-        ) + "\n".join(payload_fragments)
-    detection_target = (
-        f"{upstream_path} {business_context} {banking_action} {query_text} {body_text} {login_credentials_text} {transfer_details_text} {loan_details_text}".strip()
-    )
+        raw_payload_text = (f"{body_text}\n" if body_text else "") + "\n".join(
+            payload_fragments
+        )
+    detection_target = f"{upstream_path} {business_context} {banking_action} {query_text} {body_text} {login_credentials_text} {transfer_details_text} {loan_details_text}".strip()
 
     req_interval_ms, req_time_var = _compute_timing_features(principal_id)
     amount_value = _extract_amount_value(body_text, None)
@@ -1087,7 +1086,7 @@ async def _proxy_banking_request(
         "input_string": raw_payload_text,  # 戰情室明確顯示的輸入字串
         "principal_id": principal_id,
         "session_chain_id": session_chain_id,
-        "query_id": query_id,
+        "principal_id": principal_id,
         "method": request.method,  # 請求方法
         "endpoint": f"/{upstream_path.lstrip('/')}",  # 完整目標路徑
         "query_string": query_text,  # 查詢參數原文

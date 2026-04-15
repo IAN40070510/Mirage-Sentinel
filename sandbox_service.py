@@ -42,7 +42,7 @@ def get_sandbox_db_connection():
     return sqlite3.connect(SANDBOX_DB_PATH)
 
 
-def update_deception_state(client_ip: str, query_id: str, action: str, data: dict):
+def update_deception_state(client_ip: str, principal_id: str, action: str, data: dict):
     """在沙盒內更新欺敵狀態 - 只能修改 mirage_memory.db"""
     try:
         conn = get_sandbox_db_connection()
@@ -53,11 +53,11 @@ def update_deception_state(client_ip: str, query_id: str, action: str, data: dic
             """
             CREATE TABLE IF NOT EXISTS deception_memory (
                 client_ip TEXT,
-                query_id TEXT,
+                principal_id TEXT,
                 action TEXT,
                 data TEXT,
                 timestamp TEXT,
-                PRIMARY KEY (client_ip, query_id)
+                PRIMARY KEY (client_ip, principal_id)
             )
         """
         )
@@ -66,12 +66,12 @@ def update_deception_state(client_ip: str, query_id: str, action: str, data: dic
         cursor.execute(
             """
             INSERT OR REPLACE INTO deception_memory
-            (client_ip, query_id, action, data, timestamp)
+            (client_ip, principal_id, action, data, timestamp)
             VALUES (?, ?, ?, ?, ?)
         """,
             (
                 client_ip,
-                query_id,
+                principal_id,
                 action,
                 str(data),
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
@@ -88,7 +88,7 @@ def update_deception_state(client_ip: str, query_id: str, action: str, data: dic
 def ai_agent_decide(
     payload: str,
     client_ip: str = "",
-    query_id: str = "",
+    principal_id: str = "",
     attack_vector: str = "unknown",
 ) -> dict:
     """AI Agent 決策邏輯 - 使用LLaMA生成高互動假資料"""
@@ -123,7 +123,7 @@ def ai_agent_decide(
             {{
               "message": "用戶資料",
               "data": {{
-                "user_id": "{query_id}",
+                "user_id": "{principal_id}",
                 "name": "安全過濾的用戶名",
                 "info": "您的請求已處理"
               }}
@@ -167,7 +167,7 @@ def ai_agent_decide(
               "status": "success",
               "message": "請求已處理",
               "data": {{
-                "user_id": "{query_id}",
+                "user_id": "{principal_id}",
                 "result": "正常回應"
               }}
             }}
@@ -252,7 +252,7 @@ load_ai_model()
 
 class AttackRequest(BaseModel):
     client_ip: str
-    query_id: str
+    principal_id: str
     raw_payload: str
     attack_vector: Optional[str] = None
     risk_level: int = 0
@@ -260,7 +260,7 @@ class AttackRequest(BaseModel):
 
 class AIAgentRequest(BaseModel):
     client_ip: str
-    query_id: str
+    principal_id: str
     raw_payload: str
     attack_vector: Optional[str] = None
     risk_level: int = 0
@@ -273,7 +273,7 @@ async def simulate_attack(req: AttackRequest):
     try:
         # 1. 解析請求 (Parse Request)
         client_ip = req.client_ip
-        query_id = req.query_id
+        principal_id = req.principal_id
         raw_payload = req.raw_payload
 
         attack_vector = req.attack_vector or "unknown"
@@ -283,7 +283,7 @@ async def simulate_attack(req: AttackRequest):
         sandbox_log = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
             "client_ip": client_ip,
-            "query_id": query_id,
+            "principal_id": principal_id,
             "raw_payload": raw_payload,
             "attack_vector": attack_vector,
             "risk_level": risk_level,
@@ -292,7 +292,7 @@ async def simulate_attack(req: AttackRequest):
         logger.warning(f"[SANDBOX SIMULATION] {sandbox_log}")
 
         # 3. 模擬回應 (Simulate Response)
-        fake_data = generate_fake_data(query_id)
+        fake_data = generate_fake_data(principal_id)
 
         return {
             "status": "simulated",
@@ -318,7 +318,7 @@ async def execute_ai_agent(req: AIAgentRequest):
 
         # 1. 解析請求
         client_ip = req.client_ip
-        query_id = req.query_id
+        principal_id = req.principal_id
         raw_payload = req.raw_payload
         attack_vector = req.attack_vector or "unknown"
 
@@ -326,14 +326,14 @@ async def execute_ai_agent(req: AIAgentRequest):
         ai_decision = ai_agent_decide(
             raw_payload,
             client_ip=client_ip,
-            query_id=query_id,
+            principal_id=principal_id,
             attack_vector=attack_vector,
         )
 
         # 3. 更新沙盒內狀態 - 只能修改 mirage_memory.db
         update_deception_state(
             client_ip=client_ip,
-            query_id=query_id,
+            principal_id=principal_id,
             action=ai_decision["action"],
             data={
                 "original_payload": raw_payload,
@@ -344,13 +344,13 @@ async def execute_ai_agent(req: AIAgentRequest):
         )
 
         # 4. 使用AI生成的假資料作為回應
-        fake_data = ai_decision.get("generated_data", generate_fake_data(query_id))
+        fake_data = ai_decision.get("generated_data", generate_fake_data(principal_id))
 
         # 5. 記錄AI Agent行為
         ai_log = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
             "client_ip": client_ip,
-            "query_id": query_id,
+            "principal_id": principal_id,
             "ai_action": ai_decision["action"],
             "ai_confidence": ai_decision["confidence"],
             "ai_risk_level": ai_decision["risk_level"],
@@ -369,7 +369,7 @@ async def execute_ai_agent(req: AIAgentRequest):
     except Exception as e:
         logger.error(f"[SANDBOX AI] Agent執行失敗: {e}")
         # 備用回應
-        fake_data = generate_fake_data(req.query_id)
+        fake_data = generate_fake_data(req.principal_id)
         return {
             "status": "ai_fallback",
             "message": "AI Agent temporarily unavailable",

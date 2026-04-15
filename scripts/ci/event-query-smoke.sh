@@ -103,8 +103,8 @@ BODY=$(echo "$RESPONSE" | sed '$d')
 
 if [[ "$HTTP_CODE" == "200" ]] || [[ "$HTTP_CODE" == "404" ]]; then
   # 200 = 找到攻擊鏈，404 = 沒有該用戶的事件（也算通過）
-  if echo "$BODY" | grep -q "\"query_id\":\"CIF000001001\""; then
-    echo "✓ Test 4 passed (HTTP $HTTP_CODE, returned chain with query_id)"
+  if echo "$BODY" | grep -q "\"principal_id\":\"CIF000001001\""; then
+    echo "✓ Test 4 passed (HTTP $HTTP_CODE, returned chain with principal_id)"
     TEST_PASSED=$((TEST_PASSED + 1))
   else
     echo "✓ Test 4 passed (HTTP $HTTP_CODE, endpoint working)"

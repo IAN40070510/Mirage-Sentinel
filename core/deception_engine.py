@@ -296,7 +296,7 @@ def _funnel_level(
 
 def compute_interaction_metrics(
     client_ip: str,
-    query_id: str,
+    principal_id: str,
     current_payload: str | None,
     has_memory_hit: bool,
 ) -> dict[str, int]:
@@ -331,7 +331,7 @@ def compute_interaction_metrics(
 
         cursor.execute(
             """
-            SELECT t.request_at, t.query_id, d.raw_payload
+            SELECT t.request_at, t.principal_id, d.raw_payload
             FROM traffic_logs t
             JOIN clients c ON t.client_id = c.id
             LEFT JOIN attack_details d ON d.traffic_log_id = t.id
@@ -343,14 +343,14 @@ def compute_interaction_metrics(
         rows = cursor.fetchall()
 
     attack_times: list[datetime] = []
-    query_ids: set[str] = set()
+    principal_ids: set[str] = set()
     payloads: list[str] = []
     for row in rows:
         ts = parse_db_timestamp(row[0])
         if ts:
             attack_times.append(ts)
         if row[1]:
-            query_ids.add(row[1])
+            principal_ids.add(row[1])
         if row[2]:
             payloads.append(row[2])
 
@@ -362,10 +362,10 @@ def compute_interaction_metrics(
     else:
         dwell_seconds = 0
 
-    # 端點探索廣度：攻擊過多少不重複 query_id
-    if query_id:
-        query_ids.add(query_id)
-    endpoint_coverage = max(len(query_ids), 1)
+    # 端點探索廣度：攻擊過多少不重複 principal_id
+    if principal_id:
+        principal_ids.add(principal_id)
+    endpoint_coverage = max(len(principal_ids), 1)
 
     if current_payload:
         payloads.append(current_payload)

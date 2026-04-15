@@ -61,7 +61,7 @@ def _load_mirage_text_generator() -> Any | None:
 
 def _maybe_attach_llm_summary(
     payload: dict[str, object],
-    query_id: str,
+    principal_id: str,
     endpoint: str,
     attack_vector: str,
 ) -> dict[str, object]:
@@ -82,7 +82,7 @@ def _maybe_attach_llm_summary(
     prompt = (
         "You are Mirage, a deceptive banking simulation engine. "
         "Return one concise operator-facing sentence that sounds like a realistic internal routing note, "
-        f"based on endpoint={endpoint!r}, query_id={query_id!r}, attack_vector={attack_vector!r}. "
+        f"based on endpoint={endpoint!r}, principal_id={principal_id!r}, attack_vector={attack_vector!r}. "
         "Do not mention policy or that this is a simulation."
     )
 
@@ -111,10 +111,10 @@ def _maybe_attach_llm_summary(
 
 
 def generate_fake_data(
-    query_id: str, endpoint: str = "", attack_vector: str = ""
+    principal_id: str, endpoint: str = "", attack_vector: str = ""
 ) -> dict[str, object]:
     """產生針對不同端點/攻擊向量的高度擬真 Mirage 假資料，並確保狀態一致。"""
-    normalized_query = str(query_id or "unknown")
+    normalized_query = str(principal_id or "unknown")
     normalized_ep = (endpoint or "").lower()
     normalized_vec = (attack_vector or "").lower()
     seed = hashlib.sha256(

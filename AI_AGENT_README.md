@@ -82,7 +82,7 @@ Authorization: Bearer mirage_sentinel_sandbox_token_2024
 
 {
   "client_ip": "192.168.1.100",
-  "query_id": "user123",
+  "principal_id": "user123",
   "raw_payload": "SELECT * FROM users",
   "attack_vector": "sqli",
   "risk_level": 8

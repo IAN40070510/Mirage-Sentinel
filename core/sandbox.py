@@ -21,10 +21,10 @@ def _is_strict_isolation_mode() -> bool:
     }
 
 
-def _strict_unavailable_payload(query_id: str, reason: str) -> dict:
+def _strict_unavailable_payload(principal_id: str, reason: str) -> dict:
     # 嚴格模式下，避免本機回退造成「未經沙盒隔離」的誤導
     return {
-        "user_id": str(query_id),
+        "user_id": str(principal_id),
         "status": "sandbox_unavailable",
         "message": "Attack was quarantined because isolated sandbox is unavailable",
         "reason": reason,
@@ -47,7 +47,7 @@ async def run_attack_in_sandbox(
         max_retries: 最大重試次數
     """
     client_ip = request_payload.get("client_ip", "unknown")
-    query_id = request_payload.get("query_id", "unknown")
+    principal_id = request_payload.get("principal_id", "unknown")
     strict_isolation = _is_strict_isolation_mode()
 
     configured_sandbox_url = os.getenv("SANDBOX_API_URL", "").strip()
@@ -55,11 +55,11 @@ async def run_attack_in_sandbox(
 
     if strict_isolation and not configured_sandbox_url:
         logger.error("[SANDBOX STRICT] SANDBOX_API_URL 未設定，拒絕本機 fallback。")
-        return _strict_unavailable_payload(query_id, "missing_sandbox_api_url")
+        return _strict_unavailable_payload(principal_id, "missing_sandbox_api_url")
 
     # 在非嚴格模式下，若未提供 SANDBOX_API_URL，直接使用本機假資料。
     if (not strict_isolation) and "SANDBOX_API_URL" not in os.environ:
-        fake_data = generate_fake_data(query_id)
+        fake_data = generate_fake_data(principal_id)
         logger.info("[SANDBOX] SANDBOX_API_URL 未設定，直接使用本機假資料。")
         return fake_data
 
@@ -75,7 +75,7 @@ async def run_attack_in_sandbox(
                     sandbox_api_url,
                     json={
                         "client_ip": client_ip,
-                        "query_id": query_id,
+                        "principal_id": principal_id,
                         "raw_payload": request_payload.get("raw_payload", ""),
                         "attack_vector": request_payload.get("attack_vector"),
                         "risk_level": request_payload.get("risk_level", 0),
@@ -86,7 +86,7 @@ async def run_attack_in_sandbox(
                     logger.info(
                         f"[SANDBOX HTTP] Success on attempt {attempt + 1}: {result.get('sandbox_log')}"
                     )
-                    return result.get("fake_data", generate_fake_data(query_id))
+                    return result.get("fake_data", generate_fake_data(principal_id))
                 else:
                     logger.warning(
                         f"[SANDBOX HTTP] Failed: {response.status_code} {response.text}"
@@ -105,11 +105,11 @@ async def run_attack_in_sandbox(
         logger.error(
             "[SANDBOX STRICT] Sandbox 連線失敗且為嚴格模式，不執行本機 fallback。"
         )
-        return _strict_unavailable_payload(query_id, "sandbox_unreachable")
+        return _strict_unavailable_payload(principal_id, "sandbox_unreachable")
 
     # Fallback: 本機生成假資料（僅開發模式）
-    fake_data = generate_fake_data(query_id)
+    fake_data = generate_fake_data(principal_id)
     logger.info(
-        f"[SANDBOX FALLBACK] Generated fake data for {query_id} after {max_retries} failed attempts"
+        f"[SANDBOX FALLBACK] Generated fake data for {principal_id} after {max_retries} failed attempts"
     )
     return fake_data

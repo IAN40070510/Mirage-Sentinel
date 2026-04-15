@@ -149,7 +149,6 @@ def setup_traffic_db():
         fingerprint_id INTEGER,
         principal_id TEXT,
         session_chain_id TEXT,
-        query_id TEXT,
         device_id TEXT,
         referer TEXT,
         is_attack INTEGER DEFAULT 0,
@@ -341,11 +340,11 @@ def _log_traffic_event_once(data: dict[str, Any]) -> None:
             """
             INSERT INTO traffic_logs (
                 request_at, response_at, process_ms, method, endpoint, business_context, client_id, fingerprint_id,
-                principal_id, session_chain_id, query_id, device_id, referer,
+                principal_id, session_chain_id, device_id, referer,
                 is_attack, location, is_proxy,
                 query_string, authorization, content_type, content_length, header_count, all_headers
                 , input_string
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data.get("request_at"),
@@ -356,9 +355,8 @@ def _log_traffic_event_once(data: dict[str, Any]) -> None:
                 business_context,
                 client_id,
                 fingerprint_id,
-                data.get("principal_id", data.get("query_id")),
+                data.get("principal_id"),
                 data.get("session_chain_id"),
-                data.get("query_id"),
                 data.get("device_id"),
                 data.get("referer"),
                 is_attack,
@@ -556,7 +554,7 @@ def get_recent_transactions_by_user(
         FROM traffic_logs t
         JOIN clients c ON t.client_id = c.id
         LEFT JOIN attack_details d ON d.traffic_log_id = t.id
-        WHERE t.query_id = ? AND t.request_at > ?
+        WHERE t.principal_id = ? AND t.request_at > ?
         ORDER BY t.request_at DESC
         LIMIT ?
         """,
@@ -617,7 +615,7 @@ def get_transaction_amounts_by_user(
         SELECT d.response_payload, d.raw_payload, t.input_string
         FROM traffic_logs t
         LEFT JOIN attack_details d ON d.traffic_log_id = t.id
-        WHERE t.query_id = ? AND t.request_at > ?
+        WHERE t.principal_id = ? AND t.request_at > ?
         AND (
             COALESCE(t.business_context, '') = 'banking:transfers'
             OR (t.business_context IS NULL AND t.endpoint LIKE '%transfer%')

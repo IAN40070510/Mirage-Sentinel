@@ -21,7 +21,7 @@ class AIAgentOrchestrator:
     async def execute_ai_agent(
         self,
         client_ip: str,
-        query_id: str,
+        principal_id: str,
         raw_payload: str,
         attack_vector: Optional[str] = None,
         risk_level: int = 0,
@@ -30,7 +30,7 @@ class AIAgentOrchestrator:
 
         Args:
             client_ip: 客戶端IP
-            query_id: 查詢ID
+            principal_id: 查詢ID
             raw_payload: 原始攻擊載荷
             attack_vector: 攻擊向量
             risk_level: 風險等級
@@ -46,7 +46,7 @@ class AIAgentOrchestrator:
                     f"{self.sandbox_url}/ai_agent_execute",
                     json={
                         "client_ip": client_ip,
-                        "query_id": query_id,
+                        "principal_id": principal_id,
                         "raw_payload": raw_payload,
                         "attack_vector": attack_vector,
                         "risk_level": risk_level,
@@ -65,19 +65,19 @@ class AIAgentOrchestrator:
                         f"[AI ORCHESTRATOR] AI Agent執行失敗: {response.status_code} {response.text}"
                     )
                     # 返回備用回應
-                    return await self._fallback_response(query_id, raw_payload)
+                    return await self._fallback_response(principal_id, raw_payload)
 
         except Exception as e:
             logger.error(f"[AI ORCHESTRATOR] AI Agent調用失敗: {e}")
-            return await self._fallback_response(query_id, raw_payload)
+            return await self._fallback_response(principal_id, raw_payload)
 
     async def _fallback_response(
-        self, query_id: str, raw_payload: str
+        self, principal_id: str, raw_payload: str
     ) -> Dict[str, Any]:
         """AI Agent失敗時的備用回應"""
         from core.mirage import generate_fake_data
 
-        fake_data = generate_fake_data(query_id)
+        fake_data = generate_fake_data(principal_id)
 
         return {
             "status": "ai_fallback",
@@ -90,7 +90,7 @@ class AIAgentOrchestrator:
             "fake_data": fake_data,
             "ai_log": {
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
-                "query_id": query_id,
+                "principal_id": principal_id,
                 "ai_action": "fallback",
                 "sandbox_isolation": "maintained",
             },
@@ -103,12 +103,12 @@ ai_orchestrator = AIAgentOrchestrator()
 
 async def execute_sandbox_ai_agent(
     client_ip: str,
-    query_id: str,
+    principal_id: str,
     raw_payload: str,
     attack_vector: Optional[str] = None,
     risk_level: int = 0,
 ) -> Dict[str, Any]:
     """便捷函數：執行沙盒AI Agent"""
     return await ai_orchestrator.execute_ai_agent(
-        client_ip, query_id, raw_payload, attack_vector, risk_level
+        client_ip, principal_id, raw_payload, attack_vector, risk_level
     )

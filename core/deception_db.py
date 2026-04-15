@@ -21,19 +21,19 @@ def _migrate_attacker_ip_to_client_ip(conn: sqlite3.Connection):
 
 
 def _ensure_unique_memory_key(conn: sqlite3.Connection):
-    # 清理重複紀錄後建立唯一鍵，確保同一 client_ip + query_id 只有一筆狀態
+    # 清理重複紀錄後建立唯一鍵，確保同一 client_ip + principal_id 只有一筆狀態
     conn.execute(
         """
         DELETE FROM deception_memory
         WHERE id NOT IN (
             SELECT MAX(id)
             FROM deception_memory
-            GROUP BY client_ip, query_id
+            GROUP BY client_ip, principal_id
         )
         """
     )
     conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_deception_memory_client_query ON deception_memory(client_ip, query_id)"
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_deception_memory_client_query ON deception_memory(client_ip, principal_id)"
     )
 
 
@@ -45,7 +45,7 @@ def setup_deception_db():
             CREATE TABLE IF NOT EXISTS deception_memory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 client_ip TEXT,
-                query_id TEXT,
+                principal_id TEXT,
                 fake_data_payload TEXT,
                 -- SQL 註解必須使用雙橫線 --
                 last_vector TEXT,
@@ -61,7 +61,7 @@ def setup_deception_db():
     logger.info(f"Deception Memory Engine Ready: {DB_PATH}")
 
 
-def get_memory(client_ip: str, query_id: str):
+def get_memory(client_ip: str, principal_id: str):
     """
     讀取記憶：回傳字典以供 main.py 計算滯留時間與深度
     """
@@ -70,11 +70,11 @@ def get_memory(client_ip: str, query_id: str):
             """
             SELECT fake_data_payload, last_seen, interaction_count, hits
             FROM deception_memory
-            WHERE client_ip = ? AND query_id = ?
+            WHERE client_ip = ? AND principal_id = ?
             ORDER BY last_seen DESC
             LIMIT 1
         """,
-            (client_ip, query_id),
+            (client_ip, principal_id),
         )
         result = cursor.fetchone()
 
@@ -93,7 +93,7 @@ from typing import Any
 
 def save_deception_state(
     client_ip: str,
-    query_id: str,
+    principal_id: str,
     vector: str,
     risk: int,
     payload: dict[str, Any] | None = None,
@@ -109,10 +109,10 @@ def save_deception_state(
         conn.execute(
             """
             INSERT INTO deception_memory (
-                client_ip, query_id, fake_data_payload, last_vector, max_risk_seen,
+                client_ip, principal_id, fake_data_payload, last_vector, max_risk_seen,
                 interaction_count, hits, last_seen
             ) VALUES (?, ?, ?, ?, ?, 1, 1, ?)
-            ON CONFLICT(client_ip, query_id)
+            ON CONFLICT(client_ip, principal_id)
             DO UPDATE SET
                 fake_data_payload = excluded.fake_data_payload,
                 last_vector = excluded.last_vector,
@@ -126,7 +126,7 @@ def save_deception_state(
             """,
             (
                 client_ip,
-                query_id,
+                principal_id,
                 json.dumps(payload, ensure_ascii=False),
                 vector,
                 risk,

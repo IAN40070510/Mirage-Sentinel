@@ -12,7 +12,8 @@ import os
 from datetime import datetime
 
 SANDBOX_URL = "http://localhost:8001"
-AI_TOKEN = "mirage_sentinel_sandbox_token"
+AI_TOKEN = "mirage_sentinel_sandbox_token"  # nosec B105
+
 
 async def test_ai_agent():
     """測試AI Agent功能"""
@@ -23,44 +24,44 @@ async def test_ai_agent():
     test_payloads = [
         {
             "client_ip": "192.168.1.100",
-            "query_id": "test_user_001",
+            "principal_id": "test_user_001",
             "raw_payload": "SELECT * FROM users WHERE id = 1; DROP TABLE users;--",
             "attack_vector": "sqli",
             "risk_level": 8,
-            "description": "SQL注入攻擊"
+            "description": "SQL注入攻擊",
         },
         {
             "client_ip": "192.168.1.101",
-            "query_id": "test_user_002",
+            "principal_id": "test_user_002",
             "raw_payload": "<script>alert('xss')</script>",
             "attack_vector": "xss",
             "risk_level": 7,
-            "description": "XSS攻擊"
+            "description": "XSS攻擊",
         },
         {
             "client_ip": "192.168.1.102",
-            "query_id": "test_user_003",
+            "principal_id": "test_user_003",
             "raw_payload": "../../../../etc/passwd",
             "attack_vector": "lfi",
             "risk_level": 6,
-            "description": "本地檔案包含"
+            "description": "本地檔案包含",
         },
         {
             "client_ip": "192.168.1.103",
-            "query_id": "test_user_004",
+            "principal_id": "test_user_004",
             "raw_payload": "; cat /etc/passwd",
             "attack_vector": "rce",
             "risk_level": 9,
-            "description": "遠程代碼執行"
+            "description": "遠程代碼執行",
         },
         {
             "client_ip": "192.168.1.104",
-            "query_id": "test_user_005",
+            "principal_id": "test_user_005",
             "raw_payload": "../../../config/database.php",
             "attack_vector": "path-traversal",
             "risk_level": 5,
-            "description": "路徑遍歷"
-        }
+            "description": "路徑遍歷",
+        },
     ]
 
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -72,22 +73,19 @@ async def test_ai_agent():
                 # Call AI Agent
                 response = await client.post(
                     f"{SANDBOX_URL}/ai_agent_execute",
-                    json={
-                        **payload,
-                        "token": AI_TOKEN
-                    }
+                    json={**payload, "token": AI_TOKEN},
                 )
 
                 if response.status_code == 200:
                     result = response.json()
                     print("   Success")
                     print(f"   AI status: {result.get('status')}")
-                    ai_decision = result.get('ai_decision', {})
+                    ai_decision = result.get("ai_decision", {})
                     print(f"   AI action: {ai_decision.get('action')}")
                     print(f"   Risk level: {ai_decision.get('risk_level')}")
 
                     # Check for fake data
-                    if 'fake_data' in result:
+                    if "fake_data" in result:
                         print("   Fake data generated")
                     else:
                         print("   No fake data returned")
@@ -130,6 +128,7 @@ async def test_ai_agent():
             print("   traffic_logs.db is not exposed")
     except Exception as e:
         print(f"   Database check error: {e}")
+
 
 if __name__ == "__main__":
     asyncio.run(test_ai_agent())

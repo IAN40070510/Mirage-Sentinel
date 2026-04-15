@@ -51,18 +51,18 @@ def run():
 
         # Case 1: 驗證唯一鍵 + Upsert 不會產生重複列
         client_ip = "10.0.0.10"
-        query_id = "u1001"
+        principal_id = "u1001"
         deception_db.save_deception_state(
-            client_ip, query_id, "SQLi", 80, {"token": "fake-a"}
+            client_ip, principal_id, "SQLi", 80, {"token": "fake-a"}
         )
         deception_db.save_deception_state(
-            client_ip, query_id, "SQLi", 90, {"token": "fake-b"}
+            client_ip, principal_id, "SQLi", 90, {"token": "fake-b"}
         )
 
         with sqlite3.connect(temp_memory_db) as conn:
             cursor = conn.execute(
-                "SELECT COUNT(1), MAX(hits), MAX(interaction_count) FROM deception_memory WHERE client_ip=? AND query_id=?",
-                (client_ip, query_id),
+                "SELECT COUNT(1), MAX(hits), MAX(interaction_count) FROM deception_memory WHERE client_ip=? AND principal_id=?",
+                (client_ip, principal_id),
             )
             count_rows, hits, interaction_count = cursor.fetchone()
 
@@ -80,7 +80,7 @@ def run():
             "is_proxy": 0,
             "user_agent": "pytest",
             "tls_fingerprint": "N/A",
-            "query_id": "u2001",
+            "principal_id": "u2001",
             "is_attack": 1,
             "attack_vector": "LFI",
             "risk_level": 88,
@@ -110,7 +110,7 @@ def run():
 
         metrics = compute_interaction_metrics(
             client_ip=attack_client,
-            query_id="u2001",
+            principal_id="u2001",
             current_payload="../../../../etc/passwd",
             has_memory_hit=True,
         )
@@ -131,7 +131,7 @@ def run():
                 "is_proxy": 0,
                 "user_agent": "pytest",
                 "tls_fingerprint": "N/A",
-                "query_id": "u3001",
+                "principal_id": "u3001",
                 "is_attack": 0,
             }
         )

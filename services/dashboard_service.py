@@ -87,7 +87,7 @@ async def dashboard_root(request: Request):
             "/api/v1/dashboard/recent_traffic",
             "/api/v1/dashboard/events/by_route/{route}",
             "/api/v1/dashboard/events/by_risk_score",
-            "/api/v1/dashboard/replay/{query_id}",
+            "/api/v1/dashboard/replay/{principal_id}",
             "/api/v1/dashboard/replay/session/{session_chain_id}",
             "/api/v1/dashboard/statistics/deception_effectiveness",
         ],
@@ -173,10 +173,10 @@ async def dashboard_events_by_risk_score(
     )
 
 
-@app.get("/api/v1/dashboard/replay/{query_id}")
-async def dashboard_replay_by_query(query_id: str, request: Request):
+@app.get("/api/v1/dashboard/replay/{principal_id}")
+async def dashboard_replay_by_query(principal_id: str, request: Request):
     require_api_key(request)
-    return get_deception_chain(query_id)
+    return get_deception_chain(principal_id)
 
 
 @app.get("/api/v1/dashboard/replay/session/{session_chain_id}")
@@ -356,7 +356,7 @@ def get_hacker_dwell_time(client_ip: str) -> dict[str, Any]:
 from core.deception_engine import compute_interaction_metrics
 
 
-def analyze_interaction_depth(client_ip: str, query_id: str) -> dict[str, Any]:
+def analyze_interaction_depth(client_ip: str, principal_id: str) -> dict[str, Any]:
     """
     進階互動深度分析：回傳多維度誘餌擬真度與攻擊者信任度指標，供 SOC 前端判斷。
     """
@@ -364,20 +364,20 @@ def analyze_interaction_depth(client_ip: str, query_id: str) -> dict[str, Any]:
         # 這裡 current_payload 與 has_memory_hit 可依需求調整，先設為 None/False
         metrics = compute_interaction_metrics(
             client_ip=client_ip,
-            query_id=query_id,
+            principal_id=principal_id,
             current_payload=None,
             has_memory_hit=False,
         )
         # 正規化為可擴充的字典，避免型別推斷把 value 限制為 int。
         output: dict[str, Any] = dict(metrics)
         output["client_ip"] = client_ip
-        output["query_id"] = query_id
+        output["principal_id"] = principal_id
         return output
     except Exception as exc:
         logger.error("Failed to analyze interaction depth for %s: %r", client_ip, exc)
         return {
             "client_ip": client_ip,
-            "query_id": query_id,
+            "principal_id": principal_id,
             "error": str(exc),
         }
 
@@ -416,7 +416,7 @@ def get_ip_all_traffic_logs(client_ip: str) -> list[dict[str, Any]]:
                 t.request_at,
                 t.method,
                 t.endpoint,
-                t.query_id,
+                t.principal_id,
                 t.is_attack,
                 t.input_string,
                 COALESCE(d.attack_vector, '-') AS attack_vector,
@@ -445,7 +445,7 @@ def get_ip_all_traffic_logs(client_ip: str) -> list[dict[str, Any]]:
                 "timestamp": row["request_at"],
                 "method": row["method"] or "-",
                 "endpoint": row["endpoint"] or "-",
-                "query_id": row["query_id"] or "-",
+                "principal_id": row["principal_id"] or "-",
                 "is_attack": int(row["is_attack"] or 0),
                 "input_string": row["input_string"] or row["raw_payload"] or "-",
                 "attack_vector": row["attack_vector"] or "-",
@@ -486,7 +486,7 @@ def get_command_heatmap() -> dict[str, Any]:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT COALESCE(d.raw_payload, t.query_id, '-') AS cmd, COUNT(*) AS count
+            SELECT COALESCE(d.raw_payload, t.principal_id, '-') AS cmd, COUNT(*) AS count
             FROM traffic_logs t
             LEFT JOIN attack_details d ON d.traffic_log_id = t.id
             WHERE t.is_attack = 1
@@ -509,7 +509,7 @@ def get_ip_details(ip: str) -> dict[str, Any]:
                 c.ip AS client_ip,
                 MAX(t.location) AS location,
                 COUNT(t.id) AS hits,
-                MAX(t.query_id) AS query_id,
+                MAX(t.principal_id) AS principal_id,
                 MAX(t.mouse_entropy) AS mouse_entropy,
                 MAX(t.mouse_source) AS mouse_source,
                 MAX(d.attack_vector) AS attack_vector,
@@ -633,7 +633,7 @@ def compare_traffic(limit: int = 1000) -> dict[str, Any]:
             SELECT
                 c.ip AS client_ip,
                 MAX(d.attack_vector) AS attack_type,
-                MAX(t.query_id) AS target,
+                MAX(t.principal_id) AS target,
                 COUNT(*) AS event_count
             FROM traffic_logs t
             JOIN clients c ON c.id = t.client_id
@@ -699,9 +699,9 @@ def get_events_by_route(
                         t.id,
                         t.request_at,
                         c.ip AS client_ip,
-                        COALESCE(t.principal_id, t.query_id) AS principal_id,
+                        t.principal_id AS principal_id,
                         t.session_chain_id,
-                        t.query_id,
+                        t.principal_id,
                         t.location,
                         d.response_payload,
                         d.risk_level,
@@ -735,9 +735,9 @@ def get_events_by_route(
                         t.id,
                         t.request_at,
                         c.ip AS client_ip,
-                        COALESCE(t.principal_id, t.query_id) AS principal_id,
+                        t.principal_id AS principal_id,
                         t.session_chain_id,
-                        t.query_id,
+                        t.principal_id,
                         t.location,
                         d.response_payload,
                         d.risk_level,
@@ -774,7 +774,6 @@ def get_events_by_route(
                 "client_ip": row["client_ip"],
                 "principal_id": row["principal_id"],
                 "session_chain_id": row["session_chain_id"],
-                "query_id": row["query_id"],
                 "location": row["location"],
                 "route": route,
                 "risk_level": int(row["risk_level"] or 0),
@@ -832,8 +831,8 @@ def get_events_by_risk_score(
                     t.id,
                     t.request_at,
                     c.ip AS client_ip,
-                    COALESCE(t.principal_id, t.query_id) AS principal_id,
-                    t.query_id,
+                    t.principal_id AS principal_id,
+                    t.principal_id,
                     t.location,
                     d.response_payload,
                     d.risk_level,
@@ -856,7 +855,6 @@ def get_events_by_risk_score(
                 "request_at": row["request_at"],
                 "client_ip": row["client_ip"],
                 "principal_id": row["principal_id"],
-                "query_id": row["query_id"],
                 "location": row["location"],
                 "risk_level": int(row["risk_level"] or 0),
                 "attack_vector": row["attack_vector"],
@@ -892,8 +890,8 @@ def get_events_by_risk_score(
         return {"error": str(exc), "events": []}
 
 
-def get_deception_chain(query_id: str) -> dict[str, Any]:
-    """回放攻擊鏈：按 query_id 聚合相關事件，重現完整攻擊路徑"""
+def get_deception_chain(principal_id: str) -> dict[str, Any]:
+    """回放攻擊鏈：按 principal_id 聚合相關事件，重現完整攻擊路徑"""
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
@@ -905,8 +903,8 @@ def get_deception_chain(query_id: str) -> dict[str, Any]:
                     t.request_at,
                     c.ip AS client_ip,
                     t.session_chain_id,
-                    COALESCE(t.principal_id, t.query_id) AS principal_id,
-                    t.query_id,
+                    t.principal_id AS principal_id,
+                    t.principal_id,
                     t.location,
                     t.is_attack,
                     d.response_payload,
@@ -927,16 +925,16 @@ def get_deception_chain(query_id: str) -> dict[str, Any]:
                 JOIN clients c ON t.client_id = c.id
                 LEFT JOIN attack_details d ON d.traffic_log_id = t.id
                 LEFT JOIN fs.derived_features fs_df ON fs_df.traffic_log_id = t.id
-                WHERE t.query_id = ?
+                WHERE t.principal_id = ?
                 ORDER BY t.request_at ASC
                 """,
-                (query_id,),
+                (principal_id,),
             )
             rows = cursor.fetchall()
 
         if not rows:
             return {
-                "query_id": query_id,
+                "principal_id": principal_id,
                 "chain_length": 0,
                 "events": [],
                 "message": "No events found",
@@ -1002,7 +1000,7 @@ def get_deception_chain(query_id: str) -> dict[str, Any]:
             events.append(event)
 
         return {
-            "query_id": query_id,
+            "principal_id": principal_id,
             "client_ip": rows[0]["client_ip"] if rows else None,
             "session_chain_id": rows[0]["session_chain_id"] if rows else None,
             "chain_length": len(events),
@@ -1014,8 +1012,10 @@ def get_deception_chain(query_id: str) -> dict[str, Any]:
             "events": events,
         }
     except Exception as exc:
-        logger.error("Failed to get deception chain for query_id %s: %r", query_id, exc)
-        return {"query_id": query_id, "error": str(exc), "events": []}
+        logger.error(
+            "Failed to get deception chain for principal_id %s: %r", principal_id, exc
+        )
+        return {"principal_id": principal_id, "error": str(exc), "events": []}
 
 
 def get_deception_chain_by_session(session_chain_id: str) -> dict[str, Any]:
@@ -1028,9 +1028,9 @@ def get_deception_chain_by_session(session_chain_id: str) -> dict[str, Any]:
                 SELECT
                     t.request_at,
                     c.ip AS client_ip,
-                    COALESCE(t.principal_id, t.query_id) AS principal_id,
+                    t.principal_id AS principal_id,
                     t.session_chain_id,
-                    t.query_id,
+                    t.principal_id,
                     t.method,
                     t.endpoint,
                     t.is_attack,
@@ -1067,7 +1067,6 @@ def get_deception_chain_by_session(session_chain_id: str) -> dict[str, Any]:
                 "timestamp": row["request_at"],
                 "client_ip": row["client_ip"],
                 "principal_id": row["principal_id"],
-                "query_id": row["query_id"],
                 "method": row["method"],
                 "endpoint": row["endpoint"],
                 "is_attack": bool(row["is_attack"]),
@@ -1243,7 +1242,7 @@ def get_dashboard_ip_bundle(client_ip: str) -> dict[str, Any]:
     attack_vector = details.get("attack_vector") or "-"
     raw_payload = details.get("raw_payload") or "-"
     protocol = details.get("tls_fingerprint") or "-"
-    port = details.get("query_id") or "-"
+    port = details.get("principal_id") or "-"
     risk_level = int(details.get("risk_level") or 0)
     polluted_status = int(details.get("polluted_status") or 0)
 

@@ -54,7 +54,7 @@ def export_sql_dump(db_path: str, sql_path: str):
 
 def build_event(base_time: datetime, idx: int) -> dict:
     client_ip = f"10.20.{idx % 8}.{(idx % 40) + 10}"
-    query_id = f"user_{1000 + (idx % 50)}"
+    principal_id = f"user_{1000 + (idx % 50)}"
     is_attack = 1 if random.random() < 0.35 else 0
 
     request_at = base_time + timedelta(seconds=idx * random.randint(8, 40))
@@ -70,7 +70,7 @@ def build_event(base_time: datetime, idx: int) -> dict:
         "is_proxy": 1 if random.random() < 0.08 else 0,
         "user_agent": random.choice(USER_AGENTS),
         "tls_fingerprint": f"tls-{random.randint(100000, 999999)}",
-        "query_id": query_id,
+        "principal_id": principal_id,
         "is_attack": is_attack,
     }
 
