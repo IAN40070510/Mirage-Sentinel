@@ -101,7 +101,7 @@ def _generate_with_ollama(prompt: str) -> str | None:
                 "stop": ["\n", "User:", "Assistant:"],
             },
         }
-        with httpx.Client(timeout=15.0) as client:
+        with httpx.Client(timeout=60.0) as client:
             resp = client.post(url, json=payload)
             if resp.is_success:
                 data = resp.json()
@@ -181,7 +181,26 @@ def _maybe_attach_llm_summary(
 
     if summary:
         payload["llm_model_id"] = model_id or "unknown"
-        payload["llm_summary"] = summary[:240]
+
+        # 嘗試解析 LLM 返回的內容是否為 JSON
+        import json
+
+        try:
+            # 移除可能存在的 Markdown 代碼塊標記
+            clean_summary = summary.strip()
+            if clean_summary.startswith("```json"):
+                clean_summary = clean_summary[7:].strip()
+            if clean_summary.endswith("```"):
+                clean_summary = clean_summary[:-3].strip()
+
+            ai_data = json.loads(clean_summary)
+            if isinstance(ai_data, dict):
+                # 如果是有效的 dict，則合併到 payload 中 (覆蓋重複鍵以 LLM 為準)
+                payload.update(ai_data)
+                payload["response_origin"] = "mirage_llm"
+        except Exception:
+            # 解析失敗則維持原樣作為 summary
+            payload["llm_summary"] = summary[:1000]
 
     return payload
 
