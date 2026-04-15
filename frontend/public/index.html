@@ -7,9 +7,13 @@
   <link rel="stylesheet" href="./style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="./main.js" defer></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 </head>
 <body data-layout-mode="layout-17">
-  <div class="screen">
+  <div class="fullscreen-wrapper screen">
+    <div class="bg-grid"></div>
+    <canvas id="matrixCanvas"></canvas>
     <div class="glow"></div>
     <div class="stream-layer" id="streamLayer"></div>
 
@@ -34,6 +38,130 @@
       </script>
       </body>
       <style>
+            /* 來自 1.html 的主題背景與裝飾 */
+            body {
+              background-color: #0D1117 !important;
+              font-family: 'Noto Sans TC', 'JetBrains Mono', monospace, sans-serif !important;
+              overflow-x: hidden;
+            }
+            .fullscreen-wrapper {
+              width: 100vw;
+              height: 100vh;
+              position: relative;
+              background-color: #0D1117;
+              min-height: 100vh;
+              min-width: 100vw;
+              overflow: hidden;
+            }
+            .bg-grid {
+              position: absolute;
+              inset: 0;
+              background-image:
+                linear-gradient(rgba(0, 212, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 212, 255, 0.05) 1px, transparent 1px);
+              background-size: 50px 50px;
+              z-index: 1;
+              pointer-events: none;
+            }
+            #matrixCanvas {
+              position: absolute;
+              inset: 0;
+              z-index: 2;
+              opacity: 0.22;
+              pointer-events: none;
+            }
+            .screen > *:not(.bg-grid):not(#matrixCanvas) {
+              position: relative;
+              z-index: 10;
+            }
+            /* 裝飾角可用於重要卡片 */
+            .corner {
+              position: absolute;
+              width: 15px;
+              height: 15px;
+              border: 3px solid #FF6B35;
+              z-index: 20;
+              pointer-events: none;
+            }
+            .tl { top: -5px; left: -5px; border-right: 0; border-bottom: 0; }
+            .br { bottom: -5px; right: -5px; border-left: 0; border-top: 0; }
+            /* 強化 dashboard 卡片主題色 */
+            .main-window, .window, .sub-window, .hud-box, .info-card, .analysis-card, .cmd-bar, #trafficLogsBtn {
+              box-shadow: 0 2px 16px #0008 !important;
+              border: 1.5px solid #00D4FF !important;
+              background: rgba(13,17,23,0.92) !important;
+            }
+            .window-header, .window-title {
+              font-family: 'JetBrains Mono', monospace !important;
+              color: #00D4FF !important;
+              letter-spacing: 0.04em;
+              font-weight: 700;
+            }
+            .window-dots span {
+              background: #FF6B35 !important;
+            }
+            .cmd-btn {
+              background: #FF6B35 !important;
+              color: #fff !important;
+            }
+            .cmd-input {
+              border-color: #FF6B35 !important;
+            }
+            .overview-tab.active {
+              background: #FF6B35 !important;
+              color: #fff !important;
+            }
+            .overview-tab {
+              background: #012c2c !important;
+              color: #00D4FF !important;
+            }
+            /* 讓裝飾角出現在主視窗 */
+            .main-window .corner.tl { left: -7px; top: -7px; }
+            .main-window .corner.br { right: -7px; bottom: -7px; }
+            .main-window { position: relative; }
+            /* 讓 dashboard 內容不被背景遮住 */
+            .main-window, .window, .sub-window, .hud-box, .info-card, .analysis-card, .cmd-bar, #trafficLogsBtn {
+              backdrop-filter: blur(2px) !important;
+            }
+            /* matrix 數位雨動畫 */
+            @media (max-width: 900px) {
+              #matrixCanvas { opacity: 0.13 !important; }
+            }
+          <script>
+            // matrix 數位雨動畫
+            const canvas = document.getElementById('matrixCanvas');
+            if (canvas) {
+              const ctx = canvas.getContext('2d');
+              function resizeCanvas() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+              }
+              window.addEventListener('resize', resizeCanvas);
+              resizeCanvas();
+              const charList = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789$+-*/=%&#!?<>'.split('');
+              const fontSize = 18;
+              let columns = canvas.width / fontSize;
+              let drops = Array(Math.floor(columns)).fill(1);
+              function draw() {
+                ctx.fillStyle = 'rgba(13, 17, 23, 0.08)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                for(let i = 0; i < drops.length; i++) {
+                  const text = charList[Math.floor(Math.random() * charList.length)];
+                  const rand = Math.random();
+                  if (rand > 0.985) ctx.fillStyle = '#FF6B35';
+                  else if (rand > 0.95) ctx.fillStyle = '#fff';
+                  else ctx.fillStyle = '#00D4FF';
+                  ctx.font = `bold ${fontSize}px monospace`;
+                  ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                  if(drops[i] * fontSize > canvas.height && Math.random() > 0.985) {
+                    drops[i] = 0;
+                  }
+                  drops[i]++;
+                }
+              }
+              setInterval(draw, 33);
+            }
+          </script>
         .layout-box-pro { display: none !important; }
         @media (max-width: 900px) {
           html, body {
@@ -226,6 +354,8 @@
 
     <!-- 主視窗 -->
     <div class="window main-window draggable" id="mainWindow">
+        <div class="corner tl"></div>
+        <div class="corner br"></div>
       <div class="window-header drag-handle">
         <div class="window-title">selected ip detail</div>
         <div class="window-dots"><span></span><span></span><span></span></div>
