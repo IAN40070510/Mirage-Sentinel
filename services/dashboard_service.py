@@ -525,8 +525,8 @@ def get_ip_details(ip: str) -> dict[str, Any]:
                 MAX(t.location) AS location,
                 COUNT(t.id) AS hits,
                 MAX(t.principal_id) AS principal_id,
-                MAX(t.mouse_entropy) AS mouse_entropy,
-                MAX(t.mouse_source) AS mouse_source,
+                MAX(fs_df.mouse_entropy) AS mouse_entropy,
+                MAX(fs_df.mouse_source) AS mouse_source,
                 MAX(d.attack_vector) AS attack_vector,
                 MAX(d.raw_payload) AS raw_payload,
                 MAX(d.mitigation_status) AS mitigation_status,
@@ -535,6 +535,7 @@ def get_ip_details(ip: str) -> dict[str, Any]:
             FROM clients c
             LEFT JOIN traffic_logs t ON t.client_id = c.id
             LEFT JOIN attack_details d ON d.traffic_log_id = t.id
+            LEFT JOIN fs.derived_features fs_df ON fs_df.traffic_log_id = t.id
             WHERE c.ip = ?
             GROUP BY c.ip
             """,
