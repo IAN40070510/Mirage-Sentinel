@@ -204,6 +204,19 @@ services:
       backend_public:
         condition: service_started
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: mirage_sentinel_ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    expose:
+      - "11434"
+    # No need to expose ports to host unless you want to call it from outside
+    # ports:
+    #   - "11434:11434"
+
 volumes:
   pgdata:
   vuln_bank_pgdata:
+  ollama_data:

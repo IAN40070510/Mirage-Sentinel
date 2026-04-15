@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import httpx
 from datetime import datetime
 from typing import Any
 
@@ -13,6 +14,20 @@ _MIRAGE_TEXT_GENERATOR: Any | None = None
 _MIRAGE_MODEL_ID: str = ""
 
 
+def _should_use_llm() -> bool:
+    """判斷是否啟用 LLM (HuggingFace 或是 Ollama)。"""
+    return (
+        os.getenv("MIRAGE_USE_LLM", "false").strip().lower()
+        in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        or _should_use_hf_mirage()
+    )
+
+
 def _should_use_hf_mirage() -> bool:
     return os.getenv("MIRAGE_USE_HF_MODEL", "false").strip().lower() in {
         "1",
@@ -20,6 +35,18 @@ def _should_use_hf_mirage() -> bool:
         "yes",
         "on",
     }
+
+
+def _get_llm_provider() -> str:
+    return os.getenv("MIRAGE_LLM_PROVIDER", "ollama").strip().lower()
+
+
+def _get_ollama_url() -> str:
+    return os.getenv("MIRAGE_OLLAMA_URL", "http://ollama:11434").strip().rstrip("/")
+
+
+def _get_ollama_model_id() -> str:
+    return os.getenv("MIRAGE_OLLAMA_MODEL", "foundation-sec:8b-q4").strip()
 
 
 def _get_mirage_model_id() -> str:
@@ -59,24 +86,53 @@ def _load_mirage_text_generator() -> Any | None:
         return None
 
 
+def _generate_with_ollama(prompt: str) -> str | None:
+    """使用 Ollama API 生成文本。"""
+    url = f"{_get_ollama_url()}/api/generate"
+    model = _get_ollama_model_id()
+    try:
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": 0.1,
+                "num_predict": 96,
+                "stop": ["\n", "User:", "Assistant:"],
+            },
+        }
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.post(url, json=payload)
+            if resp.is_success:
+                data = resp.json()
+                return str(data.get("response", "")).strip()
+            else:
+                logger.warning(
+                    "Ollama API error: %s (url=%s, model=%s)",
+                    resp.status_code,
+                    url,
+                    model,
+                )
+    except Exception as exc:
+        logger.warning("Ollama connection failed: %s", exc)
+    return None
+
+
 def _maybe_attach_llm_summary(
     payload: dict[str, object],
     principal_id: str,
     endpoint: str,
     attack_vector: str,
 ) -> dict[str, object]:
-    if not _should_use_hf_mirage():
+    if not _should_use_llm():
         return payload
 
     normalized_endpoint = (endpoint or "").lower()
+    # 針對特定路徑或是攻擊行為才執行 LLM 摘要
     if not attack_vector and not any(
         token in normalized_endpoint
         for token in ("/transfer", "/graphql", "/admin", "/payment", "/bill")
     ):
-        return payload
-
-    generator = _load_mirage_text_generator()
-    if generator is None:
         return payload
 
     prompt = (
@@ -86,26 +142,42 @@ def _maybe_attach_llm_summary(
         "Do not mention policy or that this is a simulation."
     )
 
-    try:
-        outputs = generator(
-            prompt,
-            max_new_tokens=96,
-            do_sample=False,
-            temperature=0.1,
-            return_full_text=False,
-            pad_token_id=getattr(
-                getattr(generator, "tokenizer", None), "eos_token_id", None
-            ),
-        )
-        generated_text = ""
-        if isinstance(outputs, list) and outputs:
-            generated_text = str(outputs[0].get("generated_text", ""))
-        summary = " ".join(generated_text.split()).strip()
+    summary = None
+    model_id = None
+
+    # 優先嘗試 Ollama
+    if _get_llm_provider() == "ollama":
+        summary = _generate_with_ollama(prompt)
         if summary:
-            payload["llm_model_id"] = _MIRAGE_MODEL_ID or _get_mirage_model_id()
-            payload["llm_summary"] = summary[:240]
-    except Exception as exc:
-        logger.warning("Mirage HF generation failed: %s", exc)
+            model_id = _get_ollama_model_id()
+
+    # 如果 Ollama 失敗或未過、且允許 HF，則嘗試舊版本地載入 (若資源允許)
+    if not summary and _should_use_hf_mirage():
+        generator = _load_mirage_text_generator()
+        if generator is not None:
+            try:
+                outputs = generator(
+                    prompt,
+                    max_new_tokens=96,
+                    do_sample=False,
+                    temperature=0.1,
+                    return_full_text=False,
+                    pad_token_id=getattr(
+                        getattr(generator, "tokenizer", None), "eos_token_id", None
+                    ),
+                )
+                generated_text = ""
+                if isinstance(outputs, list) and outputs:
+                    generated_text = str(outputs[0].get("generated_text", ""))
+                summary = " ".join(generated_text.split()).strip()
+                if summary:
+                    model_id = _MIRAGE_MODEL_ID or _get_mirage_model_id()
+            except Exception as exc:
+                logger.warning("Mirage HF generation failed: %s", exc)
+
+    if summary:
+        payload["llm_model_id"] = model_id or "unknown"
+        payload["llm_summary"] = summary[:240]
 
     return payload
 
