@@ -722,6 +722,8 @@ def _classify_banking_surface(upstream_path: str) -> tuple[str, str]:
         return "banking:auth", "login"
     if "/balance" in lowered_path or "check_balance" in lowered_path:
         return "banking:balance", "balance"
+    if "/loan" in lowered_path or "borrow" in lowered_path:
+        return "banking:loans", "loan"
     if "/graphql" in lowered_path:
         return "banking:graphql", "graphql"
     if "/payment" in lowered_path or "/bill" in lowered_path:
@@ -789,6 +791,63 @@ def _extract_transfer_details_text(
         ):
             for key, value in parse_qsl(body_text, keep_blank_values=True):
                 if key.lower() in transfer_keys:
+                    collected.append(f"{key}={value}")
+
+    return "&".join(collected)
+
+
+def _extract_loan_details_text(
+    upstream_path: str,
+    query_text: str,
+    body_text: str,
+    content_type: str,
+) -> str:
+    """Extract loan/borrow input fields for request_loan and related flows."""
+    normalized_path = "/" + (upstream_path or "").lstrip("/")
+    lowered_path = normalized_path.lower()
+    if "loan" not in lowered_path and "borrow" not in lowered_path:
+        return ""
+
+    loan_keys = {
+        "amount",
+        "loan_amount",
+        "principal",
+        "term",
+        "tenor",
+        "purpose",
+        "reason",
+        "collateral",
+        "interest",
+        "repayment",
+        "installment",
+        "payment_date",
+        "income",
+    }
+    collected: list[str] = []
+
+    for key, value in parse_qsl(query_text, keep_blank_values=True):
+        if key.lower() in loan_keys:
+            collected.append(f"{key}={value}")
+
+    body_content_type = (content_type or "").lower()
+
+    if body_text:
+        if "application/json" in body_content_type:
+            try:
+                payload = json.loads(body_text)
+                if isinstance(payload, dict):
+                    for key, value in payload.items():
+                        if str(key).lower() in loan_keys:
+                            collected.append(f"{key}={value}")
+            except Exception:
+                pass
+
+        if (
+            "application/x-www-form-urlencoded" in body_content_type
+            or ("=" in body_text and "&" in body_text)
+        ):
+            for key, value in parse_qsl(body_text, keep_blank_values=True):
+                if key.lower() in loan_keys:
                     collected.append(f"{key}={value}")
 
     return "&".join(collected)
@@ -926,16 +985,24 @@ async def _proxy_banking_request(
         body_text=body_text,
         content_type=content_type,
     )
+    loan_details_text = _extract_loan_details_text(
+        upstream_path=upstream_path,
+        query_text=query_text,
+        body_text=body_text,
+        content_type=content_type,
+    )
     raw_payload_text = body_text
     payload_fragments = [
-        fragment for fragment in [login_credentials_text, transfer_details_text] if fragment
+        fragment
+        for fragment in [login_credentials_text, transfer_details_text, loan_details_text]
+        if fragment
     ]
     if payload_fragments:
         raw_payload_text = (
             f"{body_text}\n" if body_text else ""
         ) + "\n".join(payload_fragments)
     detection_target = (
-        f"{upstream_path} {business_context} {banking_action} {query_text} {body_text} {login_credentials_text} {transfer_details_text}".strip()
+        f"{upstream_path} {business_context} {banking_action} {query_text} {body_text} {login_credentials_text} {transfer_details_text} {loan_details_text}".strip()
     )
 
     req_interval_ms, req_time_var = _compute_timing_features(principal_id)
@@ -1017,6 +1084,7 @@ async def _proxy_banking_request(
         "user_agent": user_agent,
         "tls_fingerprint": tls_fingerprint,
         "raw_payload": raw_payload_text,  # 完整未解析的原始負載
+        "input_string": raw_payload_text,  # 戰情室明確顯示的輸入字串
         "principal_id": principal_id,
         "session_chain_id": session_chain_id,
         "query_id": query_id,
@@ -1031,7 +1099,9 @@ async def _proxy_banking_request(
         "referer": referer,
         "business_context": business_context,
         "banking_action": banking_action,
-        "banking_details": transfer_details_text or login_credentials_text or None,
+        "banking_details": (
+            loan_details_text or transfer_details_text or login_credentials_text or None
+        ),
         "header_entropy": header_entropy,
         "req_interval_ms": req_interval_ms,
         "req_time_var": req_time_var,

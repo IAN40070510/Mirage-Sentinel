@@ -164,6 +164,7 @@ def setup_traffic_db():
         content_length TEXT,
         header_count INTEGER,
         all_headers TEXT,
+        input_string TEXT,
         FOREIGN KEY(client_id) REFERENCES clients(id),
         FOREIGN KEY(fingerprint_id) REFERENCES fingerprints(id)
     )
@@ -219,6 +220,7 @@ def setup_traffic_db():
     _ensure_column(conn, "traffic_logs", "content_length TEXT")
     _ensure_column(conn, "traffic_logs", "header_count INTEGER")
     _ensure_column(conn, "traffic_logs", "all_headers TEXT")
+    _ensure_column(conn, "traffic_logs", "input_string TEXT")
     _ensure_column(conn, "attack_details", "query_string TEXT")
     _ensure_column(conn, "attack_details", "authorization TEXT")
     _ensure_column(conn, "attack_details", "content_type TEXT")
@@ -345,7 +347,8 @@ def _log_traffic_event_once(data: dict[str, Any]) -> None:
                 user_device_ratio, device_user_ratio, req_rate_5m, graph_feature_source,
                 mouse_entropy, mouse_source, amount_value, amount_deviation, is_attack, location, is_proxy,
                 query_string, authorization, content_type, content_length, header_count, all_headers
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                , input_string
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data.get("request_at"),
@@ -385,6 +388,7 @@ def _log_traffic_event_once(data: dict[str, Any]) -> None:
                     if data.get("all_headers")
                     else None
                 ),
+                data.get("input_string"),
             ),
         )
 
@@ -494,7 +498,9 @@ def get_recent_traffic(limit: int = 100) -> list[dict[str, Any]]:
                d.policy_hit, d.upstream_attempted, d.upstream_status_code,
                d.deception_engaged, d.deception_mode, d.real_backend_touched, d.response_origin,
                d.flow_stage, d.deception_score, d.trust_level, d.memory_hit,
-               t.query_string, t.authorization, t.content_type, t.content_length, t.header_count, t.all_headers,
+                             t.query_string, t.authorization, t.content_type, t.content_length, t.header_count, t.all_headers,
+                             t.input_string,
+               d.input_string AS attack_input_string,
                d.query_string AS attack_query_string, d.authorization AS attack_authorization,
                d.content_type AS attack_content_type, d.content_length AS attack_content_length,
                d.header_count AS attack_header_count, d.all_headers AS attack_all_headers
@@ -528,7 +534,7 @@ def get_recent_transactions_by_user(
 
     cursor.execute(
         """
-        SELECT t.*, c.ip AS client_ip, d.raw_payload, d.response_payload, d.attack_vector
+        SELECT t.*, c.ip AS client_ip, d.raw_payload, d.response_payload, d.attack_vector, d.input_string
         FROM traffic_logs t
         JOIN clients c ON t.client_id = c.id
         LEFT JOIN attack_details d ON d.traffic_log_id = t.id
@@ -590,7 +596,7 @@ def get_transaction_amounts_by_user(
     # 查詢所有轉帳請求（不只是攻擊），從 traffic_logs 和 response_payload 提取金額
     cursor.execute(
         """
-        SELECT d.response_payload
+        SELECT d.response_payload, d.raw_payload, d.input_string
         FROM traffic_logs t
         LEFT JOIN attack_details d ON d.traffic_log_id = t.id
         WHERE t.query_id = ? AND t.request_at > ?
@@ -610,7 +616,8 @@ def get_transaction_amounts_by_user(
     amounts: list[int] = []
     for row in rows:
         try:
-            payload = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+            payload_source = row[0] if len(row) > 0 else None
+            payload = json.loads(payload_source) if isinstance(payload_source, str) else payload_source
             if isinstance(payload, dict):
                 payload_dict = cast(dict[str, Any], payload)
                 transaction_value = payload_dict.get("transaction")

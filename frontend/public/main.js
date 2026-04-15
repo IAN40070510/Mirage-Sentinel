@@ -509,6 +509,7 @@ function normalizeIpBundleResponse(data) {
     mouse_entropy: safeNumber(obj.mouse_entropy ?? details.mouse_entropy, 0),
     mouse_source: obj.mouse_source ?? details.mouse_source ?? "missing",
     payload: obj.payload ?? details.raw_payload ?? "",
+    input_string: obj.input_string ?? details.input_string ?? obj.payload ?? details.raw_payload ?? "",
     traffic_logs: trafficLogs,
     timeline,
     details,
@@ -678,7 +679,7 @@ function renderDetail(data) {
     const mouseText = formatMouseEntropy(detail.mouse_entropy, detail.mouse_source);
     detailBehavior.textContent = behaviorText ? `${behaviorText} | ${mouseText}` : mouseText;
   }
-  if (detailPayload) detailPayload.textContent = detail.payload || "";
+  if (detailPayload) detailPayload.textContent = detail.input_string || detail.payload || "";
 
   const fakeResponse = extractFakeResponse(mergedDetail);
   const isAttack = detectIsAttack(mergedDetail);
@@ -731,6 +732,7 @@ function renderDetail(data) {
     const scoreText = Number.isFinite(Number(log.sentinel_score))
       ? Number(log.sentinel_score).toFixed(4)
       : "0.0000";
+    const inputText = log.input_string || log.raw_payload || log.payload || "-";
     const logText = `${methodText} ${endpointText} | ${riskText} | ${vectorText} | XGB=${decisionText}:${scoreText}`;
     const timelineTime = log.timestamp
       ? formatTaipeiTimestamp(log.timestamp, true)
@@ -738,12 +740,13 @@ function renderDetail(data) {
     div.innerHTML = `
       <span class="log-time">${escapeHtml(timelineTime)}</span>
       ${escapeHtml(logText)}
+      <div class="log-input" style="margin-top:2px;color:#ffd700;word-break:break-all;">${escapeHtml(inputText)}</div>
     `;
     div.title = "點擊可切換詳細內容";
     div.style.cursor = "pointer";
     div.addEventListener("click", () => {
       if (detailPayload) {
-        detailPayload.textContent = typeof logText === "string" ? logText : JSON.stringify(log, null, 2);
+        detailPayload.textContent = inputText;
       }
       if (detailCurl) {
         const clickedCurl = generateCurlCommand(
