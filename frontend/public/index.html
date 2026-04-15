@@ -36,13 +36,24 @@
       <style>
         .layout-box-pro { display: none !important; }
         @media (max-width: 900px) {
+          html, body {
+            min-width: 0;
+            max-width: 100vw;
+            overflow-x: hidden;
+          }
+          .screen {
+            padding: 0;
+            margin: 0;
+            min-width: 0;
+            max-width: 100vw;
+          }
           .hud {
             flex-direction: column;
             align-items: stretch;
             gap: 8px;
             left: 0;
             right: 0;
-            padding: 0 4vw;
+            padding: 0 2vw;
           }
           .hud-left {
             flex-direction: column;
@@ -51,7 +62,9 @@
           }
           .hud-box {
             padding: 0.7em 0.7em;
-            font-size: 13px;
+            font-size: 14px;
+            min-width: 0;
+            max-width: 100vw;
           }
           .main-window, .window, .sub-window {
             min-width: 0;
@@ -59,9 +72,13 @@
             left: 0 !important;
             right: 0 !important;
             margin: 0 auto !important;
+            position: static !important;
+            box-shadow: none !important;
+            border-radius: 10px !important;
+            background: rgba(0,32,32,0.13) !important;
           }
           .main-window {
-            width: 98vw !important;
+            width: 99vw !important;
             min-width: 0 !important;
             max-width: 100vw !important;
           }
@@ -70,26 +87,104 @@
             padding-right: 8px !important;
           }
           .main-grid, .overview-card-grid {
-            grid-template-columns: 1fr 1fr !important;
+            grid-template-columns: 1fr !important;
             gap: 8px !important;
           }
           .info-card, .analysis-card {
             min-width: 0 !important;
-            font-size: 13px !important;
+            font-size: 14px !important;
+            padding: 0.5em 0.7em !important;
           }
           .cmd-bar {
             left: 0 !important;
             right: 0 !important;
             width: 100vw !important;
-            padding: 0 4vw !important;
+            padding: 0 2vw !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
           }
           #trafficLogsBtn {
             left: 8px !important;
             right: auto !important;
             bottom: 12px !important;
-            padding: 0.6em 1.1em !important;
+            padding: 0.7em 1.2em !important;
+            font-size: 1.1em !important;
+            border-radius: 8px !important;
+            width: 95vw !important;
+            max-width: 99vw !important;
+            margin: 0 auto !important;
+            display: block !important;
+            position: fixed !important;
+            z-index: 1000;
+          }
+          .window.sub-window.w1, .window.sub-window.w2, .window.sub-window.w3 {
+            margin-top: 12px !important;
+          }
+          .window-header {
+            font-size: 1.08em !important;
+            padding-top: 0.5em !important;
+            padding-bottom: 0.5em !important;
+          }
+          .window-dots span {
+            width: 7px !important;
+            height: 7px !important;
+          }
+          .section-title, .label {
             font-size: 1em !important;
+          }
+          .log-block, .log-list, .attack-list, .analysis-list {
+            font-size: 13px !important;
+            padding: 0.5em 0.5em !important;
+            word-break: break-all;
+          }
+          .overview-tabs {
+            display: flex;
+            flex-direction: row;
+            gap: 0.5em;
+            margin-bottom: 0.5em;
+          }
+          .overview-tab {
+            flex: 1 1 0;
+            font-size: 1em !important;
+            padding: 0.5em 0.2em !important;
             border-radius: 7px !important;
+            min-width: 0;
+          }
+          .chart-placeholder, .analysis-chart-wrap, .pie-chart-wrap {
+            min-width: 0 !important;
+            max-width: 100vw !important;
+            overflow-x: auto !important;
+          }
+          canvas {
+            max-width: 95vw !important;
+            height: auto !important;
+          }
+          .draggable {
+            -webkit-user-select: none;
+            user-select: none;
+            touch-action: none;
+          }
+        }
+        /* 進階手機 UX：單欄分頁顯示，避免資訊爆炸 */
+        @media (max-width: 700px) {
+          .window.sub-window.w1, .window.sub-window.w2, .window.sub-window.w3 {
+            width: 99vw !important;
+            max-width: 100vw !important;
+            margin: 0 auto 12px auto !important;
+            display: block !important;
+            position: static !important;
+          }
+          .window.main-window {
+            margin-top: 10px !important;
+          }
+          .overview-tabs {
+            gap: 0.2em;
+          }
+          .overview-panel, .overview-panel.active {
+            padding: 0.5em 0.2em !important;
+          }
+          .cmd-bar {
+            margin-bottom: 12vw !important;
           }
         }
       </style>
