@@ -1,3 +1,12 @@
+    <!-- Mac 風格攔截流量紀錄按鈕（左下角） -->
+    <button id="trafficLogsBtn" class="mac-btn mac-btn-bottomleft">
+      <span class="mac-btn-dots">
+        <span class="mac-dot mac-dot-red"></span>
+        <span class="mac-dot mac-dot-yellow"></span>
+        <span class="mac-dot mac-dot-green"></span>
+      </span>
+      <span class="mac-btn-label">攔截流量紀錄 &rarr;</span>
+    </button>
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -10,7 +19,7 @@
 </head>
 <body data-layout-mode="layout-17">
   <!-- Matrix 字母雨背景層（主色調綠，無重疊）-->
-  <canvas id="matrixCanvas" style="position:fixed;inset:0;z-index:0;pointer-events:none;opacity:0.22;"></canvas>
+  <canvas id="matrixCanvas" style="position:fixed;inset:0;z-index:0;pointer-events:none;opacity:1;background:#000;"></canvas>
   <div class="screen">
 
     <div class="hud">
@@ -37,7 +46,7 @@
             /* --- Mac 風格主題（僅細節美化，不覆蓋定位/寬度/響應式）--- */
             .main-window, .window, .sub-window {
               border-radius: 16px;
-              box-shadow: 0 8px 32px #0008, 0 1.5px 4px #00ffa233;
+              box-shadow: 0 8px 32px #0008, 0 1.5px 4px rgba(255, 255, 255, 0.2);
               border: 1.5px solid #222b33;
               background: #1a222a;
             }
@@ -91,15 +100,15 @@
               box-shadow: 0 2px 12px #0006;
               background: #232b33;
               border: 1.5px solid #222b33;
-              color: #e6faff;
+              color: #fbfbfb;
               font-weight: 600;
               letter-spacing: 0.04em;
               transition: background 0.2s, color 0.2s;
             }
             #trafficLogsBtn:hover {
-              background: #00ffa2;
+              background: #ffffff;
               color: #1a222a;
-              border-color: #00ffa2;
+              border-color: #ffffff;
             }
         .layout-box-pro { display: none !important; }
         @media (max-width: 900px) {
@@ -235,11 +244,11 @@
             border-radius: 7px !important;
             min-width: 0;
             background: #014040 !important;
-            color: #00ffa2 !important;
+            color: #ffffff !important;
             border: none !important;
           }
           .overview-tab.active {
-            background: #00ffa2 !important;
+            background: #ffffff !important;
             color: #013333 !important;
           }
           .chart-placeholder, .analysis-chart-wrap, .pie-chart-wrap {
@@ -454,18 +463,20 @@
       </div>
     </div> -->
 
-    <!-- 指令輸入 -->
-    <div class="cmd-bar">
-      <div class="cmd-top">command input</div>
-      <div class="cmd-input-wrap">
-        <span class="cmd-prefix">root@matrix:~$</span>
-        <input
-          id="commandInput"
-          class="cmd-input"
-          type="text"
-          placeholder="輸入內容會送往 /api/dashboard/terminal_cmd"
-        />
-        <button id="commandSendBtn" class="cmd-btn" type="button">EXEC</button>
+    <!-- Mac 風格 Command Input 區塊（終端機外觀） -->
+    <div class="mac-terminal-bar">
+      <div class="mac-terminal-header">
+        <span class="mac-btn-dots">
+          <span class="mac-dot mac-dot-red"></span>
+          <span class="mac-dot mac-dot-yellow"></span>
+          <span class="mac-dot mac-dot-green"></span>
+        </span>
+        <span class="mac-terminal-title">Terminal</span>
+      </div>
+      <div class="mac-terminal-input-wrap">
+        <span class="mac-terminal-prefix">root@matrix ~ %</span>
+        <input id="commandInput" class="mac-terminal-input" type="text" placeholder="輸入內容會送往 /api/dashboard/terminal_cmd">
+        <button id="commandSendBtn" class="mac-terminal-btn" type="button">EXEC</button>
       </div>
     </div>
 
@@ -480,7 +491,7 @@
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     // 黑色背景
-    canvas.style.background = '#000';
+    canvas.style.background = '#000000';
     // 資安/攻擊相關指令字串
     const charList = [
       'nmap', 'sqlmap', 'hydra', 'curl', 'wget', 'nc', 'ssh', 'ftp', 'telnet',
@@ -538,7 +549,7 @@
       'root', 'admin', 'user', 'guest', 'test', 'sys', 'service', 'daemon',
       'tmp', 'var', 'log', 'conf', 'bak', 'old', 'new', 'backup',
     ];
-    const fontSize = 18;
+    const fontSize = 28;
     let columns, drops;
     function resizeCanvas() {
       canvas.width = window.innerWidth;
@@ -549,18 +560,36 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
     function drawMatrix() {
-      ctx.fillStyle = 'rgba(0,0,0,0.13)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // 背景殘影：rgba(0,0,0,0.2) 代表黑色、透明度 0.2，數值越低殘影越淡，越高越明顯
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'; // 字母雨軌跡殘影強度
+      ctx.fillRect(0, 0, canvas.width, canvas.height); // 填滿整個畫布
+
+      // 字型設定：fontSize 控制字母大小與間距
       ctx.font = `bold ${fontSize}px monospace`;
+
+      // 主迴圈：每一個 column（雨滴）
       for(let i = 0; i < drops.length; i++) {
+        // 隨機挑一個字串
         const text = charList[Math.floor(Math.random() * charList.length)];
-        const rand = Math.random();
-        if (rand > 0.985) ctx.fillStyle = '#fff'; // 偶爾白色
-        else ctx.fillStyle = '#00ffa2'; // 主色調綠
+
+        // 透明度，1.0 為完全不透明
+        ctx.globalAlpha = 1.0;
+
+        // 字母顏色，調整這裡可改變字母主色
+        ctx.fillStyle = '#62febd'; // 亮綠色
+
+        // 字母光暈顏色與強度，shadowBlur 越大越亮、越模糊
+        ctx.shadowColor = '#0c2319'; // 綠色光暈
+        ctx.shadowBlur = 18; // 光暈強度
+
+        // 實際繪製字母
         ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+        // 若雨滴超出畫布底部，機率性重置回頂端
         if(drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
           drops[i] = 0;
         }
+        // 雨滴往下移動
         drops[i]++;
       }
     }
