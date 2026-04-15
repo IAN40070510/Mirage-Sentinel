@@ -51,14 +51,14 @@ jobs:
             $COMPOSE_CMD --profile demo-ui --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml up -d --build --remove-orphans
 
             for i in $(seq 1 30); do
-              if curl -fsS http://127.0.0.1/banking/ >/dev/null 2>&1; then
-                echo "[deploy] banking proxy passed"
+              if curl -fsS http://127.0.0.1:8000/healthz >/dev/null 2>&1; then
+                echo "[deploy] banking proxy gate passed"
                 break
               fi
               if [ "$i" -eq 30 ]; then
-                echo "[deploy] ERROR: banking proxy failed"
+                echo "[deploy] ERROR: banking proxy gate failed"
                 $COMPOSE_CMD --profile demo-ui --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml ps
-                $COMPOSE_CMD --profile demo-ui --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml logs --tail=120 nginx vuln_bank vuln_bank_db
+                $COMPOSE_CMD --profile demo-ui --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml logs --tail=120 backend_public vuln_bank vuln_bank_db
                 exit 1
               fi
               sleep 3
