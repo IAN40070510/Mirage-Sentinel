@@ -297,29 +297,39 @@
           <script>
             // 手機下 window/sub-window/main-window 收合/展開
             function enableMobileAccordion() {
-              if (window.innerWidth > 900) return;
               const windows = document.querySelectorAll('.window, .main-window, .sub-window');
-              windows.forEach((win, idx) => {
-                const header = win.querySelector('.window-header');
-                const body = win.querySelector('.window-body');
-                if (!header || !body) return;
-                // 預設只展開第一個，其餘收合
-                if (idx === 0) {
+              if (window.innerWidth > 900) {
+                // 桌面：全部展開，移除 cursor/onclick
+                windows.forEach((win) => {
+                  const header = win.querySelector('.window-header');
+                  const body = win.querySelector('.window-body');
+                  if (!header || !body) return;
                   body.style.display = 'block';
-                } else {
-                  body.style.display = 'none';
-                }
-                header.style.cursor = 'pointer';
-                header.onclick = () => {
-                  // 若已展開則收合，否則展開並收合其他
-                  const isOpen = body.style.display !== 'none';
-                  windows.forEach((w2, i2) => {
-                    const b2 = w2.querySelector('.window-body');
-                    if (b2) b2.style.display = 'none';
-                  });
-                  body.style.display = isOpen ? 'none' : 'block';
-                };
-              });
+                  header.style.cursor = '';
+                  header.onclick = null;
+                });
+              } else {
+                // 手機：只展開一個
+                windows.forEach((win, idx) => {
+                  const header = win.querySelector('.window-header');
+                  const body = win.querySelector('.window-body');
+                  if (!header || !body) return;
+                  if (idx === 0) {
+                    body.style.display = 'block';
+                  } else {
+                    body.style.display = 'none';
+                  }
+                  header.style.cursor = 'pointer';
+                  header.onclick = () => {
+                    const isOpen = body.style.display !== 'none';
+                    windows.forEach((w2) => {
+                      const b2 = w2.querySelector('.window-body');
+                      if (b2) b2.style.display = 'none';
+                    });
+                    body.style.display = isOpen ? 'none' : 'block';
+                  };
+                });
+              }
             }
             window.addEventListener('DOMContentLoaded', enableMobileAccordion);
             window.addEventListener('resize', enableMobileAccordion);
