@@ -823,6 +823,7 @@ function drawTrafficChart(normalCount, attackCount) {
 
   ctx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
 
+  // 外圍底圈
   ctx.beginPath();
   ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
   ctx.strokeStyle = "rgba(0,255,136,0.18)";
@@ -831,26 +832,32 @@ function drawTrafficChart(normalCount, attackCount) {
 
   if (total > 0) {
     const normalAngle = (normalCount / total) * Math.PI * 2;
-
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, -Math.PI / 2, -Math.PI / 2 + normalAngle);
-    ctx.strokeStyle = "rgba(0,255,136,0.92)";
-    ctx.lineWidth = 16;
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, -Math.PI / 2 + normalAngle, -Math.PI / 2 + Math.PI * 2);
-    ctx.strokeStyle = "rgba(0,255,136,0.28)";
-    ctx.lineWidth = 16;
-    ctx.stroke();
+    // 正常流量區段（綠色）
+    if (normalCount > 0) {
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, -Math.PI / 2, -Math.PI / 2 + normalAngle);
+      ctx.strokeStyle = "rgba(0,255,136,0.92)";
+      ctx.lineWidth = 16;
+      ctx.stroke();
+    }
+    // 攻擊流量區段（紅色）
+    if (attackCount > 0) {
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, -Math.PI / 2 + normalAngle, -Math.PI / 2 + Math.PI * 2);
+      ctx.strokeStyle = "#ff4d4f";
+      ctx.lineWidth = 16;
+      ctx.stroke();
+    }
   }
 
-  ctx.fillStyle = "rgba(0,255,136,0.92)";
+  // 圓心數字（白色）
+  ctx.fillStyle = "#fff";
   ctx.font = "bold 16px Consolas";
   ctx.textAlign = "center";
   ctx.fillText(`${total}`, centerX, centerY - 4);
 
-  ctx.fillStyle = "rgba(0,255,136,0.6)";
+  // 下方 requests 字樣（白色半透明）
+  ctx.fillStyle = "rgba(255,255,255,0.7)";
   ctx.font = "12px Consolas";
   ctx.fillText("requests", centerX, centerY + 16);
 }

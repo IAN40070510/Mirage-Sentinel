@@ -417,23 +417,27 @@ body::after {
 }
 
 .ip-item {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.05);
-  padding: 12px 14px;
-  border-radius: 8px;
+  border: 1.5px solid #222b33;
+  background: linear-gradient(135deg, #232b33 80%, #2c313a 100%);
+  padding: 13px 18px;
+  border-radius: 12px;
   cursor: pointer;
-  transition: 0.16s ease;
+  color: #e6faff;
+  box-shadow: 0 2px 12px #0006;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
 }
 
 .ip-item:hover {
-  border-color: rgba(0, 255, 136, 0.22);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: #00ffa2;
+  background: #232b33;
+  color: #00ffa2;
 }
 
 .ip-item.active {
-  border-color: rgba(0, 255, 136, 0.36);
-  background: rgba(0, 255, 136, 0.1);
-  box-shadow: 0 0 12px rgba(0, 255, 136, 0.08);
+  border-color: #00ffa2;
+  background: #1a222a;
+  color: #00ffa2;
+  box-shadow: 0 0 16px #00ffa233;
 }
 
 .ip-top,
@@ -503,9 +507,10 @@ body::after {
 
 .attack-row {
   padding: 9px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 7px;
+  border: 1.5px solid #222b33;
+  background: linear-gradient(90deg, #232b33 80%, #2c313a 100%);
+  border-radius: 10px;
+  color: #e6faff;
 }
 
 .attack-name {
@@ -522,17 +527,19 @@ body::after {
 
 .bar-wrap {
   flex: 1;
-  height: 6px;
+  height: 7px;
   margin: 0 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: #181d1f;
   border-radius: 99px;
   overflow: hidden;
+  box-shadow: 0 1px 3px #0003;
 }
 
 .bar {
   height: 100%;
-  background: linear-gradient(90deg, rgba(0, 255, 136, 0.32), rgba(0, 255, 136, 0.95));
+  background: linear-gradient(90deg, #00ffa2 60%, #00cfff 100%);
   border-radius: 99px;
+  box-shadow: 0 0 4px 0 rgba(0,255,136,0.18);
 }
 
 .log-item {
