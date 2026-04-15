@@ -1,9 +1,24 @@
 from typing import Any
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+import logging
 
-app = FastAPI()
+_logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """確保 backend_soc 啟動時自行初始化 DB schema，不依賴 backend_public。"""
+    from core.traffic_db import setup_traffic_db
+
+    setup_traffic_db()
+    _logger.info("[dashboard_service] DB schema initialized.")
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 # 兼容舊 SOC 前端路由 alias（必須放在 app 實例建立之後）
