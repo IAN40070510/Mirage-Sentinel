@@ -79,11 +79,26 @@
     transform-origin: top left !important;
     z-index: 1000 !important;
   }
+    /* 主視窗 main-window */
+    .main-window {
+      position: absolute !important;
+      top: 40px !important;       /* ← 主視窗距離頂端 px */
+      left: 50% !important;       /* ← 主視窗水平置中 */
+      width: 700px !important;    /* ← 主視窗寬度 */
+      margin-left: -350px !important; /* ← 主視窗置中偏移量（-width/2）*/
+      min-height: 220px !important;
+      max-height: 600px !important;
+      overflow: hidden !important;
+      transform: scale(0.67) !important;
+      transform-origin: top center !important;
+      z-index: 1000 !important;
+    }
   /* 讓子視窗內容可滾動，避免內容溢出重疊 */
-  .window.sub-window .window-body {
-    overflow: auto !important;
-    max-height: calc(100% - 44px) !important;
-  }
+    /* 讓所有視窗內容可滾動，避免內容溢出重疊 */
+    .window .window-body {
+      overflow-y: auto !important;
+      max-height: calc(100% - 44px) !important;
+    }
   /* 主視窗 */
   .main-window {
     position: absolute !important;
