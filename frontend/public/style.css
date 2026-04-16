@@ -52,8 +52,7 @@
     }
     .window.sub-window.w1,
     .window.sub-window.w2,
-    .window.sub-window.w3,
-    .main-window {
+    .window.sub-window.w3 {
       scrollbar-width: thin;
       scrollbar-color: #888 #232b33;
     }
@@ -112,8 +111,9 @@
       width: 700px !important;    /* ← 主視窗寬度 */
       margin-left: -350px !important; /* ← 主視窗置中偏移量（-width/2）*/
       min-height: 220px !important;
-      max-height: 800px !important;
-      /* overflow-y: auto !important; */
+      max-height: 900px !important;
+      /* 不要 overflow-y，完全移除主視窗滾動條 */
+      overflow: visible !important;
       transform: scale(0.67) !important;
       transform-origin: top center !important;
       z-index: 1000 !important;
@@ -164,7 +164,7 @@
     }
     /* 移除 .window .window-body 的強制 max-height，避免多重滾動條 */
     .window .window-body {
-      overflow-y: auto !important;
+      overflow: visible !important;
     }
     /* 讓 window-header 固定在頂部，內容滾動 */
     .window {
