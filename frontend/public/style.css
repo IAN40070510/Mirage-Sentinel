@@ -610,7 +610,7 @@ body::after {
   overflow-y: auto;
   max-height: 200px;
   scrollbar-width: thin;
-  scrollbar-color: #888 #232b33;
+  scrollbar-color: #6c7a89 #232b33;
 }
 .log-list::-webkit-scrollbar {
   width: 8px;
@@ -618,30 +618,30 @@ body::after {
   border-radius: 8px;
 }
 .log-list::-webkit-scrollbar-thumb {
-  background: #888;
+  background: #6c7a89;
   border-radius: 8px;
   min-height: 32px;
   box-shadow: 0 0 6px #222b33;
 }
 .log-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
-  padding: 9px 10px;
-  border: 1.5px solid #222b33;
-  background: linear-gradient(90deg, #232b33 80%, #2c313a 100%);
-  border-radius: 10px;
-  color: #e6faff;
-  font-size: 13px;
-  margin-bottom: 8px;
+  padding: 7px 10px;
+  border: 1.2px solid #3a4250;
+  background: linear-gradient(90deg, #232b33 80%, #2a2f38 100%);
+  border-radius: 8px;
+  color: #dbe6f7;
+  font-size: 12px;
+  margin-bottom: 7px;
   transition: background 0.2s, color 0.2s, border-color 0.2s;
 }
 .log-row:last-child {
   margin-bottom: 0;
 }
 .log-row:hover {
-  border-color: #00ffa2;
+  border-color: #6c7a89;
   background: #232b33;
   color: #fff;
 }
