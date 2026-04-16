@@ -33,18 +33,18 @@
 */
 @media (min-width: 901px) {
   /* 左上視窗 w1 */
-    .window.sub-window.w1 {
-      position: absolute !important;
-      top: 100px !important;
-      left: 60px !important;
-      width: 500px !important;
-      min-height: 220px !important; /* ← 最小高度，依需求調整 */
-      max-height: 600px !important; /* ← 最大高度，依需求調整 */
-      /*overflow: hidden !important;*/
-          overflow: hidden !important;
-      transform-origin: top left !important;
-      z-index: 1000 !important;
-    }
+  .window.sub-window.w1 {
+    position: absolute !important;
+    top: 100px !important;      /* ← 左上視窗距離頂端 px */
+    left: 60px !important;      /* ← 左上視窗距離左側 px */
+    width: 500px !important;    /* ← 左上視窗寬度 */
+    min-height: 120px !important; /* ← 最小高度，依需求調整 */
+    max-height: 300px !important; /* ← 最大高度，依需求調整 */
+    overflow: hidden !important;
+    transform: scale(0.67) !important; /* ← 全區縮放比例 */
+    transform-origin: top left !important;
+    z-index: 1000 !important;
+  }
   /* 右上視窗 w2 */
   .window.sub-window.w2 {
     /*TRAFIC OVERVIEW*/
@@ -52,7 +52,7 @@
     top: 100px !important;      /* ← 右上視窗距離頂端 px */
     right: 60px !important;     /* ← 右上視窗距離右側 px */
     width: 500px !important;    /* ← 右上視窗寬度 */
-        overflow: hidden !important;
+    min-height: 340px !important;
     max-height: 800px !important;
     overflow: hidden !important;
     transform: scale(0.67) !important;
@@ -64,7 +64,7 @@
     pointer-events: none;
   }
   }
-        overflow: hidden !important;
+  /* 左下視窗 w3（TOP 10）*/
   .window.sub-window.w3,
   .w3.window.sub-window {
     position: absolute !important;
@@ -75,15 +75,14 @@
     min-height: 120px !important;
     max-height: 300px !important;
     overflow: hidden !important;
-          overflow: hidden !important;
+    transform: scale(0.67) !important;
     transform-origin: top left !important;
     z-index: 1000 !important;
   }
-        .window .window-body {
-          overflow-y: auto !important;
-          height: 100% !important;
-          max-height: none !important;
-        }
+    /* 主視窗 main-window */
+    .main-window {
+      position: absolute !important;
+      top: 40px !important;       /* ← 主視窗距離頂端 px */
       left: 50% !important;       /* ← 主視窗水平置中 */
       width: 700px !important;    /* ← 主視窗寬度 */
       margin-left: -350px !important; /* ← 主視窗置中偏移量（-width/2）*/
@@ -125,18 +124,21 @@ body {
   width: 100vw;
   min-width: 100vw;
   background-size: cover;
+  height: 100vh;
+  min-height: 100vh;
+  overflow-y: auto !important;
 }
 /*
 ============================
  Mac 風格攔截流量紀錄按鈕（左下角）
-  .window.sub-window.w2 {
+----------------------------
  調整 left/bottom/width/font-size 可改變按鈕大小與位置
 ============================
 */
 .mac-btn-bottomleft {
   position: fixed;
   left: 5px;
-    /*overflow: hidden !important;*/
+  bottom: 5px;
   z-index: 100;
   padding: 0.6em 1em 0.6em 1em;
   background: #232b33;
@@ -156,7 +158,7 @@ body {
 .mac-btn-bottomleft:hover {
   background: #00ffa2;
   color: #1a222a;
-    /*overflow: hidden !important;*/
+  border-color: #00ffa2;
 }
 .mac-btn-dots {
   display: flex;
@@ -170,18 +172,18 @@ body {
   display: inline-block;
 }
 .mac-dot-red { background: #ff5f57; border: 1.5px solid #e0443e; }
-    /*overflow: hidden !important;*/
+.mac-dot-yellow { background: #febc2e; border: 1.5px solid #dea123; }
 .mac-dot-green { background: #28c840; border: 1.5px solid #1aaf29; }
 .mac-btn-label {
   flex: 1;
   text-align: center;
 }
 
-  .window .window-body {
-    overflow-y: auto !important;
-    height: calc(100% - 44px) !important;
-    max-height: none !important;
-  }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
 :root {
   --bg: #041c16;
@@ -202,7 +204,6 @@ html,
 body {
   width: 100%;
   height: 100%;
-  overflow: hidden;
   background: #000;
   font-family: Consolas, "Courier New", monospace;
   color: #ffffff;
@@ -399,8 +400,7 @@ body::after {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 0 18px;
-  height: 44px;
+  padding: 10px 14px;
   cursor: move;
   background: linear-gradient(180deg, rgba(12, 58, 42, 0.98), rgba(8, 34, 24, 0.92));
   border-bottom: 1px solid rgba(0, 255, 136, 0.16);
@@ -420,8 +420,6 @@ body::after {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
-  align-items: center;
-  height: 100%;
 }
 
 .window-dots span {
@@ -606,10 +604,10 @@ body::after {
 
 .log-item {
   border-left: 2px solid rgba(0, 255, 136, 0.32);
-  padding-left: 8px;
+  padding-left: 10px;
   color: #fff;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .log-time {
