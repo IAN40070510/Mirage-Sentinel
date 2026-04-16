@@ -120,16 +120,31 @@
     }
   /* 讓子視窗內容可滾動，避免內容溢出重疊 */
     /* 讓所有視窗內容可滾動，避免內容溢出重疊 */
-      /* 只針對群體惡意分析內容顯示滾動條，其他不顯示 */
-      .malicious-analysis-panel {
-        overflow-y: auto !important;
-        max-height: calc(100% - 44px) !important;
-      }
-      /* 其他 window-body 預設不顯示滾動條 */
-      .window .window-body {
-        overflow-y: visible !important;
-        max-height: none !important;
-      }
+    /* 只讓 .analysis-stack 內容可滾動，標題與 tabs 不滾動 */
+    .analysis-stack {
+      overflow-y: auto;
+      max-height: 520px;
+      padding-right: 2px;
+    }
+    .analysis-stack::-webkit-scrollbar {
+      width: 8px;
+      background: #232b33;
+      border-radius: 8px;
+    }
+    .analysis-stack::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 8px;
+      min-height: 32px;
+      box-shadow: 0 0 6px #222b33;
+    }
+    .analysis-stack {
+      scrollbar-width: thin;
+      scrollbar-color: #888 #232b33;
+    }
+    /* 移除 .window .window-body 的強制 max-height，避免多重滾動條 */
+    .window .window-body {
+      overflow-y: auto !important;
+    }
     /* 讓 window-header 固定在頂部，內容滾動 */
     .window {
       display: flex;
