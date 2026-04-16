@@ -170,7 +170,7 @@
     /* 只讓 .log-list（最近紀錄）可滾動，主視窗不滾動 */
     .main-window .log-list {
       overflow-y: auto;
-      max-height: 140px;
+      max-height: 190px;
       padding-right: 2px;
     }
     .main-window .log-list::-webkit-scrollbar {
