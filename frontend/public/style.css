@@ -884,20 +884,21 @@ body::after {
   border-radius: 8px;
 }
 
-/* 讓 .analysis-card 內 section 標題右移一個字元（約 1ch） */
-.analysis-card .section-title {
-  padding-left: 1ch;
+.analysis-card .section-title,
+.analysis-card .chart-title {
+  margin-left: 16px;
 }
 
-/* 縮小圖表 bar/label 文字（如未知手段） */
-.analysis-card .chart-label,
-.analysis-card .chartjs-tooltip,
+/* 縮小圖表內主要標籤、座標軸、圖例等字體 */
 .analysis-card .chartjs-render-monitor,
+.analysis-card .chart-label,
 .analysis-card .chart-legend,
+.analysis-card .chartjs-tooltip,
 .analysis-card .chartjs-size-monitor,
-.analysis-card .chartjs-size-monitor-expand,
-.analysis-card .chartjs-size-monitor-shrink {
-  font-size: 11px !important;
+.analysis-card text,
+.analysis-card tspan,
+.analysis-card * {
+  font-size: 10px !important;
 }
 
   /* 針對分析圖表內部的標籤、座標軸、圖例等也縮小字體 */
