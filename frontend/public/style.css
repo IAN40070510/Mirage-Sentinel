@@ -20,7 +20,7 @@
   /* 仿 attack-list/log-list 風格 */
   padding: 0 2px 0 0;
   overflow-y: auto;
-  max-height: 200px;
+  max-height: 340px; /* ← 內文框高度加長，原為 200px */
   scrollbar-width: thin;
   scrollbar-color: #6c7a89 #232b33;
 }
