@@ -35,7 +35,7 @@
         /* 讓 LIVE IP 區塊的 IP 列表可滾動（假設 class 為 .ip-list） */
         .window .ip-list {
           overflow-y: auto;
-          max-height: 100px;
+          max-height: 220px;
           padding-right: 2px;
         }
         .window .ip-list::-webkit-scrollbar {
