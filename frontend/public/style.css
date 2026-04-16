@@ -32,6 +32,17 @@
 ============================
 */
 @media (min-width: 901px) {
+      /* 固定 window-header 於頂部，內容滑動時標題不動 */
+      .window.sub-window.w1 .window-header,
+      .window.sub-window.w2 .window-header,
+      .window.sub-window.w3 .window-header,
+      .main-window .window-header {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: linear-gradient(180deg, rgba(12, 58, 42, 0.98), rgba(8, 34, 24, 0.92));
+        /* 保持原本樣式 */
+      }
     /* Mac 灰色風格滾動條 for w1/w2/w3/main-window */
     .window.sub-window.w1::-webkit-scrollbar,
     .window.sub-window.w2::-webkit-scrollbar,
