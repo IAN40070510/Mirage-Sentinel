@@ -1,22 +1,115 @@
-/* 讓主介面預設縮放 67%，適合大螢幕展示 */
+/*
+============================
+ 桌面版主要視窗定位與縮放
+----------------------------
+ 1. .window.sub-window.w1/w2/w3：三個子視窗（左上、右上、左下）
+    - top/left/right：調整視窗在畫面上的絕對位置
+    - width：視窗寬度
+    - transform: scale(0.67)：整體縮放比例（0.67=67%）
+    - z-index：疊層順序
+ 2. .main-window：主視窗（中央）
+    - top/left/width/margin-left：置中與寬度
+    - transform: scale(0.67)：縮放比例
+----------------------------
+ 若要調整視窗大小、間距、縮放，請修改下方數值。
+============================
+*/
+
+/*
+============================
+ 桌面版主要視窗定位與縮放（統一區塊，方便調整）
+----------------------------
+ 1. .window.sub-window.w1/w2/w3：三個子視窗（左上、右上、左下）
+    - top/left/right：調整視窗在畫面上的絕對位置
+    - width：視窗寬度
+    - transform: scale(0.67)：整體縮放比例（0.67=67%）
+    - z-index：疊層順序
+ 2. .main-window：主視窗（中央）
+    - top/left/width/margin-left：置中與寬度
+    - transform: scale(0.67)：縮放比例
+----------------------------
+ 若要調整視窗大小、間距、縮放，請修改下方數值。
+============================
+*/
+@media (min-width: 901px) {
+  /* 左上視窗 w1 */
+  .window.sub-window.w1 {
+    position: absolute !important;
+    top: 100px !important;      /* ← 左上視窗距離頂端 px */
+    left: 60px !important;      /* ← 左上視窗距離左側 px */
+    width: 500px !important;    /* ← 左上視窗寬度 */
+    transform: scale(0.67) !important; /* ← 全區縮放比例 */
+    transform-origin: top left !important;
+    z-index: 1000 !important;
+  }
+  /* 右上視窗 w2 */
+  .window.sub-window.w2 {
+    /*TRAFIC OVERVIEW*/
+    position: absolute !important;
+    top: 100px !important;      /* ← 右上視窗距離頂端 px */
+    right: 60px !important;     /* ← 右上視窗距離右側 px */
+    width: 500px !important;    /* ← 右上視窗寬度 */
+    transform: scale(0.67) !important;
+    transform-origin: top right !important;
+    z-index: 1000 !important;
+    pointer-events: none;
+  }
+  /* 左下視窗 w3（TOP 10）*/
+  .window.sub-window.w3,
+  .w3.window.sub-window {
+    position: absolute !important;
+    left: 60px !important;      /* ← 左下視窗距離左側 px */
+    right: auto !important;
+    top: 350px !important;      /* ← 左下視窗距離頂端 px（調整可改變上下位置）*/
+    width: 500px !important;    /* ← 左下視窗寬度 */
+    transform: scale(0.67) !important;
+    transform-origin: top left !important;
+    z-index: 1000 !important;
+  }
+  /* 主視窗 */
+  .main-window {
+    position: absolute !important;
+    top: 40px !important;       /* ← 主視窗距離頂端 px */
+    left: 50% !important;       /* ← 主視窗水平置中 */
+    width: 700px !important;    /* ← 主視窗寬度 */
+    margin-left: -350px !important; /* ← 主視窗置中偏移量（-width/2）*/
+    transform: scale(0.67) !important;
+    transform-origin: top center !important;
+    z-index: 1000 !important;
+  }
+}
+/*
+============================
+ 主體 body 響應式設定
+----------------------------
+ width: 100vw;      // 滿版寬度
+ min-width: 100vw;  // 防止橫向捲軸
+ background-size: cover; // 背景圖自動填滿
+============================
+*/
 body {
-  /* 移除強制縮放，改為響應式，讓內容自動填滿 */
   width: 100vw;
   min-width: 100vw;
   background-size: cover;
 }
-/* Mac 風格攔截流量紀錄按鈕左下角 */
+/*
+============================
+ Mac 風格攔截流量紀錄按鈕（左下角）
+----------------------------
+ 調整 left/bottom/width/font-size 可改變按鈕大小與位置
+============================
+*/
 .mac-btn-bottomleft {
   position: fixed;
-  left: 32px;
-  bottom: 32px;
-  z-index: 1000;
-  padding: 0.7em 1.5em 0.7em 1.2em;
+  left: 5px;
+  bottom: 5px;
+  z-index: 100;
+  padding: 0.6em 1em 0.6em 1em;
   background: #232b33;
   color: #e6faff;
   border: 1.5px solid #222b33;
-  border-radius: 14px;
-  font-size: 1.15em;
+  border-radius: 10px;
+  font-size: 1em;
   font-weight: 600;
   letter-spacing: 0.04em;
   box-shadow: 0 2px 12px #0006;
@@ -50,81 +143,6 @@ body {
   text-align: center;
 }
 
-/* Mac 終端機 Command Input 區塊 */
-.mac-terminal-bar {
-  position: absolute;
-  left: 50%;
-  bottom: 18px;
-  transform: translateX(-50%);
-  width: min(920px, calc(100% - 40px));
-  z-index: 100;
-  border: 1.5px solid #222b33;
-  background: #181d1f;
-  box-shadow: 0 8px 32px #0008, 0 1.5px 4px #00ffa233;
-  border-radius: 16px;
-  overflow: hidden;
-  backdrop-filter: blur(8px);
-}
-.mac-terminal-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 18px 10px 18px;
-  background: #232b33;
-  border-bottom: 1.5px solid #222b33;
-}
-.mac-terminal-title {
-  flex: 1;
-  text-align: center;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #e6faff;
-  font-size: 1.08em;
-}
-.mac-terminal-input-wrap {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 16px 18px 16px 18px;
-  background: #181d1f;
-}
-.mac-terminal-prefix {
-  color: #fff;
-  font-size: 1.13em;
-  font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
-  white-space: nowrap;
-}
-.mac-terminal-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: #fff;
-  font-size: 1.13em;
-  font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
-  padding: 2px 0;
-}
-.mac-terminal-input::placeholder {
-  color: #fff;
-  opacity: 0.5;
-}
-.mac-terminal-btn {
-  border: 1.5px solid #222b33;
-  background: #232b33;
-  color: #fff;
-  border-radius: 8px;
-  padding: 8px 18px;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 1em;
-  font-weight: 600;
-  transition: 0.16s ease;
-}
-.mac-terminal-btn:hover {
-  background: #00ffa2;
-  color: #1a222a;
-  border-color: #00ffa2;
-}
 * {
   box-sizing: border-box;
   margin: 0;
@@ -355,7 +373,7 @@ body::after {
 }
 
 .window-title {
-  font-size: 1.13em;
+  font-size: 12px;
   color: #fff;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -713,6 +731,7 @@ body::after {
   font-size: 13px;
   line-height: 1.7;
   text-align: center;
+  font-size: 12px;
   padding: 12px 4px;
 }
 
@@ -750,97 +769,4 @@ body::after {
   text-align: center;
   padding: 18px;
   line-height: 1.8;
-}
-
-/* ===== 13 吋 ===== */
-body[data-layout-mode="layout-15"] .main-window {
-  width: 600px;
-  height: 430px;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -52%);
-}
-
-body[data-layout-mode="layout-15"] .sub-window {
-  width: 400px;
-}
-
-body[data-layout-mode="layout-15"] .w1 {
-  top: 105px;
-  left: 20px;
-  height: 290px;
-}
-
-body[data-layout-mode="layout-15"] .w2 {
-  top: 105px;
-  right: 20px;
-  height: 495px;
-}
-
-body[data-layout-mode="layout-15"] .w3 {
-  top: 415px;
-  left: 20px;
-  height: 185px;
-}
-
-/* ===== 17 吋預設 ===== */
-body[data-layout-mode="layout-17"] .main-window {
-  width: 720px;
-  height: 500px;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -52%);
-}
-
-body[data-layout-mode="layout-17"] .sub-window {
-  width: 500px;
-}
-
-body[data-layout-mode="layout-17"] .w1 {
-  top: 120px;
-  left: 26px;
-  height: 360px;
-}
-
-body[data-layout-mode="layout-17"] .w2 {
-  top: 120px;
-  right: 26px;
-  height: 615px;
-}
-
-body[data-layout-mode="layout-17"] .w3 {
-  top: 500px;
-  left: 26px;
-  height: 255px;
-}
-
-/* ===== 25 吋 ===== */
-body[data-layout-mode="layout-25"] .main-window {
-  width: 860px;
-  height: 580px;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -52%);
-}
-
-body[data-layout-mode="layout-25"] .sub-window {
-  width: 620px;
-}
-
-body[data-layout-mode="layout-25"] .w1 {
-  top: 120px;
-  left: 36px;
-  height: 480px;
-}
-
-body[data-layout-mode="layout-25"] .w2 {
-  top: 120px;
-  right: 36px;
-  height: 800px;
-}
-
-body[data-layout-mode="layout-25"] .w3 {
-  top: 650px;
-  left: 36px;
-  height: 320px;
 }
