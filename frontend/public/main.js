@@ -227,7 +227,7 @@ const attackMethodEmpty = document.getElementById("attackMethodEmpty");
 const geoCache = new Map();
 const TAIPEI_TIMEZONE = "Asia/Taipei";
 
-function formatTaipeiTimestamp(value, withSeconds = true) {
+function formatTaipeiTimestamp(value, withSeconds = true, withMilliseconds = false) {
   if (value === null || value === undefined || value === "") return "-";
 
   let dateObj;
@@ -274,10 +274,15 @@ function formatTaipeiTimestamp(value, withSeconds = true) {
   const hh = get("hour");
   const mm = get("minute");
   const ss = get("second");
+  const ms = String(dateObj.getMilliseconds()).padStart(3, "0");
 
-  return withSeconds
-    ? `${y}/${m}/${d} ${hh}:${mm}:${ss}`
-    : `${y}/${m}/${d} ${hh}:${mm}`;
+  if (!withSeconds) {
+    return `${y}/${m}/${d} ${hh}:${mm}`;
+  }
+
+  return withMilliseconds
+    ? `${y}/${m}/${d} ${hh}:${mm}:${ss}.${ms}`
+    : `${y}/${m}/${d} ${hh}:${mm}:${ss}`;
 }
 
 // =========================
@@ -746,7 +751,7 @@ function renderDetail(data) {
     const inputText = log.input_string || log.raw_payload || log.payload || "-";
     const logText = `${methodText} ${endpointText} | ${riskText} | ${vectorText} | XGB=${decisionText}:${scoreText}`;
     const timelineTime = log.timestamp
-      ? formatTaipeiTimestamp(log.timestamp, true)
+      ? formatTaipeiTimestamp(log.timestamp, true, true)
       : (log.time || index + 1);
     div.innerHTML = `
       <span class="log-time">${escapeHtml(timelineTime)}</span>

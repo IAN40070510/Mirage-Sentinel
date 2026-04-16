@@ -473,7 +473,7 @@ def get_ip_all_traffic_logs(client_ip: str) -> list[dict[str, Any]]:
                 "flow_stage": row["flow_stage"] or "-",
                 # 保持與舊前端欄位相容
                 "action": row["attack_vector"] or "-",
-                "time": _parse_ts(row["request_at"]).strftime("%H:%M"),
+                "time": _parse_ts(row["request_at"]).strftime("%H:%M:%S.%f")[:-3],
             }
         )
 
