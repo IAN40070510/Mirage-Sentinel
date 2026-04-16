@@ -1003,7 +1003,9 @@ async def _proxy_banking_request(
         raw_payload_text = (f"{body_text}\n" if body_text else "") + "\n".join(
             payload_fragments
         )
-    detection_target = f"{upstream_path} {business_context} {banking_action} {query_text} {body_text} {login_credentials_text} {transfer_details_text} {loan_details_text}".strip()
+    detection_target = " ".join(
+        filter(None, [query_text, raw_payload_text])
+    ).strip()
 
     # 先預設為 None，稍後根據是否攻擊流量決定來源
     req_interval_ms = None
