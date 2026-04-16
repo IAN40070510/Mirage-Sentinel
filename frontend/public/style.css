@@ -113,10 +113,28 @@
       margin-left: -350px !important; /* ← 主視窗置中偏移量（-width/2）*/
       min-height: 220px !important;
       max-height: 900px !important;
-      overflow-y: auto !important;
+      /* overflow-y: auto !important;  // 只讓最近紀錄可滾動 */
       transform: scale(0.67) !important;
       transform-origin: top center !important;
       z-index: 1000 !important;
+    }
+    /* 只讓 main-window 內的最近紀錄區塊可滾動，其他區塊不滾動 */
+    .main-window .recent-logs-body {
+      overflow-y: auto !important;
+      max-height: 320px !important;
+      scrollbar-width: thin;
+      scrollbar-color: #888 #232b33;
+    }
+    .main-window .recent-logs-body::-webkit-scrollbar {
+      width: 8px;
+      background: #232b33;
+      border-radius: 8px;
+    }
+    .main-window .recent-logs-body::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 8px;
+      min-height: 32px;
+      box-shadow: 0 0 6px #222b33;
     }
   /* 讓子視窗內容可滾動，避免內容溢出重疊 */
     /* 讓所有視窗內容可滾動，避免內容溢出重疊 */
