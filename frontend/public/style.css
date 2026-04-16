@@ -33,14 +33,10 @@
 */
 @media (min-width: 901px) {
         /* 讓 LIVE IP 區塊的 IP 列表可滾動（假設 class 為 .ip-list） */
-        /* 僅讓 .ip-list（全部 IP 內容）可滑動，外層 LIVE IP 視窗不滑動 */
         .window .ip-list {
           overflow-y: auto;
           max-height: 220px;
           padding-right: 2px;
-        }
-        .window.sub-window.w1 {
-          overflow: visible !important;
         }
         .window .ip-list::-webkit-scrollbar {
           width: 8px;
@@ -82,18 +78,18 @@
       scrollbar-color: #888 #232b33;
     }
   /* 左上視窗 w1 */
-  .window.sub-window.w1 {
-    position: absolute !important;
-    top: 100px !important;      /* ← 左上視窗距離頂端 px */
-    left: 60px !important;      /* ← 左上視窗距離左側 px */
-    width: 500px !important;    /* ← 左上視窗寬度 */
-    min-height: 120px !important; /* ← 最小高度，依需求調整 */
-    max-height: 300px !important; /* ← 最大高度，依需求調整 */
-    overflow-y: auto !important;
-    transform: scale(0.67) !important; /* ← 全區縮放比例 */
-    transform-origin: top left !important;
-    z-index: 1000 !important;
-  }
+    .window.sub-window.w1 {
+      position: absolute !important;
+      top: 100px !important;      /* ← 左上視窗距離頂端 px */
+      left: 60px !important;      /* ← 左上視窗距離左側 px */
+      width: 500px !important;    /* ← 左上視窗寬度 */
+      min-height: 120px !important; /* ← 最小高度，依需求調整 */
+      max-height: 300px !important; /* ← 最大高度，依需求調整 */
+      overflow: visible !important;
+      transform: scale(0.67) !important; /* ← 全區縮放比例 */
+      transform-origin: top left !important;
+      z-index: 1000 !important;
+    }
   /* 右上視窗 w2 */
   .window.sub-window.w2 {
     /*TRAFIC OVERVIEW*/
