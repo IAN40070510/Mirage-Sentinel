@@ -88,7 +88,7 @@
       margin-left: -350px !important; /* ← 主視窗置中偏移量（-width/2）*/
       min-height: 220px !important;
       max-height: 900px !important;
-      overflow: hidden !important;
+      overflow-y: auto !important;
       transform: scale(0.67) !important;
       transform-origin: top center !important;
       z-index: 1000 !important;
