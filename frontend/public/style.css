@@ -160,7 +160,7 @@
       width: 700px !important;    /* ← 主視窗寬度 */
       margin-left: -350px !important; /* ← 主視窗置中偏移量（-width/2）*/
       min-height: 220px !important;
-      max-height: 800px !important;
+      max-height: 850px !important;
       /* 不要 overflow-y，完全移除主視窗滾動條 */
       overflow: visible !important;
       transform: scale(0.67) !important;
