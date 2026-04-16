@@ -32,6 +32,27 @@
 ============================
 */
 @media (min-width: 901px) {
+        /* 讓 LIVE IP 區塊的 IP 列表可滾動（假設 class 為 .ip-list） */
+        .window .ip-list {
+          overflow-y: auto;
+          max-height: 220px;
+          padding-right: 2px;
+        }
+        .window .ip-list::-webkit-scrollbar {
+          width: 8px;
+          background: #232b33;
+          border-radius: 8px;
+        }
+        .window .ip-list::-webkit-scrollbar-thumb {
+          background: #888;
+          border-radius: 8px;
+          min-height: 32px;
+          box-shadow: 0 0 6px #222b33;
+        }
+        .window .ip-list {
+          scrollbar-width: thin;
+          scrollbar-color: #888 #232b33;
+        }
     /* Mac 灰色風格滾動條 for w1/w2/w3/main-window */
     .window.sub-window.w1::-webkit-scrollbar,
     .window.sub-window.w2::-webkit-scrollbar,
@@ -111,7 +132,7 @@
       width: 700px !important;    /* ← 主視窗寬度 */
       margin-left: -350px !important; /* ← 主視窗置中偏移量（-width/2）*/
       min-height: 220px !important;
-      max-height: 900px !important;
+      max-height: 800px !important;
       /* 不要 overflow-y，完全移除主視窗滾動條 */
       overflow: visible !important;
       transform: scale(0.67) !important;
