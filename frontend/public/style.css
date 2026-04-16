@@ -872,6 +872,17 @@ body::after {
 }
 
 .analysis-card {
+    font-size: 12px;
+  }
+
+  /* 針對分析圖表內部的標籤、座標軸、圖例等也縮小字體 */
+  .analysis-card *,
+  .analysis-card .chartjs-render-monitor,
+  .analysis-card .chart-label,
+  .analysis-card .chart-legend,
+  .analysis-card .chartjs-tooltip {
+    font-size: 12px !important;
+  }
   min-height: unset;
   height: auto;
   width: 100%;
@@ -881,15 +892,6 @@ body::after {
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 8px;
-  overflow-x: auto;
-}
-
-/* 防止 analysis-card 內容左右超出卡片寬度 */
-.analysis-card > * {
-  max-width: 100%;
-  box-sizing: border-box;
-  overflow-x: auto;
-}
 }
 
 .analysis-list {
