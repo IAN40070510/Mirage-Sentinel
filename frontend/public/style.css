@@ -1,5 +1,64 @@
 /*
 ============================
+ 攔截流量紀錄（traffic-logs-list/traffic-logs-row）
+----------------------------
+ 1. .traffic-logs-list：攔截流量紀錄列表（仿 log-list/attack-list 風格）
+    - 僅內容區塊可滾動，最大高度 200px
+    - Mac 灰色滾動條
+ 2. .traffic-logs-row：單一攔截紀錄卡片（仿 log-row/attack-row 風格）
+    - 卡片式圓角、陰影、漸層背景
+    - 滑鼠 hover 高亮
+    - 字體、間距、顏色與主視窗一致
+----------------------------
+ 若要調整攔截紀錄外觀，請修改下方數值。
+============================
+*/
+.traffic-logs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* 仿 attack-list/log-list 風格 */
+  padding: 0 2px 0 0;
+  overflow-y: auto;
+  max-height: 200px;
+  scrollbar-width: thin;
+  scrollbar-color: #6c7a89 #232b33;
+}
+.traffic-logs-list::-webkit-scrollbar {
+  width: 8px;
+  background: #232b33;
+  border-radius: 8px;
+}
+.traffic-logs-list::-webkit-scrollbar-thumb {
+  background: #6c7a89;
+  border-radius: 8px;
+  min-height: 32px;
+  box-shadow: 0 0 6px #222b33;
+}
+.traffic-logs-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1.2px solid #3a4250;
+  background: linear-gradient(90deg, #232b33 80%, #2a2f38 100%);
+  border-radius: 8px;
+  color: #dbe6f7;
+  font-size: 12px;
+  margin-bottom: 7px;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.traffic-logs-row:last-child {
+  margin-bottom: 0;
+}
+.traffic-logs-row:hover {
+  border-color: #6c7a89;
+  background: #232b33;
+  color: #fff;
+}
+/*
+============================
  桌面版主要視窗定位與縮放
 ----------------------------
  1. .window.sub-window.w1/w2/w3：三個子視窗（左上、右上、左下）
