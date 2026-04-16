@@ -32,6 +32,31 @@
 ============================
 */
 @media (min-width: 901px) {
+    /* Mac 灰色風格滾動條 for w1/w2/w3/main-window */
+    .window.sub-window.w1::-webkit-scrollbar,
+    .window.sub-window.w2::-webkit-scrollbar,
+    .window.sub-window.w3::-webkit-scrollbar,
+    .main-window::-webkit-scrollbar {
+      width: 8px;
+      background: #232b33;
+      border-radius: 8px;
+    }
+    .window.sub-window.w1::-webkit-scrollbar-thumb,
+    .window.sub-window.w2::-webkit-scrollbar-thumb,
+    .window.sub-window.w3::-webkit-scrollbar-thumb,
+    .main-window::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 8px;
+      min-height: 32px;
+      box-shadow: 0 0 6px #222b33;
+    }
+    .window.sub-window.w1,
+    .window.sub-window.w2,
+    .window.sub-window.w3,
+    .main-window {
+      scrollbar-width: thin;
+      scrollbar-color: #888 #232b33;
+    }
   /* 左上視窗 w1 */
   .window.sub-window.w1 {
     position: absolute !important;
