@@ -41,7 +41,7 @@
       min-height: 220px !important; /* ← 最小高度，依需求調整 */
       max-height: 600px !important; /* ← 最大高度，依需求調整 */
       /*overflow: hidden !important;*/
-      transform: scale(0.67) !important;
+          overflow: hidden !important;
       transform-origin: top left !important;
       z-index: 1000 !important;
     }
@@ -52,7 +52,7 @@
     top: 100px !important;      /* ← 右上視窗距離頂端 px */
     right: 60px !important;     /* ← 右上視窗距離右側 px */
     width: 500px !important;    /* ← 右上視窗寬度 */
-    min-height: 340px !important;
+        overflow: hidden !important;
     max-height: 800px !important;
     overflow: hidden !important;
     transform: scale(0.67) !important;
@@ -64,7 +64,7 @@
     pointer-events: none;
   }
   }
-  /* 左下視窗 w3（TOP 10）*/
+        overflow: hidden !important;
   .window.sub-window.w3,
   .w3.window.sub-window {
     position: absolute !important;
@@ -75,14 +75,15 @@
     min-height: 120px !important;
     max-height: 300px !important;
     overflow: hidden !important;
-    transform: scale(0.67) !important;
+          overflow: hidden !important;
     transform-origin: top left !important;
     z-index: 1000 !important;
   }
-    /* 主視窗 main-window */
-    .main-window {
-      position: absolute !important;
-      top: 40px !important;       /* ← 主視窗距離頂端 px */
+        .window .window-body {
+          overflow-y: auto !important;
+          height: 100% !important;
+          max-height: none !important;
+        }
       left: 50% !important;       /* ← 主視窗水平置中 */
       width: 700px !important;    /* ← 主視窗寬度 */
       margin-left: -350px !important; /* ← 主視窗置中偏移量（-width/2）*/
@@ -398,7 +399,8 @@ body::after {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 14px;
+  padding: 0 18px;
+  height: 44px;
   cursor: move;
   background: linear-gradient(180deg, rgba(12, 58, 42, 0.98), rgba(8, 34, 24, 0.92));
   border-bottom: 1px solid rgba(0, 255, 136, 0.16);
@@ -418,6 +420,8 @@ body::after {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+  align-items: center;
+  height: 100%;
 }
 
 .window-dots span {
