@@ -594,6 +594,9 @@ body::after {
   margin-bottom: 10px;
   text-transform: uppercase;
 }
+.analysis-card .section-title {
+  padding-left: 1em;
+}
 
 .section-gap {
   margin-top: 12px;
