@@ -78,34 +78,13 @@
     right: 60px !important;     /* ← 右上視窗距離右側 px */
     width: 500px !important;    /* ← 右上視窗寬度 */
     min-height: 340px !important;
-    max-height: 800px !important;
-    overflow: hidden !important;
+    max-height: 700px !important;
+    overflow-y: auto !important;
     transform: scale(0.67) !important;
     transform-origin: top right !important;
     z-index: 1000 !important;
     /* pointer-events: none;  // 改由 header 控制拖曳禁止 */
   }
-    /* 只讓 w2 內容區塊（如 .window-body, .analysis-list）可滾動顯示滾動條 */
-    .window.sub-window.w2 .window-body,
-    .window.sub-window.w2 .analysis-list {
-      overflow-y: auto !important;
-      max-height: calc(100% - 44px) !important;
-      scrollbar-width: thin;
-      scrollbar-color: #888 #232b33;
-    }
-    .window.sub-window.w2 .window-body::-webkit-scrollbar,
-    .window.sub-window.w2 .analysis-list::-webkit-scrollbar {
-      width: 8px;
-      background: #232b33;
-      border-radius: 8px;
-    }
-    .window.sub-window.w2 .window-body::-webkit-scrollbar-thumb,
-    .window.sub-window.w2 .analysis-list::-webkit-scrollbar-thumb {
-      background: #888;
-      border-radius: 8px;
-      min-height: 32px;
-      box-shadow: 0 0 6px #222b33;
-    }
   /* 禁止 w2 header 拖曳與互動，但內容可互動 */
   .window.sub-window.w2 .window-header {
     pointer-events: none;
@@ -141,10 +120,16 @@
     }
   /* 讓子視窗內容可滾動，避免內容溢出重疊 */
     /* 讓所有視窗內容可滾動，避免內容溢出重疊 */
-    .window .window-body {
-      overflow-y: auto !important;
-      max-height: calc(100% - 44px) !important;
-    }
+      /* 只針對群體惡意分析內容顯示滾動條，其他不顯示 */
+      .malicious-analysis-panel {
+        overflow-y: auto !important;
+        max-height: calc(100% - 44px) !important;
+      }
+      /* 其他 window-body 預設不顯示滾動條 */
+      .window .window-body {
+        overflow-y: visible !important;
+        max-height: none !important;
+      }
     /* 讓 window-header 固定在頂部，內容滾動 */
     .window {
       display: flex;
