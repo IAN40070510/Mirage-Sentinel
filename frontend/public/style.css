@@ -35,16 +35,14 @@
     /* Mac 灰色風格滾動條 for w1/w2/w3/main-window */
     .window.sub-window.w1::-webkit-scrollbar,
     .window.sub-window.w2::-webkit-scrollbar,
-    .window.sub-window.w3::-webkit-scrollbar,
-    .main-window::-webkit-scrollbar {
+    .window.sub-window.w3::-webkit-scrollbar {
       width: 8px;
       background: #232b33;
       border-radius: 8px;
     }
     .window.sub-window.w1::-webkit-scrollbar-thumb,
     .window.sub-window.w2::-webkit-scrollbar-thumb,
-    .window.sub-window.w3::-webkit-scrollbar-thumb,
-    .main-window::-webkit-scrollbar-thumb {
+    .window.sub-window.w3::-webkit-scrollbar-thumb {
       background: #888;
       border-radius: 8px;
       min-height: 32px;
@@ -52,8 +50,7 @@
     }
     .window.sub-window.w1,
     .window.sub-window.w2,
-    .window.sub-window.w3,
-    .main-window {
+    .window.sub-window.w3 {
       scrollbar-width: thin;
       scrollbar-color: #888 #232b33;
     }
@@ -113,26 +110,33 @@
       margin-left: -350px !important; /* ← 主視窗置中偏移量（-width/2）*/
       min-height: 220px !important;
       max-height: 800px !important;
-      /* 不要讓整個 main-window 滾動 */
+      /* 不要全視窗滾動條 */
       overflow: visible !important;
       transform: scale(0.67) !important;
       transform-origin: top center !important;
       z-index: 1000 !important;
-      display: flex;
-      flex-direction: column;
-    }
-    /* 讓 main-window 內部的 .main-scrollable-content（最近紀錄以下）可滾動 */
-    .main-window .main-scrollable-content {
-      flex: 1 1 auto;
-      overflow-y: auto;
-      min-height: 0;
-      max-height: 100%;
     }
   /* 讓子視窗內容可滾動，避免內容溢出重疊 */
     /* 讓所有視窗內容可滾動，避免內容溢出重疊 */
     .window .window-body {
       overflow-y: auto !important;
       max-height: calc(100% - 44px) !important;
+    }
+    /* 只讓 main-window 內的 window-body 有滾動條 */
+    .main-window .window-body::-webkit-scrollbar {
+      width: 8px;
+      background: #232b33;
+      border-radius: 8px;
+    }
+    .main-window .window-body::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 8px;
+      min-height: 32px;
+      box-shadow: 0 0 6px #222b33;
+    }
+    .main-window .window-body {
+      scrollbar-width: thin;
+      scrollbar-color: #888 #232b33;
     }
     /* 讓 window-header 固定在頂部，內容滾動 */
     .window {
