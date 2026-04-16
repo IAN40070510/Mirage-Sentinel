@@ -167,9 +167,10 @@
       z-index: 1000 !important;
     }
     /* 只讓 .log-list（最近紀錄）可滾動，主視窗不滾動 */
+    /* 讓最近紀錄(log-list)高度自適應主視窗，避免超框 */
     .main-window .log-list {
       overflow-y: auto;
-      max-height: 180px;
+      max-height: calc(900px * 0.67 - 120px); /* 主視窗最大高度*縮放-預留header等 */
       padding-right: 2px;
     }
     .main-window .log-list::-webkit-scrollbar {
@@ -190,9 +191,10 @@
   /* 讓子視窗內容可滾動，避免內容溢出重疊 */
     /* 讓所有視窗內容可滾動，避免內容溢出重疊 */
     /* 只讓 .analysis-stack 內容可滾動，標題與 tabs 不滾動 */
+    /* 讓分析圖表區塊(analysis-stack)高度自適應主視窗，避免超框 */
     .analysis-stack {
       overflow-y: auto;
-      max-height: 340px;
+      max-height: calc(900px * 0.67 - 180px); /* 主視窗最大高度*縮放-預留header等 */
       padding-right: 2px;
     }
     .analysis-stack::-webkit-scrollbar {
