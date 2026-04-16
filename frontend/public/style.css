@@ -40,7 +40,7 @@
     width: 500px !important;    /* ← 左上視窗寬度 */
     min-height: 120px !important; /* ← 最小高度，依需求調整 */
     max-height: 300px !important; /* ← 最大高度，依需求調整 */
-    overflow: hidden !important;
+    overflow-y: auto !important;
     transform: scale(0.67) !important; /* ← 全區縮放比例 */
     transform-origin: top left !important;
     z-index: 1000 !important;
@@ -54,15 +54,15 @@
     width: 500px !important;    /* ← 右上視窗寬度 */
     min-height: 340px !important;
     max-height: 800px !important;
-    overflow: hidden !important;
+    overflow-y: auto !important;
     transform: scale(0.67) !important;
     transform-origin: top right !important;
     z-index: 1000 !important;
     /* pointer-events: none;  // 改由 header 控制拖曳禁止 */
+  }
   /* 禁止 w2 header 拖曳與互動，但內容可互動 */
   .window.sub-window.w2 .window-header {
     pointer-events: none;
-  }
   }
   /* 左下視窗 w3（TOP 10）*/
   .window.sub-window.w3,
@@ -74,7 +74,7 @@
     width: 500px !important;    /* ← 左下視窗寬度 */
     min-height: 120px !important;
     max-height: 300px !important;
-    overflow: hidden !important;
+    overflow-y: auto !important;
     transform: scale(0.67) !important;
     transform-origin: top left !important;
     z-index: 1000 !important;
