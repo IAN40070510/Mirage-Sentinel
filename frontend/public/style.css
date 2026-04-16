@@ -119,10 +119,37 @@
     width: 500px !important;    /* ← 左下視窗寬度 */
     min-height: 120px !important;
     max-height: 300px !important;
-    overflow-y: auto !important;
+    overflow: visible !important;
     transform: scale(0.67) !important;
     transform-origin: top left !important;
     z-index: 1000 !important;
+  }
+  /* 讓 TOP 10 ATTACK 內容 attack-list 可滑動，大標題固定 */
+  .window.sub-window.w3 .window-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: inherit;
+  }
+  .window.sub-window.w3 .attack-list {
+    overflow-y: auto;
+    max-height: 200px;
+    padding-right: 2px;
+  }
+  .window.sub-window.w3 .attack-list::-webkit-scrollbar {
+    width: 8px;
+    background: #232b33;
+    border-radius: 8px;
+  }
+  .window.sub-window.w3 .attack-list::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 8px;
+    min-height: 32px;
+    box-shadow: 0 0 6px #222b33;
+  }
+  .window.sub-window.w3 .attack-list {
+    scrollbar-width: thin;
+    scrollbar-color: #888 #232b33;
   }
     /* 主視窗 main-window */
     .main-window {
