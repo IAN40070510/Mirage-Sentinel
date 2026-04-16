@@ -776,7 +776,16 @@ function renderDetail(data) {
     const riskText = xgb.status;
     const methodText = log.method || "-";
     const endpointText = log.endpoint || "-";
-    const vectorText = log.attack_vector || log.action || log.event || log.description || xgb.attackType || "-";
+    const rawVectorText = [
+      xgb.status === "BLOCK" ? xgb.attackType : "",
+      log.attack_vector,
+      log.action,
+      log.event,
+      log.description,
+    ].find((value) => value && value !== "-" && value !== "normal") || "-";
+    const vectorText = xgb.status === "BLOCK" && rawVectorText !== "-"
+      ? String(rawVectorText).toUpperCase()
+      : rawVectorText;
     const decisionText = xgb.decision;
     const scoreText = Number.isFinite(
       Number(xgb.status === "NORMAL" ? xgb.normalConfidence : xgb.attackScore),
