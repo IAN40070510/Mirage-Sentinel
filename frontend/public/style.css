@@ -169,7 +169,7 @@
     /* 只讓 .log-list（最近紀錄）可滾動，主視窗不滾動 */
     .main-window .log-list {
       overflow-y: auto;
-      max-height: 260px;
+      max-height: 140px;
       padding-right: 2px;
     }
     .main-window .log-list::-webkit-scrollbar {
@@ -872,7 +872,8 @@ body::after {
 }
 
 .analysis-card {
-  min-height: 220px;
+  min-height: 0;
+  height: auto;
 }
 
 .analysis-list {
