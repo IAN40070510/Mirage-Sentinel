@@ -606,10 +606,10 @@ body::after {
 
 .log-item {
   border-left: 2px solid rgba(0, 255, 136, 0.32);
-  padding-left: 10px;
+  padding-left: 8px;
   color: #fff;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .log-time {
