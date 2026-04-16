@@ -92,13 +92,14 @@
     }
   /* 右上視窗 w2 */
   .window.sub-window.w2 {
-    /*TRAFIC OVERVIEW*/
+    /*TRAFIC OVERVIEW & 惡意分析統一高度*/
     position: absolute !important;
-    top: 100px !important;      /* ← 右上視窗距離頂端 px */
-    right: 60px !important;     /* ← 右上視窗距離右側 px */
-    width: 500px !important;    /* ← 右上視窗寬度 */
+    top: 100px !important;
+    right: 60px !important;
+    width: 500px !important;
     min-height: 340px !important;
     max-height: 700px !important;
+    height: 700px !important;
     overflow-y: auto !important;
     transform: scale(0.67) !important;
     transform-origin: top right !important;
