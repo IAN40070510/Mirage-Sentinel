@@ -605,6 +605,46 @@ body::after {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* 仿 attack-list 風格 */
+  padding: 0 2px 0 0;
+  overflow-y: auto;
+  max-height: 200px;
+  scrollbar-width: thin;
+  scrollbar-color: #888 #232b33;
+}
+.log-list::-webkit-scrollbar {
+  width: 8px;
+  background: #232b33;
+  border-radius: 8px;
+}
+.log-list::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 8px;
+  min-height: 32px;
+  box-shadow: 0 0 6px #222b33;
+}
+.log-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1.5px solid #222b33;
+  background: linear-gradient(90deg, #232b33 80%, #2c313a 100%);
+  border-radius: 10px;
+  color: #e6faff;
+  font-size: 13px;
+  margin-bottom: 8px;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.log-row:last-child {
+  margin-bottom: 0;
+}
+.log-row:hover {
+  border-color: #00ffa2;
+  background: #232b33;
+  color: #fff;
+}
 }
 
 .ip-item {
