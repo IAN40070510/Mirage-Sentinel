@@ -53,7 +53,7 @@
     right: 60px !important;     /* ← 右上視窗距離右側 px */
     width: 500px !important;    /* ← 右上視窗寬度 */
     min-height: 340px !important;
-    max-height: 600px !important;
+    max-height: 800px !important;
     overflow: hidden !important;
     transform: scale(0.67) !important;
     transform-origin: top right !important;
