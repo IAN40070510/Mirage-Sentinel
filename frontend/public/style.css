@@ -56,7 +56,7 @@ body {
   left: 50%;
   bottom: 18px;
   transform: translateX(-50%);
-  width: min(600px, calc(100% - 40px));
+  width: min(150px, calc(100% - 40px));
   z-index: 100;
   border: 1.5px solid #222b33;
   background: #181d1f;
