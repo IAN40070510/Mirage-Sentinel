@@ -35,7 +35,7 @@
         /* 讓 LIVE IP 區塊的 IP 列表可滾動（假設 class 為 .ip-list） */
         .window .ip-list {
           overflow-y: auto;
-          max-height: 120px;
+          max-height: 100px;
           padding-right: 2px;
         }
         .window .ip-list::-webkit-scrollbar {
@@ -873,6 +873,15 @@ body::after {
 
 .analysis-card {
     font-size: 12px;
+    min-height: unset;
+    height: auto;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 10px 0 18px 0;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
   }
 
   /* 針對分析圖表內部的標籤、座標軸、圖例等也縮小字體 */
@@ -882,16 +891,6 @@ body::after {
   .analysis-card .chart-legend,
   .analysis-card .chartjs-tooltip {
     font-size: 12px !important;
-  }
-  min-height: unset;
-  height: auto;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  padding: 10px 0 18px 0;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 8px;
 }
 
 .analysis-list {
