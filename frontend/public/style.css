@@ -124,22 +124,21 @@
       overflow-y: auto !important;
       max-height: calc(100% - 44px) !important;
     }
-
-    /* 讓 w2 標題固定，內容可獨立滾動 */
-    .window.sub-window.w2 {
+    /* 讓 window-header 固定在頂部，內容滾動 */
+    .window {
       display: flex;
       flex-direction: column;
     }
-    .window.sub-window.w2 .window-header {
+    .window-header {
+      flex-shrink: 0;
       position: sticky;
       top: 0;
       z-index: 2;
-      background: linear-gradient(180deg, rgba(12, 58, 42, 0.98), rgba(8, 34, 24, 0.92));
+      background: inherit;
     }
-    .window.sub-window.w2 .window-body {
+    .window-body {
       flex: 1 1 auto;
-      overflow-y: auto !important;
-      max-height: none !important;
+      min-height: 0;
     }
   /* 主視窗 */
   .main-window {
