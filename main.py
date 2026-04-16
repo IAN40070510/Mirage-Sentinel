@@ -211,8 +211,9 @@ def analyze_intent(text: str):
 
         confidence = float(judgment["attack_score"])
         attack_vector = str(judgment["top_attack_type"])
-        sentinel_decision = str(judgment.get("decision", "PASS") or "PASS")
-        is_attack = confidence > 0.3
+        # 產品規則：僅保留二元決策，attack_score >= 0.7 視為 BLOCK，否則 PASS。
+        is_attack = confidence >= 0.7
+        sentinel_decision = "BLOCK" if is_attack else "PASS"
 
         return is_attack, confidence, attack_vector, sentinel_decision, True
     except Exception as exc:

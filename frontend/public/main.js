@@ -34,7 +34,6 @@ async function loadRecentTraffic() {
       }
 
       // 重要欄位顏色與 icon
-      const mitigationStatus = log.mitigation_status || log.details?.mitigation_status || "-";
       const endpoint = escapeHtml(log.endpoint || "-");
       const payload = escapeHtml(log.raw_payload || "-");
       const query = escapeHtml(log.query_string || "-");
@@ -48,19 +47,26 @@ async function loadRecentTraffic() {
       const xgboostDecisionRaw = log.xgboost_decision ?? log.sentinel_decision;
       const xgboostAttackTypeRaw = log.xgboost_attack_type ?? log.sentinel_attack_type;
       const xgboostModelReadyRaw = log.xgboost_model_ready ?? log.sentinel_model_ready;
-      const isRiskTraffic = String(xgboostDecisionRaw || "PASS").toUpperCase() === "BLOCK";
-      const riskColor = isRiskTraffic ? '#ff4d4f' : '#00ffa2';
-      const riskIcon = isRiskTraffic ? '⚠️' : '';
-      const trafficLabel = isRiskTraffic ? 'RISK traffic' : 'NORMAL';
+      const xgb = evaluateXgboostStatus(
+        xgboostDecisionRaw,
+        xgboostScoreRaw,
+        xgboostAttackTypeRaw,
+      );
+      const isNormalTraffic = xgb.status === "NORMAL";
+      const riskColor = isNormalTraffic ? '#00ffa2' : '#ff4d4f';
+      const riskIcon = isNormalTraffic ? '' : '⚠️';
+      const trafficLabel = xgb.status;
       const businessContext = escapeHtml(log.business_context || log.surface || "-");
       const bankingAction = escapeHtml(log.banking_action || "-");
       const bankingDetails = escapeHtml(log.banking_details || "-");
 
-      const sentinelScore = Number.isFinite(Number(xgboostScoreRaw))
-        ? Number(xgboostScoreRaw).toFixed(4)
+      const sentinelScore = Number.isFinite(
+        Number(xgb.status === "NORMAL" ? xgb.normalConfidence : xgb.attackScore),
+      )
+        ? Number(xgb.status === "NORMAL" ? xgb.normalConfidence : xgb.attackScore).toFixed(4)
         : "0.0000";
-      const sentinelDecision = escapeHtml(xgboostDecisionRaw || "PASS");
-      const sentinelAttackType = escapeHtml(xgboostAttackTypeRaw || "normal");
+      const sentinelDecision = escapeHtml(xgb.decision);
+      const sentinelAttackType = escapeHtml(xgb.attackType || "normal");
       const sentinelModelReady = Number(xgboostModelReadyRaw || 0) === 1 ? "ready" : "fallback";
 
       // 來源地區顯示（國家名稱＋國旗）
@@ -120,7 +126,7 @@ async function loadRecentTraffic() {
       const shortPayload = payload;
 
       return `
-      <div class="log-item log-card${isNormal ? '' : ' attack'}" style="border:1px solid #1affb2; border-radius:8px; margin-bottom:0.7em; background:rgba(0,32,32,0.22); padding:0.65em 0.8em;">
+      <div class="log-item log-card${isNormalTraffic ? '' : ' attack'}" style="border:1px solid #1affb2; border-radius:8px; margin-bottom:0.7em; background:rgba(0,32,32,0.22); padding:0.65em 0.8em;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
           <span class="log-label" style="font-weight:bold;">${time}</span>
           <span class="log-risk" style="color:${riskColor};font-weight:bold;white-space:nowrap;">${riskIcon} ${trafficLabel}</span>
@@ -442,6 +448,27 @@ function detectIsAttack(detail) {
   );
 }
 
+function evaluateXgboostStatus(decisionRaw, scoreRaw, attackTypeRaw) {
+  const attackScore = Number.isFinite(Number(scoreRaw))
+    ? Math.min(Math.max(Number(scoreRaw), 0), 1)
+    : 0;
+  const normalConfidence = Math.min(Math.max(1 - attackScore, 0), 1);
+  const isBlock = attackScore >= 0.7;
+  const attackType = String(attackTypeRaw || "").trim();
+  const hasAttackType =
+    attackType
+    && attackType !== "-"
+    && !["normal", "none", "unknown"].includes(attackType.toLowerCase());
+
+  return {
+    status: isBlock ? "BLOCK" : "NORMAL",
+    decision: isBlock ? "BLOCK" : "PASS",
+    attackType: isBlock ? (hasAttackType ? attackType : "-") : "normal",
+    attackScore,
+    normalConfidence,
+  };
+}
+
 function formatFakeResponse(fakeResponse) {
   if (!fakeResponse) return "";
   if (typeof fakeResponse === "string") return fakeResponse;
@@ -741,13 +768,20 @@ function renderDetail(data) {
   logsToRender.forEach((log, index) => {
     const div = document.createElement("div");
     div.className = "log-item";
-    const riskText = Number(log.risk_level || 0) > 0 ? `RISK=${log.risk_level}` : "NORMAL";
+    const xgb = evaluateXgboostStatus(
+      log.sentinel_decision,
+      log.sentinel_score,
+      log.sentinel_attack_type,
+    );
+    const riskText = xgb.status;
     const methodText = log.method || "-";
     const endpointText = log.endpoint || "-";
-    const vectorText = log.attack_vector || log.action || log.event || log.description || "-";
-    const decisionText = log.sentinel_decision || "-";
-    const scoreText = Number.isFinite(Number(log.sentinel_score))
-      ? Number(log.sentinel_score).toFixed(4)
+    const vectorText = log.attack_vector || log.action || log.event || log.description || xgb.attackType || "-";
+    const decisionText = xgb.decision;
+    const scoreText = Number.isFinite(
+      Number(xgb.status === "NORMAL" ? xgb.normalConfidence : xgb.attackScore),
+    )
+      ? Number(xgb.status === "NORMAL" ? xgb.normalConfidence : xgb.attackScore).toFixed(4)
       : "0.0000";
     const inputText = log.input_string || log.raw_payload || log.payload || "-";
     const logText = `${methodText} ${endpointText} | ${riskText} | ${vectorText} | XGB=${decisionText}:${scoreText}`;
