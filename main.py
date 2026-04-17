@@ -30,6 +30,7 @@ import ipaddress
 import math
 import statistics
 import json
+import html
 import re
 import hashlib
 from typing import Any, cast
@@ -544,6 +545,62 @@ def _inject_mouse_tracker_html(content: bytes, content_type: str | None) -> byte
 def _build_mirage_cookie_header(fake_session_token: str) -> str:
     """Build Mirage session cookie header for deception-flow stickiness."""
     return f"mirage_session={fake_session_token}; Path=/; HttpOnly; SameSite=Lax"
+
+
+def _build_mirage_dashboard_html(fake_response: dict[str, object]) -> str:
+        """Return a lightweight fake dashboard HTML for browser navigations."""
+        username = str(fake_response.get("username") or fake_response.get("user_id") or "guest")
+        account_number = str(
+                fake_response.get("account_number")
+                or fake_response.get("account_id")
+                or "ACC-UNKNOWN"
+        )
+        balance = fake_response.get("balance", 50000.0)
+
+        try:
+            if isinstance(balance, (int, float, str)):
+                balance_text = f"{float(balance):,.2f}"
+            else:
+                balance_text = "50,000.00"
+        except Exception:
+            balance_text = "50,000.00"
+
+        safe_username = html.escape(username)
+        safe_account = html.escape(account_number)
+        safe_balance = html.escape(balance_text)
+
+        return f"""<!DOCTYPE html>
+<html lang=\"en\">
+<head>
+    <meta charset=\"UTF-8\" />
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
+    <title>Bank Dashboard</title>
+    <style>
+        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #f3f6fb; color: #1f2937; }}
+        .wrap {{ max-width: 860px; margin: 48px auto; padding: 0 16px; }}
+        .card {{ background: #fff; border-radius: 14px; padding: 24px; box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08); }}
+        h1 {{ margin: 0 0 8px; font-size: 24px; }}
+        .muted {{ color: #64748b; margin-bottom: 18px; }}
+        .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}
+        .tile {{ background: #f8fafc; border-radius: 10px; padding: 14px; }}
+        .label {{ font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }}
+        .value {{ font-size: 20px; margin-top: 6px; font-weight: 600; }}
+    </style>
+</head>
+<body>
+    <div class=\"wrap\">
+        <div class=\"card\">
+            <h1>Welcome back, {safe_username}</h1>
+            <div class=\"muted\">Your session is active.</div>
+            <div class=\"grid\">
+                <div class=\"tile\"><div class=\"label\">Account Number</div><div class=\"value\">{safe_account}</div></div>
+                <div class=\"tile\"><div class=\"label\">Available Balance</div><div class=\"value\">${safe_balance}</div></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+"""
 
 
 @app.get("/")
@@ -1251,6 +1308,33 @@ async def _check_fake_session_and_respond(
                 "balance": 50000.0,
                 "account_type": "Checking",
             })
+
+    accept_header = (request.headers.get("accept") or "").lower()
+    if "/dashboard" in endpoint and request.method.upper() == "GET" and "text/html" in accept_header:
+        html_content = _build_mirage_dashboard_html(fake_response)
+        event_meta = {
+            "mitigation_status": "fake_session_detected",
+            "response_origin": "deception_cache_html",
+            "deception_mode": "fake_session_hit",
+            "fake_session_token": fake_session_token,
+            "engagement_level": fake_session.get("engagement_level", 0),
+        }
+        save_deception_state(
+            client_ip=client_ip,
+            principal_id=principal_id,
+            vector="cached_session",
+            risk=0,
+            payload=fake_response,
+        )
+        return (
+            html_content.encode("utf-8"),
+            200,
+            {
+                "content-type": "text/html; charset=utf-8",
+                "set-cookie": _build_mirage_cookie_header(fake_session_token),
+            },
+            event_meta,
+        )
     
     if "/transactions" in endpoint or "/transaction" in endpoint:
         # 返回之前記錄的假轉帳歷史
