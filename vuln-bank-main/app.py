@@ -198,6 +198,11 @@ if not os.path.exists(UPLOAD_FOLDER):
 def generate_account_number():
     return ''.join(random.choices(string.digits, k=10))
 
+
+def resolve_account_number(username):
+    username_text = str(username or '').strip()
+    return username_text or generate_account_number()
+
 def generate_card_number():
     """Generate a 16-digit card number"""
     # Vulnerability: Predictable card number generation
@@ -288,12 +293,13 @@ def register():
         try:
             # Mass Assignment Vulnerability - Client can send additional parameters
             user_data = request.get_json()  # Changed to get_json()
-            account_number = generate_account_number()
+            username = str(user_data.get('username') or '').strip()
+            account_number = resolve_account_number(username)
             
             # Check if username exists
             existing_user = execute_query(
                 "SELECT username FROM users WHERE username = %s",
-                (user_data.get('username'),)
+                (username,)
             )
             
             if existing_user and existing_user[0]:
@@ -307,7 +313,7 @@ def register():
             # Build dynamic query based on user input fields
             # Vulnerability: Mass Assignment possible here
             fields = ['username', 'password', 'account_number']
-            values = [user_data.get('username'), user_data.get('password'), account_number]
+            values = [username, user_data.get('password'), account_number]
             
             # Include any additional parameters from user input
             for key, value in user_data.items():
@@ -384,6 +390,19 @@ def login():
                 user = user[0]  # Get first row
                 print(f"Debug - Found user: {user}")  # Debug print
 
+                resolved_account_number = user[3]
+                normalized_username = str(user[1] or '').strip()
+                if user[3] != normalized_username:
+                    try:
+                        execute_query(
+                            "UPDATE users SET account_number = %s WHERE id = %s",
+                            (normalized_username, user[0]),
+                            fetch=False,
+                        )
+                        resolved_account_number = normalized_username
+                    except Exception as sync_error:
+                        print(f"Account number sync skipped: {sync_error}")
+
                 if len(user) > 9 and user[9]:
                     return jsonify({
                         'status': 'error',
@@ -398,12 +417,12 @@ def login():
                     'status': 'success',
                     'message': 'Login successful',
                     'token': token,
-                    'accountNumber': user[3],
+                    'accountNumber': resolved_account_number,
                     'isAdmin':       user[5],
                     'debug_info': {  # Vulnerability: Information disclosure
                         'user_id': user[0],
                         'username': user[1],
-                        'account_number': user[3],
+                        'account_number': resolved_account_number,
                         'is_admin': user[5],
                         'login_time': str(datetime.now())
                     }

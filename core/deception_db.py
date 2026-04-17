@@ -592,17 +592,17 @@ def get_fake_transactions_for_attacker(client_ip: str, principal_id: str) -> lis
         ]
 
 
-def get_fake_cards_for_attacker(client_ip: str, principal_id: str) -> list[dict[str, object]]:
+def get_fake_cards_for_attacker(_client_ip: str, principal_id: str) -> list[dict[str, object]]:
     """獲取攻擊者的假卡片"""
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.execute(
             """
             SELECT id, card_number, card_holder, expiry, cvv, card_type, currency, card_limit, current_balance, is_frozen, is_active, last_used_at, created_at
             FROM fake_cards
-            WHERE client_ip = ? AND principal_id = ?
+            WHERE principal_id = ?
             ORDER BY created_at DESC
             """,
-            (client_ip, principal_id)
+            (principal_id,),
         )
         results = cursor.fetchall()
         return [
@@ -629,15 +629,15 @@ def get_fake_cards_for_attacker(client_ip: str, principal_id: str) -> list[dict[
         ]
 
 
-def _get_fake_card_row(conn: sqlite3.Connection, client_ip: str, principal_id: str, card_id: int) -> tuple[Any, ...] | None:
+def _get_fake_card_row(conn: sqlite3.Connection, _client_ip: str, principal_id: str, card_id: int) -> tuple[Any, ...] | None:
     return conn.execute(
         """
         SELECT id, card_number, card_holder, expiry, cvv, card_type, currency, card_limit,
                current_balance, is_frozen, is_active, last_used_at, created_at
         FROM fake_cards
-        WHERE id = ? AND client_ip = ? AND principal_id = ?
+        WHERE id = ? AND principal_id = ?
         """,
-        (card_id, client_ip, principal_id),
+        (card_id, principal_id),
     ).fetchone()
 
 
@@ -757,16 +757,16 @@ def update_fake_card_limit(client_ip: str, principal_id: str, card_id: int, new_
         return limit_value
 
 
-def get_fake_card_transactions(client_ip: str, principal_id: str, card_id: int) -> list[dict[str, object]]:
+def get_fake_card_transactions(_client_ip: str, principal_id: str, card_id: int) -> list[dict[str, object]]:
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
             """
             SELECT amount, merchant_name, transaction_type, status, description, created_at
             FROM fake_card_transactions
-            WHERE client_ip = ? AND principal_id = ? AND card_id = ?
+            WHERE principal_id = ? AND card_id = ?
             ORDER BY created_at DESC
             """,
-            (client_ip, principal_id, card_id),
+            (principal_id, card_id),
         ).fetchall()
     return [
         {
