@@ -1178,12 +1178,30 @@ async def _execute_deception_response(
         fake_username = req_username or model_username or f"attacker_{principal_id}"
         fake_password = req_password or model_password or "honeypot_default_password"
         fake_account_id = str(
-            fake_response.get("account_number")
+            req_username
+            or fake_response.get("account_number")
             or fake_response.get("account_id")
             or f"ACC-{fake_session_token[:8]}"
         )
 
         login_balance = _coerce_amount(fake_response.get("balance", 50000.0), fallback=50000.0)
+        mirror_is_admin = bool(fake_response.get("is_admin", False))
+        mirror_profile_picture = (
+            str(fake_response.get("profile_picture"))
+            if fake_response.get("profile_picture") is not None
+            else None
+        )
+        mirror_reset_pin = (
+            str(fake_response.get("reset_pin"))
+            if fake_response.get("reset_pin") is not None
+            else None
+        )
+        mirror_bio = (
+            str(fake_response.get("bio"))
+            if fake_response.get("bio") is not None
+            else None
+        )
+        mirror_is_suspended = bool(fake_response.get("is_suspended", False))
 
         record_fake_login(
             client_ip,
@@ -1192,6 +1210,11 @@ async def _execute_deception_response(
             fake_password,
             fake_account_id,
             balance=login_balance,
+            is_admin=mirror_is_admin,
+            profile_picture=mirror_profile_picture,
+            reset_pin=mirror_reset_pin,
+            bio=mirror_bio,
+            is_suspended=mirror_is_suspended,
         )
         fake_response["username"] = fake_username
         fake_response["password"] = fake_password
@@ -1244,7 +1267,16 @@ async def _execute_deception_response(
         fake_response["new_balance"] = transfer_result["new_balance"]
         fake_response["balance"] = transfer_result["new_balance"]
         
-    elif "/new_card" in endpoint or "/newcard" in endpoint or "/add_card" in endpoint or "/upload" in endpoint or "/profile" in endpoint or "/card" in endpoint:
+    elif (
+        "/new_card" in endpoint
+        or "/newcard" in endpoint
+        or "/add_card" in endpoint
+        or "/upload" in endpoint
+        or "/profile" in endpoint
+        or "/card" in endpoint
+        or "virtual-cards" in endpoint
+        or "virtual_cards" in endpoint
+    ):
         # 卡片/個人資料操作：記錄假卡片
         fake_card_number = str(request_fields.get("card_number") or fake_response.get("card_number", "4111111111111111"))
         fake_card_holder = str(request_fields.get("card_holder") or fake_response.get("card_holder", fake_username or "Honeypot User"))
@@ -1252,7 +1284,12 @@ async def _execute_deception_response(
         fake_cvv = str(request_fields.get("cvv") or fake_response.get("cvv", "123"))
         fake_card_type = str(request_fields.get("card_type") or fake_response.get("card_type", "VISA"))
         
-        if "/card" in endpoint or "/add_card" in endpoint:
+        if (
+            "/card" in endpoint
+            or "/add_card" in endpoint
+            or "virtual-cards" in endpoint
+            or "virtual_cards" in endpoint
+        ):
             record_fake_card(client_ip, principal_id, fake_card_number, fake_card_holder, fake_expiry, fake_cvv, fake_card_type)
         
         fake_response["status"] = "success"
@@ -1477,7 +1514,53 @@ async def _check_fake_session_and_respond(
                     "transaction_id": latest_txn.get("transaction_id"),
                 })
     
-    if "/card" in endpoint or "/cards" in endpoint:
+    if "/card" in endpoint or "/cards" in endpoint or "virtual-cards" in endpoint or "virtual_cards" in endpoint:
+        if request.method.upper() == "POST":
+            body_bytes = await request.body()
+            body_text = body_bytes.decode("utf-8", errors="ignore") if body_bytes else ""
+            content_type = request.headers.get("content-type", "")
+            request_fields = _extract_json_or_form_fields(body_text, content_type)
+
+            fake_account = get_fake_account_for_attacker(client_ip, session_principal_id)
+            card_holder = str(
+                request_fields.get("card_holder")
+                or (fake_account or {}).get("username")
+                or session_principal_id
+            )
+            card_number = str(
+                request_fields.get("card_number")
+                or f"4{hashlib.sha256(f'{session_principal_id}|{time.time()}'.encode('utf-8')).hexdigest()[:15]}"
+            )
+            expiry = str(
+                request_fields.get("expiry")
+                or request_fields.get("expiry_date")
+                or "12/28"
+            )
+            cvv = str(request_fields.get("cvv") or "123")
+            card_type = str(request_fields.get("card_type") or "standard")
+
+            from core.deception_db import record_fake_card
+            record_fake_card(
+                client_ip,
+                session_principal_id,
+                card_number,
+                card_holder,
+                expiry,
+                cvv,
+                card_type,
+            )
+
+            fake_response.update({
+                "status": "success",
+                "message": "Virtual card created successfully",
+                "card_details": {
+                    "card_number": card_number,
+                    "cvv": cvv,
+                    "expiry_date": expiry,
+                    "card_type": card_type,
+                },
+            })
+
         # 返回虛假卡片列表
         fake_cards = get_fake_cards_for_attacker(client_ip, session_principal_id)
         if fake_cards:
@@ -1874,6 +1957,14 @@ async def _proxy_banking_request(
                     "connection",
                 }
             }
+
+            # 正常登入流程（未被 Mirage 攔截）要清除舊的 mirage_session，
+            # 避免同一瀏覽器因殘留 cookie 被誤導回欺敵資料庫。
+            if normalized_upstream_path in {"/login", "/banking/login"}:
+                response_headers["set-cookie"] = (
+                    "mirage_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"
+                )
+
             event_payload["upstream_status_code"] = status_code
             event_payload["real_backend_touched"] = 1
             event_payload["response_origin"] = "vuln_bank_main"
