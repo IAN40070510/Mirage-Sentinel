@@ -1319,6 +1319,10 @@ async def _check_fake_session_and_respond(
     endpoint = "/" + (upstream_path or "").lstrip("/").lower()
     now_iso = datetime.now().isoformat(timespec="milliseconds")
 
+    # 靜態資源必須回源，否則頁面會因 CSS/JS 被 JSON 取代而破版。
+    if _is_render_critical_path(endpoint):
+        return None
+
     # 允許使用者重新進入登入/註冊流程，避免瀏覽器返回時直接顯示 Mirage JSON。
     if "/login" in endpoint or "/register" in endpoint:
         return None
