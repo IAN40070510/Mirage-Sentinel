@@ -156,9 +156,31 @@ def setup_deception_db():
                 expiry TEXT,
                 cvv TEXT,
                 card_type TEXT,
+                currency TEXT DEFAULT 'USD',
+                card_limit REAL DEFAULT 1000.0,
+                current_balance REAL DEFAULT 0.0,
+                is_frozen INTEGER DEFAULT 0,
+                is_active INTEGER DEFAULT 1,
+                last_used_at TEXT,
                 created_at TEXT
             )
         """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS fake_card_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                client_ip TEXT,
+                principal_id TEXT,
+                card_id INTEGER,
+                amount REAL,
+                merchant_name TEXT,
+                transaction_type TEXT,
+                status TEXT,
+                description TEXT,
+                created_at TEXT
+            )
+            """
         )
         _migrate_attacker_ip_to_client_ip(conn)
         _ensure_column(conn, "principal_id TEXT")
@@ -172,6 +194,21 @@ def setup_deception_db():
         _ensure_column(conn, "engagement_level INTEGER DEFAULT 1")
         _ensure_table_column(conn, "fake_accounts", "fake_balance REAL DEFAULT 50000.0")
         _ensure_table_column(conn, "fake_transactions", "description TEXT")
+        _ensure_table_column(conn, "fake_cards", "currency TEXT DEFAULT 'USD'")
+        _ensure_table_column(conn, "fake_cards", "card_limit REAL DEFAULT 1000.0")
+        _ensure_table_column(conn, "fake_cards", "current_balance REAL DEFAULT 0.0")
+        _ensure_table_column(conn, "fake_cards", "is_frozen INTEGER DEFAULT 0")
+        _ensure_table_column(conn, "fake_cards", "is_active INTEGER DEFAULT 1")
+        _ensure_table_column(conn, "fake_cards", "last_used_at TEXT")
+        _ensure_table_column(conn, "fake_card_transactions", "client_ip TEXT")
+        _ensure_table_column(conn, "fake_card_transactions", "principal_id TEXT")
+        _ensure_table_column(conn, "fake_card_transactions", "card_id INTEGER")
+        _ensure_table_column(conn, "fake_card_transactions", "amount REAL")
+        _ensure_table_column(conn, "fake_card_transactions", "merchant_name TEXT")
+        _ensure_table_column(conn, "fake_card_transactions", "transaction_type TEXT")
+        _ensure_table_column(conn, "fake_card_transactions", "status TEXT")
+        _ensure_table_column(conn, "fake_card_transactions", "description TEXT")
+        _ensure_table_column(conn, "fake_card_transactions", "created_at TEXT")
         _ensure_billing_tables(conn)
         _ensure_unique_memory_key(conn)
     logger.info(f"Deception Memory Engine Ready: {DB_PATH}")
@@ -416,6 +453,10 @@ def record_fake_card(
     expiry: str,
     cvv: str,
     card_type: str,
+    currency: str = "USD",
+    card_limit: float = 1000.0,
+    current_balance: float = 0.0,
+    is_frozen: bool = False,
 ) -> bool:
     """記錄攻擊者的假卡片信息"""
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
@@ -423,10 +464,27 @@ def record_fake_card(
         with sqlite3.connect(DB_PATH) as conn:
             conn.execute(
                 """
-                INSERT INTO fake_cards (client_ip, principal_id, card_number, card_holder, expiry, cvv, card_type, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO fake_cards (
+                    client_ip, principal_id, card_number, card_holder, expiry, cvv,
+                    card_type, currency, card_limit, current_balance, is_frozen,
+                    is_active, last_used_at, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, ?)
                 """,
-                (client_ip, principal_id, card_number, card_holder, expiry, cvv, card_type, now)
+                (
+                    client_ip,
+                    principal_id,
+                    card_number,
+                    card_holder,
+                    expiry,
+                    cvv,
+                    card_type,
+                    str(currency or "USD").upper(),
+                    float(card_limit),
+                    float(current_balance),
+                    1 if is_frozen else 0,
+                    now,
+                )
             )
         return True
     except Exception as e:
@@ -522,25 +580,210 @@ def get_fake_cards_for_attacker(client_ip: str, principal_id: str) -> list[dict[
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.execute(
             """
-            SELECT card_number, card_holder, expiry, cvv, card_type, created_at
+            SELECT id, card_number, card_holder, expiry, cvv, card_type, currency,
+                   card_limit, current_balance, is_frozen, is_active, last_used_at, created_at
             FROM fake_cards
-            WHERE client_ip = ? AND principal_id = ?
+            WHERE principal_id = ?
             ORDER BY created_at DESC
             """,
-            (client_ip, principal_id)
+            (principal_id,)
         )
         results = cursor.fetchall()
         return [
             {
-                "card_number": row[0],
-                "card_holder": row[1],
-                "expiry": row[2],
-                "cvv": row[3],
-                "card_type": row[4],
-                "created_at": row[5]
+                "id": int(row[0]),
+                "card_number": row[1],
+                "card_holder": row[2],
+                "expiry": row[3],
+                "expiry_date": row[3],
+                "cvv": row[4],
+                "card_type": row[5],
+                "currency": row[6] or "USD",
+                "limit": float(row[7]) if row[7] is not None else 1000.0,
+                "balance": float(row[8]) if row[8] is not None else 0.0,
+                "current_balance": float(row[8]) if row[8] is not None else 0.0,
+                "is_frozen": bool(row[9]),
+                "is_active": bool(row[10]) if row[10] is not None else True,
+                "last_used_at": row[11],
+                "created_at": row[12],
+                "currency_symbol": "$",
             }
             for row in results
         ]
+
+
+def _get_fake_card_row(conn: sqlite3.Connection, principal_id: str, card_id: int) -> tuple[Any, ...] | None:
+    return conn.execute(
+        """
+        SELECT id, card_number, card_holder, expiry, cvv, card_type, currency, card_limit,
+               current_balance, is_frozen, is_active, last_used_at, created_at
+        FROM fake_cards
+        WHERE id = ? AND principal_id = ?
+        """,
+        (card_id, principal_id),
+    ).fetchone()
+
+
+def fund_fake_card(client_ip: str, principal_id: str, card_id: int, usd_amount: float) -> dict[str, object]:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    amount_value = float(usd_amount)
+    if amount_value <= 0:
+        raise ValueError("Funding amount must be greater than zero")
+
+    with sqlite3.connect(DB_PATH) as conn:
+        card = _get_fake_card_row(conn, principal_id, card_id)
+        if not card:
+            raise ValueError("Card or account not found")
+        if int(card[9] or 0):
+            raise ValueError("Card is frozen")
+
+        account_row = conn.execute(
+            """
+            SELECT id, fake_account_id, fake_balance
+            FROM fake_accounts
+            WHERE principal_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (principal_id,),
+        ).fetchone()
+        if not account_row:
+            raise ValueError("Card or account not found")
+
+        main_balance = float(account_row[2] or 0.0)
+        if amount_value > main_balance:
+            raise ValueError("Insufficient main balance")
+
+        card_currency = str(card[6] or "USD")
+        rate_map = {"USD": 1.0, "EUR": 0.92, "GBP": 0.79, "JPY": 149.5, "NGN": 1550.0}
+        exchange_rate = float(rate_map.get(card_currency, 1.0))
+        converted_amount = round(amount_value * exchange_rate, 8 if card_currency in {"BTC", "ETH"} else 2)
+
+        new_card_balance = float(card[8] or 0.0) + converted_amount
+        card_limit = float(card[7] or 0.0)
+        if card_limit > 0 and new_card_balance > card_limit:
+            raise ValueError("Funding would exceed the card limit")
+
+        conn.execute("UPDATE fake_accounts SET fake_balance = fake_balance - ? WHERE id = ?", (amount_value, int(account_row[0])))
+        conn.execute(
+            """
+            UPDATE mirror_users
+            SET balance = balance - ?
+            WHERE id = (
+                SELECT id FROM mirror_users
+                WHERE principal_id = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+            )
+            """,
+            (amount_value, principal_id),
+        )
+        conn.execute(
+            """
+            UPDATE fake_cards
+            SET current_balance = ?, last_used_at = ?
+            WHERE id = ?
+            """,
+            (new_card_balance, now, card_id),
+        )
+        conn.execute(
+            """
+            INSERT INTO fake_card_transactions
+            (client_ip, principal_id, card_id, amount, merchant_name, transaction_type, status, description, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                client_ip,
+                principal_id,
+                card_id,
+                converted_amount,
+                "Main Balance",
+                "funding",
+                "completed",
+                f"Funded {card_currency} virtual card from main balance",
+                now,
+            ),
+        )
+
+    return {
+        "card_id": card_id,
+        "card_currency": card_currency,
+        "card_type": card[5],
+        "usd_amount": round(amount_value, 2),
+        "converted_amount": converted_amount,
+        "exchange_rate": exchange_rate,
+        "main_balance_after": round(main_balance - amount_value, 2),
+        "card_balance_after": new_card_balance,
+    }
+
+
+def toggle_fake_card_freeze(principal_id: str, card_id: int) -> bool:
+    with sqlite3.connect(DB_PATH) as conn:
+        card = _get_fake_card_row(conn, principal_id, card_id)
+        if not card:
+            raise ValueError("Card not found")
+        new_value = 0 if int(card[9] or 0) else 1
+        conn.execute("UPDATE fake_cards SET is_frozen = ? WHERE id = ?", (new_value, card_id))
+        return bool(new_value)
+
+
+def update_fake_card_limit(principal_id: str, card_id: int, new_limit: float) -> dict[str, object]:
+    limit_value = float(new_limit)
+    with sqlite3.connect(DB_PATH) as conn:
+        card = _get_fake_card_row(conn, principal_id, card_id)
+        if not card:
+            raise ValueError("Card not found")
+        conn.execute(
+            """
+            UPDATE fake_cards
+            SET card_limit = ?
+            WHERE id = ?
+            """,
+            (limit_value, card_id),
+        )
+        refreshed = _get_fake_card_row(conn, principal_id, card_id)
+
+    if not refreshed:
+        raise ValueError("Card not found")
+
+    return {
+        "id": int(refreshed[0]),
+        "card_limit": float(refreshed[7]) if refreshed and refreshed[7] is not None else limit_value,
+        "current_balance": float(refreshed[8]) if refreshed and refreshed[8] is not None else 0.0,
+        "is_frozen": bool(refreshed[9]) if refreshed else False,
+        "is_active": bool(refreshed[10]) if refreshed else True,
+        "card_type": refreshed[5] if refreshed else "standard",
+        "currency": refreshed[6] if refreshed else "USD",
+    }
+
+
+def get_fake_card_transactions(principal_id: str, card_id: int) -> list[dict[str, object]]:
+    with sqlite3.connect(DB_PATH) as conn:
+        rows = conn.execute(
+            """
+            SELECT t.id, t.amount, t.merchant_name, t.transaction_type, t.status, t.created_at,
+                   t.description, c.card_number, c.currency
+            FROM fake_card_transactions t
+            JOIN fake_cards c ON t.card_id = c.id
+            WHERE t.principal_id = ? AND t.card_id = ?
+            ORDER BY t.created_at DESC
+            """,
+            (principal_id, card_id),
+        ).fetchall()
+    return [
+        {
+            "id": int(row[0]),
+            "amount": float(row[1] or 0.0),
+            "merchant": row[2],
+            "type": row[3],
+            "status": row[4],
+            "timestamp": row[5],
+            "description": row[6],
+            "card_number": row[7],
+            "currency": row[8] or "USD",
+        }
+        for row in rows
+    ]
 
 
 def apply_fake_transfer(

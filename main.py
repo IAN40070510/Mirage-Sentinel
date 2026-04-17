@@ -1097,9 +1097,15 @@ async def _execute_deception_response(
         get_memory,
         save_deception_state,
         create_fake_session_token,
+        get_fake_account_for_attacker,
         record_fake_login,
         record_fake_transaction,
         record_fake_card,
+        get_fake_cards_for_attacker,
+        fund_fake_card,
+        toggle_fake_card_freeze,
+        update_fake_card_limit,
+        get_fake_card_transactions,
         apply_fake_transfer,
         get_fake_bill_categories,
         get_fake_billers_by_category,
@@ -1328,6 +1334,126 @@ async def _execute_deception_response(
         fake_response["new_balance"] = transfer_result["new_balance"]
         fake_response["balance"] = transfer_result["new_balance"]
         
+    elif "/virtual-cards/" in endpoint and "/fund" in endpoint and request_method.upper() == "POST":
+        card_match = re.search(r"/virtual-cards/(\d+)/fund", endpoint)
+        card_id = int(card_match.group(1)) if card_match else 0
+        funding_result = fund_fake_card(
+            client_ip,
+            principal_id,
+            card_id,
+            _coerce_amount(request_fields.get("amount", 0.0), fallback=0.0),
+        )
+        fake_response = {
+            "status": "success",
+            "message": "Card funded successfully",
+            "funding": funding_result,
+        }
+
+    elif "/virtual-cards/" in endpoint and "/toggle-freeze" in endpoint and request_method.upper() == "POST":
+        card_match = re.search(r"/virtual-cards/(\d+)/toggle-freeze", endpoint)
+        card_id = int(card_match.group(1)) if card_match else 0
+        frozen = toggle_fake_card_freeze(principal_id, card_id)
+        fake_response = {
+            "status": "success",
+            "message": "Card frozen successfully" if frozen else "Card unfrozen successfully",
+            "is_frozen": frozen,
+        }
+
+    elif "/virtual-cards/" in endpoint and "/update-limit" in endpoint and request_method.upper() == "POST":
+        card_match = re.search(r"/virtual-cards/(\d+)/update-limit", endpoint)
+        card_id = int(card_match.group(1)) if card_match else 0
+        updated = update_fake_card_limit(
+            principal_id,
+            card_id,
+            _coerce_amount(request_fields.get("card_limit", request_fields.get("limit", 0.0)), fallback=0.0),
+        )
+        fake_response = {
+            "status": "success",
+            "message": "Card updated successfully",
+            "debug_info": {
+                "updated_fields": ["card_limit"],
+                "card_details": updated,
+            },
+        }
+
+    elif "/virtual-cards/" in endpoint and "/transactions" in endpoint:
+        card_match = re.search(r"/virtual-cards/(\d+)/transactions", endpoint)
+        card_id = int(card_match.group(1)) if card_match else 0
+        fake_response = {
+            "status": "success",
+            "transactions": get_fake_card_transactions(principal_id, card_id),
+        }
+
+    elif "/api/virtual-cards/create" in endpoint and request_method.upper() == "POST":
+        fake_account = get_fake_account_for_attacker(client_ip, principal_id)
+        card_holder = str(
+            request_fields.get("card_holder")
+            or (fake_account or {}).get("username")
+            or principal_id
+        )
+        card_number = str(
+            request_fields.get("card_number")
+            or f"4{hashlib.sha256(f'{principal_id}|{time.time()}'.encode('utf-8')).hexdigest()[:15]}"
+        )
+        expiry = str(
+            request_fields.get("expiry")
+            or request_fields.get("expiry_date")
+            or "12/28"
+        )
+        cvv = str(request_fields.get("cvv") or "123")
+        card_type = str(request_fields.get("card_type") or "standard")
+        card_currency = str(request_fields.get("currency") or "USD").upper()
+        card_limit = _coerce_amount(request_fields.get("card_limit", 1000.0), fallback=1000.0)
+
+        record_fake_card(
+            client_ip,
+            principal_id,
+            card_number,
+            card_holder,
+            expiry,
+            cvv,
+            card_type,
+            currency=card_currency,
+            card_limit=card_limit,
+            current_balance=0.0,
+            is_frozen=False,
+        )
+
+        cards = get_fake_cards_for_attacker(client_ip, principal_id)
+        created_card = cards[0] if cards else {
+            "id": None,
+            "card_number": card_number,
+            "cvv": cvv,
+            "expiry_date": expiry,
+            "limit": card_limit,
+            "balance": 0.0,
+            "card_type": card_type,
+            "currency": card_currency,
+            "currency_symbol": "$",
+        }
+
+        fake_response = {
+            "status": "success",
+            "message": "Virtual card created successfully",
+            "card_details": {
+                "id": created_card.get("id"),
+                "card_number": created_card.get("card_number"),
+                "cvv": created_card.get("cvv"),
+                "expiry_date": created_card.get("expiry_date") or created_card.get("expiry"),
+                "limit": created_card.get("limit", card_limit),
+                "balance": created_card.get("balance", 0.0),
+                "type": created_card.get("card_type", card_type),
+                "currency": created_card.get("currency", card_currency),
+                "currency_symbol": created_card.get("currency_symbol", "$"),
+            },
+        }
+
+    elif endpoint.endswith("/api/virtual-cards"):
+        fake_response = {
+            "status": "success",
+            "cards": get_fake_cards_for_attacker(client_ip, principal_id),
+        }
+
     elif (
         "/new_card" in endpoint
         or "/newcard" in endpoint
@@ -1335,24 +1461,16 @@ async def _execute_deception_response(
         or "/upload" in endpoint
         or "/profile" in endpoint
         or "/card" in endpoint
-        or "virtual-cards" in endpoint
-        or "virtual_cards" in endpoint
     ):
-        # 卡片/個人資料操作：記錄假卡片
         fake_card_number = str(request_fields.get("card_number") or fake_response.get("card_number", "4111111111111111"))
         fake_card_holder = str(request_fields.get("card_holder") or fake_response.get("card_holder", fake_username or "Honeypot User"))
         fake_expiry = str(request_fields.get("expiry") or request_fields.get("expiry_date") or fake_response.get("expiry", "12/28"))
         fake_cvv = str(request_fields.get("cvv") or fake_response.get("cvv", "123"))
         fake_card_type = str(request_fields.get("card_type") or fake_response.get("card_type", "VISA"))
-        
-        if (
-            "/card" in endpoint
-            or "/add_card" in endpoint
-            or "virtual-cards" in endpoint
-            or "virtual_cards" in endpoint
-        ):
+
+        if "/card" in endpoint or "/add_card" in endpoint:
             record_fake_card(client_ip, principal_id, fake_card_number, fake_card_holder, fake_expiry, fake_cvv, fake_card_type)
-        
+
         fake_response["status"] = "success"
         fake_response["message"] = "Operation completed"
         fake_response["card_number"] = fake_card_number
@@ -1410,6 +1528,11 @@ async def _check_fake_session_and_respond(
         get_fake_account_for_attacker,
         get_fake_transactions_for_attacker,
         get_fake_cards_for_attacker,
+        record_fake_card,
+        fund_fake_card,
+        toggle_fake_card_freeze,
+        update_fake_card_limit,
+        get_fake_card_transactions,
         apply_fake_transfer,
         get_fake_bill_categories,
         get_fake_billers_by_category,
@@ -1646,7 +1769,139 @@ async def _check_fake_session_and_respond(
                     "transaction_id": latest_txn.get("transaction_id"),
                 })
     
-    if "/card" in endpoint or "/cards" in endpoint or "virtual-cards" in endpoint or "virtual_cards" in endpoint:
+    if "/virtual-cards/" in endpoint and "/fund" in endpoint and request.method.upper() == "POST":
+        body_bytes = await request.body()
+        body_text = body_bytes.decode("utf-8", errors="ignore") if body_bytes else ""
+        content_type = request.headers.get("content-type", "")
+        request_fields = _extract_json_or_form_fields(body_text, content_type)
+        card_match = re.search(r"/virtual-cards/(\d+)/fund", endpoint)
+        card_id = int(card_match.group(1)) if card_match else 0
+        fake_response = {
+            "status": "success",
+            "message": "Card funded successfully",
+            "funding": fund_fake_card(
+                client_ip,
+                session_principal_id,
+                card_id,
+                _coerce_amount(request_fields.get("amount", 0.0), fallback=0.0),
+            ),
+        }
+
+    elif "/virtual-cards/" in endpoint and "/toggle-freeze" in endpoint and request.method.upper() == "POST":
+        card_match = re.search(r"/virtual-cards/(\d+)/toggle-freeze", endpoint)
+        card_id = int(card_match.group(1)) if card_match else 0
+        frozen = toggle_fake_card_freeze(session_principal_id, card_id)
+        fake_response = {
+            "status": "success",
+            "message": "Card frozen successfully" if frozen else "Card unfrozen successfully",
+            "is_frozen": frozen,
+        }
+
+    elif "/virtual-cards/" in endpoint and "/update-limit" in endpoint and request.method.upper() == "POST":
+        body_bytes = await request.body()
+        body_text = body_bytes.decode("utf-8", errors="ignore") if body_bytes else ""
+        content_type = request.headers.get("content-type", "")
+        request_fields = _extract_json_or_form_fields(body_text, content_type)
+        card_match = re.search(r"/virtual-cards/(\d+)/update-limit", endpoint)
+        card_id = int(card_match.group(1)) if card_match else 0
+        updated = update_fake_card_limit(
+            session_principal_id,
+            card_id,
+            _coerce_amount(request_fields.get("card_limit", request_fields.get("limit", 0.0)), fallback=0.0),
+        )
+        fake_response = {
+            "status": "success",
+            "message": "Card updated successfully",
+            "debug_info": {
+                "updated_fields": ["card_limit"],
+                "card_details": updated,
+            },
+        }
+
+    elif "/virtual-cards/" in endpoint and "/transactions" in endpoint:
+        card_match = re.search(r"/virtual-cards/(\d+)/transactions", endpoint)
+        card_id = int(card_match.group(1)) if card_match else 0
+        fake_response = {
+            "status": "success",
+            "transactions": get_fake_card_transactions(session_principal_id, card_id),
+        }
+
+    elif "/api/virtual-cards/create" in endpoint and request.method.upper() == "POST":
+        body_bytes = await request.body()
+        body_text = body_bytes.decode("utf-8", errors="ignore") if body_bytes else ""
+        content_type = request.headers.get("content-type", "")
+        request_fields = _extract_json_or_form_fields(body_text, content_type)
+
+        fake_account = get_fake_account_for_attacker(client_ip, session_principal_id)
+        card_holder = str(
+            request_fields.get("card_holder")
+            or (fake_account or {}).get("username")
+            or session_principal_id
+        )
+        card_number = str(
+            request_fields.get("card_number")
+            or f"4{hashlib.sha256(f'{session_principal_id}|{time.time()}'.encode('utf-8')).hexdigest()[:15]}"
+        )
+        expiry = str(
+            request_fields.get("expiry")
+            or request_fields.get("expiry_date")
+            or "12/28"
+        )
+        cvv = str(request_fields.get("cvv") or "123")
+        card_type = str(request_fields.get("card_type") or "standard")
+        card_currency = str(request_fields.get("currency") or "USD").upper()
+        card_limit = _coerce_amount(request_fields.get("card_limit", 1000.0), fallback=1000.0)
+
+        record_fake_card(
+            client_ip,
+            session_principal_id,
+            card_number,
+            card_holder,
+            expiry,
+            cvv,
+            card_type,
+            currency=card_currency,
+            card_limit=card_limit,
+            current_balance=0.0,
+            is_frozen=False,
+        )
+
+        cards = get_fake_cards_for_attacker(client_ip, session_principal_id)
+        created_card = cards[0] if cards else {
+            "id": None,
+            "card_number": card_number,
+            "cvv": cvv,
+            "expiry_date": expiry,
+            "limit": card_limit,
+            "balance": 0.0,
+            "card_type": card_type,
+            "currency": card_currency,
+            "currency_symbol": "$",
+        }
+
+        fake_response = {
+            "status": "success",
+            "message": "Virtual card created successfully",
+            "card_details": {
+                "id": created_card.get("id"),
+                "card_number": created_card.get("card_number"),
+                "cvv": created_card.get("cvv"),
+                "expiry_date": created_card.get("expiry_date") or created_card.get("expiry"),
+                "limit": created_card.get("limit", card_limit),
+                "balance": created_card.get("balance", 0.0),
+                "type": created_card.get("card_type", card_type),
+                "currency": created_card.get("currency", card_currency),
+                "currency_symbol": created_card.get("currency_symbol", "$"),
+            },
+        }
+
+    elif endpoint.endswith("/api/virtual-cards"):
+        fake_response = {
+            "status": "success",
+            "cards": get_fake_cards_for_attacker(client_ip, session_principal_id),
+        }
+
+    elif "/card" in endpoint or "/cards" in endpoint or "virtual_cards" in endpoint:
         if request.method.upper() == "POST":
             body_bytes = await request.body()
             body_text = body_bytes.decode("utf-8", errors="ignore") if body_bytes else ""
@@ -1671,7 +1926,6 @@ async def _check_fake_session_and_respond(
             cvv = str(request_fields.get("cvv") or "123")
             card_type = str(request_fields.get("card_type") or "standard")
 
-            from core.deception_db import record_fake_card
             record_fake_card(
                 client_ip,
                 session_principal_id,
@@ -1775,6 +2029,7 @@ async def _proxy_banking_request(
         device_id=device_id,
         request_epoch_ms=request_epoch_ms,
     )
+    should_clear_mirage_cookie = False
     
     # 【第一層檢測】檢查是否來自已建立的假會話
     fake_session_response = await _check_fake_session_and_respond(
