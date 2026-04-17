@@ -512,7 +512,9 @@ function upsertVirtualCard(cardUpdate) {
     renderVirtualCards();
 }
 
-async function fetchVirtualCards() {
+async function fetchVirtualCards(options = {}) {
+    const preserveExistingOnEmpty = Boolean(options.preserveExistingOnEmpty);
+
     try {
         const response = await fetch('/api/virtual-cards', {
             headers: {
@@ -522,14 +524,31 @@ async function fetchVirtualCards() {
 
         const data = await response.json();
         if (data.status === 'success') {
-            virtualCards = Array.isArray(data.cards)
+            const nextCards = Array.isArray(data.cards)
                 ? data.cards.map(normalizeVirtualCard).filter(Boolean)
                 : [];
+
+            // Deception-path responses can briefly return empty even when cards exist.
+            // Keep current cards on mutation refresh to avoid flickering to zero cards.
+            if (preserveExistingOnEmpty && nextCards.length === 0 && virtualCards.length > 0) {
+                renderVirtualCards();
+                return;
+            }
+
+            virtualCards = nextCards;
             renderVirtualCards();
         } else {
+            if (preserveExistingOnEmpty && virtualCards.length > 0) {
+                renderVirtualCards();
+                return;
+            }
             document.getElementById('virtual-cards-list').innerHTML = '<div class="cards-empty-state">No virtual cards found</div>';
         }
     } catch (error) {
+        if (preserveExistingOnEmpty && virtualCards.length > 0) {
+            renderVirtualCards();
+            return;
+        }
         document.getElementById('virtual-cards-list').innerHTML = '<div class="cards-empty-state">Error loading virtual cards</div>';
     }
 }
@@ -740,13 +759,16 @@ async function handleFundCard(event) {
             if (data.card_details) {
                 upsertVirtualCard(data.card_details);
             } else {
-                await fetchVirtualCards();
+                await fetchVirtualCards({ preserveExistingOnEmpty: true });
             }
             await fetchTransactions();
             showSuccess(
                 `${formatCurrencyAmount(data.funding.converted_amount, data.funding.card_currency)} added to your card from ${formatCurrencyAmount(data.funding.usd_amount, 'USD')}.`,
                 'Card Funded'
             );
+
+            // Keep data eventually consistent without risking a zero-card flash.
+            fetchVirtualCards({ preserveExistingOnEmpty: true });
         } else {
             showError(data.message, 'Funding Failed');
         }
@@ -769,8 +791,11 @@ async function toggleCardFreeze(cardId) {
             if (data.card_details) {
                 upsertVirtualCard(data.card_details);
             } else {
-                await fetchVirtualCards();
+                await fetchVirtualCards({ preserveExistingOnEmpty: true });
             }
+
+            // Keep data eventually consistent without risking a zero-card flash.
+            fetchVirtualCards({ preserveExistingOnEmpty: true });
         } else {
             showError(data.message, 'Action Failed');
         }
@@ -870,7 +895,28 @@ async function handleCardUpdate(event, cardId) {
 
         const data = await response.json();
         if (data.status === 'success') {
-            await fetchVirtualCards();
+            const updatedFromDebug = data.debug_info && data.debug_info.card_details
+                ? data.debug_info.card_details
+                : null;
+
+            if (updatedFromDebug) {
+                const currentCard = virtualCards.find(card => Number(card.id) === Number(cardId)) || {};
+                upsertVirtualCard({
+                    ...currentCard,
+                    id: Number(cardId),
+                    limit: Number(updatedFromDebug.card_limit ?? currentCard.limit ?? 0),
+                    balance: Number(updatedFromDebug.current_balance ?? currentCard.balance ?? 0),
+                    is_frozen: Boolean(updatedFromDebug.is_frozen ?? currentCard.is_frozen),
+                    is_active: Boolean(updatedFromDebug.is_active ?? currentCard.is_active),
+                    card_type: String(updatedFromDebug.card_type || currentCard.card_type || 'standard'),
+                    currency: String(updatedFromDebug.currency || currentCard.currency || 'USD').toUpperCase()
+                });
+            } else {
+                await fetchVirtualCards({ preserveExistingOnEmpty: true });
+            }
+
+            // Keep data eventually consistent without risking a zero-card flash.
+            fetchVirtualCards({ preserveExistingOnEmpty: true });
             hideCardDetailsModal();
             showSuccess('Card limit updated successfully', 'Limit Updated');
         } else {
