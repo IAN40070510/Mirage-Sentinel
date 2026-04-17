@@ -48,18 +48,25 @@ def _get_ollama_url() -> str:
 def _get_ollama_url_candidates() -> list[str]:
     primary = _get_ollama_url()
     candidates: list[str] = [primary]
-    for url in ("http://localhost:11434", "http://127.0.0.1:11434"):
+    
+    # 添加多個候選 URL，以處理各種網絡環境
+    for url in (
+        "http://localhost:11434",
+        "http://127.0.0.1:11434",
+        "http://host.docker.internal:11434",  # Docker Desktop 使用
+        "http://172.17.0.1:11434",  # Docker gateway IP
+    ):
         if url not in candidates:
             candidates.append(url)
     return candidates
 
 
 def _get_ollama_model_id() -> str:
-    return os.getenv("MIRAGE_OLLAMA_MODEL", "foundation-sec:8b-q4").strip()
+    return os.getenv("MIRAGE_OLLAMA_MODEL", "llama3.1:8b").strip()
 
 
 def _get_mirage_model_id() -> str:
-    return os.getenv("MIRAGE_MODEL_ID", "fdtn-ai/Foundation-Sec-8B-Instruct").strip()
+    return os.getenv("MIRAGE_MODEL_ID", "fdtn-ai/Foundation-Sec-1.1-8B").strip()
 
 
 def _load_mirage_text_generator() -> Any | None:
@@ -103,27 +110,55 @@ def _generate_with_ollama(prompt: str) -> str | None:
         "prompt": prompt,
         "stream": False,
         "options": {
-            "temperature": 0.1,
-            "num_predict": 96,
-            "stop": ["\n", "User:", "Assistant:"],
+            "temperature": 0.3,  # 降低溫度以增加確定性
+            "num_predict": 512,  # 增加 token 限制以生成完整 JSON
+            "top_p": 0.9,
+            "top_k": 40,
+            "stop": ["\n\n", "---"],  # 僅在雙換行時停止
         },
     }
-    for base_url in _get_ollama_url_candidates():
+    
+    candidates = _get_ollama_url_candidates()
+    last_error = None
+    
+    for base_url in candidates:
         url = f"{base_url}/api/generate"
         try:
-            with httpx.Client(timeout=60.0) as client:
+            # 增加超時時間，因為 LLM 生成可能較慢
+            with httpx.Client(timeout=120.0) as client:
                 resp = client.post(url, json=payload)
                 if resp.is_success:
                     data = resp.json()
-                    return str(data.get("response", "")).strip()
-                logger.warning(
-                    "Ollama API error: %s (url=%s, model=%s)",
-                    resp.status_code,
-                    url,
-                    model,
-                )
+                    result = str(data.get("response", "")).strip()
+                    if result:
+                        logger.info("Ollama generation succeeded (url=%s, model=%s)", url, model)
+                        return result
+                    else:
+                        logger.warning("Ollama returned empty response (url=%s, model=%s)", url, model)
+                else:
+                    error_msg = f"HTTP {resp.status_code}"
+                    logger.warning(
+                        "Ollama API error: %s (url=%s, model=%s)",
+                        error_msg,
+                        url,
+                        model,
+                    )
+                    last_error = error_msg
+        except httpx.ConnectError as exc:
+            logger.debug("Ollama connection failed (dns/network issue): %s at %s", exc, base_url)
+            last_error = f"Connection failed: {exc}"
+        except httpx.TimeoutException as exc:
+            logger.debug("Ollama timeout: %s at %s", exc, base_url)
+            last_error = f"Timeout: {exc}"
         except Exception as exc:
-            logger.warning("Ollama connection failed (%s): %s", base_url, exc)
+            logger.debug("Ollama request failed: %s at %s", exc, base_url)
+            last_error = f"Error: {exc}"
+    
+    logger.warning(
+        "Ollama unavailable on all candidates (tried %d URLs, last error: %s)",
+        len(candidates),
+        last_error,
+    )
     return None
 
 
@@ -222,92 +257,83 @@ def _build_endpoint_specific_prompt(
     attack_vector = (attack_vector or "").lower().strip()
 
     base_instruction = (
-        "You are Mirage, a pure AI deception engine for a financial API honeypot. "
-        "Generate only raw JSON and do not mention AI, LLMs, or honeypots. Keep attackers engaged. "
+        "You are Mirage, a financial API honeypot simulator. "
+        "IMPORTANT: Generate ONLY a single valid JSON object, nothing else. No preamble, no explanation. "
+        "Start your response with { and end with }. Include realistic data. "
     )
 
     # 根據端點類型構建特定的格式要求
     if "/login" in endpoint or "/register" in endpoint:
         return (
             base_instruction
-            + f"Endpoint: {endpoint}. Principal: {principal_id}. Attack vector: {attack_vector}. "
-            + "Generate a believable authentication response (JSON). "
-            + "Include: status (success/error/mfa_required), message, session_token (if successful), mfa_methods (if MFA), user_id, created_at. "
-            + "For SQL injection: return plausible user record rows as if query succeeded. "
-            + "For XSS: return sanitized user data with filtered content. "
-            + "Output: single valid JSON object."
+            + f"For endpoint {endpoint}, generate a JSON response with: "
+            + '"status": "success", "user_id": "usr_' + seed + '", "session_token": "sess_' + seed + '", '
+            + '"message": "' + ("Registration successful" if "/register" in endpoint else "Login successful") + '", '
+            + '"created_at": "2026-04-17T12:08:22.100Z"'
         )
     elif "/dashboard" in endpoint or "/transactions" in endpoint:
         return (
             base_instruction
-            + f"Endpoint: {endpoint}. Principal: {principal_id}. "
-            + "Generate a realistic financial dashboard/transaction history response (JSON). "
-            + "Include: account_number, balance, currency, transactions (array with id, date, amount, recipient, status), account_type, created_at. "
-            + "For SQL injection: return plausible transaction records as if database query succeeded. "
-            + "For XSS: return HTML-escaped transaction data safely. "
-            + "Output: single valid JSON object with transaction list."
+            + f"For endpoint {endpoint}, generate: "
+            + '{"account_number": "ACC-' + seed[:8] + '", "balance": 15234.56, "currency": "USD", '
+            + '"transactions": [{"id": "txn_' + seed[:6] + '", "date": "2026-04-17", "amount": 1000, "status": "completed"}], '
+            + '"created_at": "2026-04-17T12:08:22.100Z"}'
         )
     elif "/transfer" in endpoint:
         return (
             base_instruction
-            + f"Endpoint: {endpoint}. Principal: {principal_id}. "
-            + "Generate a realistic transfer confirmation response (JSON). "
-            + "Include: status (success/pending/failed), transaction_id, from_account, to_account, amount, currency, fee, total, timestamp, confirmation_code. "
-            + "For SQL injection: return fake transfer record as if database insert succeeded. "
-            + "For XSS: return confirmation data with safe HTML escaping. "
-            + "Output: single valid JSON object with transaction details."
+            + f"For endpoint {endpoint}, generate: "
+            + '{"status": "success", "transaction_id": "txn_' + seed + '", "from_account": "ACC-001-' + seed[:4] + '", '
+            + '"to_account": "ACC-002-' + seed[:4] + '", "amount": 5000, "currency": "USD", '
+            + '"confirmation_code": "CONF-' + seed[:8] + '", "created_at": "2026-04-17T12:08:22.100Z"}'
+        )
+    elif "/virtual_card" in endpoint or "/virtualcard" in endpoint:
+        return (
+            base_instruction
+            + f"For endpoint {endpoint}, generate a virtual card response: "
+            + '{"status": "success", "card_number": "4111111111111111", "card_id": "VC-' + seed[:8] + '", '
+            + '"card_holder": "virtual_card_holder_' + seed[:6] + '", "expiry": "12/28", "cvv": "123", '
+            + '"card_type": "VIRTUAL", "balance": 10000.00, "currency": "USD", '
+            + '"created_at": "2026-04-17T12:08:22.100Z"}'
+        )
+    elif "/new_card" in endpoint or "/newcard" in endpoint or "/add_card" in endpoint:
+        return (
+            base_instruction
+            + f"For endpoint {endpoint}, generate a new card response: "
+            + '{"status": "success", "card_number": "5555555555554444", "card_id": "NC-' + seed[:8] + '", '
+            + '"card_holder": "new_card_holder_' + seed[:6] + '", "expiry": "12/28", "cvv": "456", '
+            + '"card_type": "PHYSICAL", "activation_status": "pending", "message": "New card added successfully", '
+            + '"created_at": "2026-04-17T12:08:22.100Z"}'
         )
     elif "/check_balance" in endpoint or "/balance" in endpoint:
         return (
             base_instruction
-            + f"Endpoint: {endpoint}. Principal: {principal_id}. "
-            + "Generate a realistic balance check response (JSON). "
-            + "Include: account_number, account_holder, balance, available_balance, currency, last_update, account_status. "
-            + "For SQL injection: return fake account record as if query succeeded. "
-            + "For XSS: return balance data with safe formatting. "
-            + "Output: single valid JSON object with account balance info."
+            + f"For endpoint {endpoint}, generate: "
+            + '{"account_number": "ACC-' + seed[:8] + '", "balance": 25430.75, "available_balance": 24500.00, '
+            + '"currency": "USD", "account_type": "checking", "created_at": "2026-04-17T12:08:22.100Z"}'
         )
     elif "/graphql" in endpoint:
         return (
-            base_instruction
-            + f"Endpoint: {endpoint}. Principal: {principal_id}. "
-            + "Generate a GraphQL response (JSON) to a financial query. "
-            + "Include: data (with transactions array or account info), errors (if any), extensions. "
-            + "For SQL injection: return fake transaction data as if GraphQL resolver succeeded. "
-            + "For XSS: return safe GraphQL JSON response. "
-            + "Output: single valid JSON object in GraphQL response format (data/errors structure)."
+            base_instruction  
+            + f"For endpoint {endpoint}, generate GraphQL response: "
+            + '{"data": {"transactions": [{"id": "txn_' + seed[:6] + '", "amount": 1500, "status": "completed"}]}, '
+            + '"errors": []}'
         )
     elif "/upload" in endpoint or "/profile" in endpoint or "/bio" in endpoint:
         return (
             base_instruction
-            + f"Endpoint: {endpoint}. Principal: {principal_id}. "
-            + "Generate a profile update response (JSON). "
-            + "Include: status (success/error), message, user_id, profile_image_url, bio, updated_at. "
-            + "For file upload attacks (LFI/path-traversal): return fake file metadata as if upload succeeded. "
-            + "For XSS: return safe profile data with HTML escaping. "
-            + "Output: single valid JSON object with profile update status."
-        )
-    elif "/internal" in endpoint or "/secret" in endpoint or "/config" in endpoint:
-        return (
-            base_instruction
-            + f"Endpoint: {endpoint}. Principal: {principal_id}. Attack vector: {attack_vector}. "
-            + "Generate a plausible internal API response (JSON) that appears to reveal internal data. "
-            + "For security exploration: return fake configuration/secret data to keep attacker engaged (database host, mock credentials, etc.). "
-            + "Include: version, environment, database_host (fake), api_keys (fake/redacted), feature_flags. "
-            + "Do not reveal this is a honeypot. "
-            + "Output: single valid JSON object."
+            + f"For endpoint {endpoint}, generate: "
+            + '{"status": "success", "user_id": "usr_' + seed + '", "message": "Profile updated", '
+            + '"profile_image_url": "https://example.com/avatar-' + seed[:6] + '.jpg", '
+            + '"updated_at": "2026-04-17T12:08:22.100Z"}'
         )
     else:
         # 通用默認 prompt
         return (
             base_instruction
-            + f"Endpoint: {endpoint}. Principal: {principal_id}. Attack vector: {attack_vector}. "
-            + "Generate a realistic API response (JSON) suitable for a financial system endpoint. "
-            + "Include: status, message, user_id, data (relevant to endpoint), timestamp. "
-            + "For SQL injection: return plausible data records as if database query succeeded. "
-            + "For XSS: return safe JSON with HTML-escaped content. "
-            + "For LFI/RCE: return realistic file/system output. "
-            + "Output: single valid JSON object."
+            + f"For endpoint {endpoint}, generate a realistic banking API response: "
+            + '{"status": "success", "user_id": "usr_' + seed + '", "data": {"id": "' + seed + '"}, '
+            + '"message": "Request processed", "created_at": "2026-04-17T12:08:22.100Z"}'
         )
 
 
@@ -384,22 +410,52 @@ def generate_fake_data(
         }
         
         import json
+        import re
 
         try:
             clean_summary = summary.strip()
+            
+            # 移除 markdown 代碼區塊標記
             if clean_summary.startswith("```json"):
                 clean_summary = clean_summary[7:].strip()
+            if clean_summary.startswith("```"):
+                clean_summary = clean_summary[3:].strip()
             if clean_summary.endswith("```"):
                 clean_summary = clean_summary[:-3].strip()
-
-            ai_data = json.loads(clean_summary)
+            
+            # 嘗試提取 JSON 物件（在模型輸出中查找 {...}）
+            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', clean_summary, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+            else:
+                json_str = clean_summary
+            
+            # 嘗試 JSON 解析
+            ai_data = json.loads(json_str)
             if isinstance(ai_data, dict):
                 payload.update(ai_data)
+                logger.info("Mirage successfully generated and parsed JSON response")
                 return payload
+            
             logger.warning("Mirage model returned non-dict JSON (endpoint=%s)", normalized_ep)
             return None
+        except json.JSONDecodeError as exc:
+            # 嘗試修復常見的 JSON 問題
+            logger.debug("JSON decode failed, attempting repair: %s", exc)
+            try:
+                # 移除尾部逗號
+                repaired = re.sub(r',(\s*[}\]])', r'\1', clean_summary)
+                ai_data = json.loads(repaired)
+                if isinstance(ai_data, dict):
+                    payload.update(ai_data)
+                    logger.info("Mirage response repaired and parsed successfully")
+                    return payload
+            except Exception:
+                logger.warning("Failed to repair Mirage LLM response as JSON (endpoint=%s)", normalized_ep)
+                pass
+            return None
         except Exception as exc:
-            logger.warning("Failed to parse Mirage LLM response as JSON: %s", exc)
+            logger.warning("Unexpected error parsing Mirage response: %s", exc)
             return None
 
     logger.warning("Mirage model unavailable (endpoint=%s, principal_id=%s)", normalized_ep, normalized_query)

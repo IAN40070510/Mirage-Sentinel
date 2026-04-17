@@ -918,7 +918,7 @@ def _build_values_only_detection_target(
         if not parsed:
             values.append(body)
 
-    return " ".join(values).strip()
+    return "".join(values).strip()
 
 
 def _local_deception_payload(
@@ -979,20 +979,34 @@ async def _execute_deception_response(
             principal_id, endpoint=endpoint, attack_vector=attack_vector
         )
 
-    # 嚴格模式：Mirage 只能模型回應，模型不可用時不啟用任何備援流程。
+    # 嚴格模式：Mirage 只能模型回應，模型不可用時返回適當的錯誤結構。
     if not fake_response:
+        now_iso = datetime.now().isoformat(timespec="milliseconds")
+        fake_session_token = create_fake_session_token(client_ip, principal_id)
+        
+        # 即使模型不可用，也返回結構化的錯誤回應（200 而非 503，使前端能正確解析）
         error_payload = {
             "status": "error",
             "route": "mirage",
             "response_origin": "mirage_unavailable",
-            "message": "Mirage model unavailable",
+            "message": "Service temporarily unavailable. Please try again.",
             "endpoint": endpoint,
             "user_id": principal_id,
-            "created_at": datetime.now().isoformat(timespec="milliseconds"),
+            "session_token": fake_session_token,
+            "created_at": now_iso,
         }
+        # 將錯誤也保存到欺敵資料庫，作為記錄
+        save_deception_state(
+            client_ip=client_ip,
+            principal_id=principal_id,
+            vector=attack_vector,
+            risk=risk_level,
+            payload=error_payload
+        )
+        
         return (
             json.dumps(error_payload, ensure_ascii=False).encode("utf-8"),
-            503,
+            200,  # 改為 200，使前端能正確解析此回應
             {"content-type": "application/json; charset=utf-8"},
             {
                 "mitigation_status": "mirage_unavailable",
@@ -1008,16 +1022,20 @@ async def _execute_deception_response(
     
     # 根據端點類型記錄到欺敵資料庫
     if "/login" in endpoint or "/register" in endpoint:
-        # 登入攻擊：記錄假帳號/密碼
+        # 登入/註冊攻擊：記錄假帳號/密碼
         fake_password = str(fake_response.get("password", "honeypot_default_password"))
         fake_account_id = str(fake_response.get("account_id", f"ACC-{fake_session_token[:8]}"))
         record_fake_login(client_ip, principal_id, fake_username, fake_password, fake_account_id)
         fake_response["session_token"] = fake_session_token
         fake_response["status"] = "success"
-        fake_response["message"] = "Login successful"
+        # 區分 login 和 register 回應
+        if "/register" in endpoint:
+            fake_response["message"] = "Registration successful"
+        else:
+            fake_response["message"] = "Login successful"
         
-    elif "/transfer" in endpoint:
-        # 轉帳攻擊：記錄假轉帳
+    elif "/transfer" in endpoint or "/virtual_card" in endpoint or "/virtualcard" in endpoint:
+        # 轉帳攻擊（包含虛擬卡轉帳）：記錄假轉帳，不做真轉帳
         try:
             import json as json_lib
             body_json = json_lib.loads(body_text) if body_text else {}
@@ -1030,12 +1048,13 @@ async def _execute_deception_response(
         currency = str(body_json.get("currency", fake_response.get("currency", "USD")))
         transaction_id = str(fake_response.get("transaction_id", f"TXN-{fake_session_token[:12]}"))
         
+        # 記錄假轉帳到欺敵資料庫，不做真轉帳
         record_fake_transaction(client_ip, principal_id, from_account, to_account, amount, currency, transaction_id)
         fake_response["status"] = "success"
-        fake_response["message"] = "Transfer completed"
+        fake_response["message"] = "Transfer completed" if "/transfer" in endpoint else "Virtual card transfer completed"
         fake_response["confirmation_code"] = f"CONF-{fake_session_token[:12]}"
         
-    elif "/upload" in endpoint or "/profile" in endpoint or "/card" in endpoint or "/add_card" in endpoint:
+    elif "/new_card" in endpoint or "/newcard" in endpoint or "/add_card" in endpoint or "/upload" in endpoint or "/profile" in endpoint or "/card" in endpoint:
         # 卡片/個人資料操作：記錄假卡片
         fake_card_number = str(fake_response.get("card_number", "4111111111111111"))
         fake_card_holder = str(fake_response.get("card_holder", fake_username or "Honeypot User"))
