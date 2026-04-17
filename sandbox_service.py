@@ -91,89 +91,25 @@ def ai_agent_decide(
     principal_id: str = "",
     attack_vector: str = "unknown",
 ) -> dict:
-    """AI Agent 決策邏輯 - 使用LLaMA生成高互動假資料"""
+    """Pure AI 決策邏輯 - 完全由 LLM 決定響應策略，無條件分支或硬編碼規則。"""
     try:
-        # 根據攻擊類型生成不同的prompt
-        if attack_vector.lower() in ["sqli", "sql injection"]:
-            prompt = f"""
-            你是一個網路安全欺敵系統。駭客正在嘗試SQL注入攻擊，想要從資料庫獲取資料。
-            攻擊載荷: {payload}
+        # 統一的純 AI prompt，讓 LLM 根據攻擊類型自行決策
+        prompt = (
+            "You are Mirage, a pure AI deception engine for a financial API honeypot sandbox. "
+            "Do not mention AI, LLMs, or honeypots. Generate only raw JSON and do not explain your reasoning. "
+            f"Attack payload: {payload!r}. Attack vector: {attack_vector!r}. "
+            f"Principal ID: {principal_id!r}. Client IP: {client_ip!r}. "
+            "Your task: Generate a realistic deceptive JSON response that matches the attack vector and keeps the attacker engaged. "
+            "If sqli/sql injection: return fake database records with columns like id, username, email, balance, status, created_at. "
+            "If xss/cross-site scripting: return a JSON response that safely reflects user data without executing scripts. "
+            "If lfi/local file inclusion: return fake file content (e.g., config files with filtered credentials). "
+            "If rce/remote code execution: return simulated command output with exit code and execution time. "
+            "If path-traversal/directory traversal: return fake directory listing with plausible files. "
+            "For any other vector: return a plausible API response with user_id, status, message, and relevant data. "
+            "Output must be a single valid JSON object."
+        )
 
-            請生成假的資料庫記錄作為回應，模擬一個正常的用戶資料庫查詢結果。
-            嚴格遵守 JSON 格式，只返回資料陣列:
-            [
-              {{
-                "id": 隨機數字,
-                "username": "隨機用戶名",
-                "email": "user@example.com",
-                "balance": 隨機金額,
-                "status": "active",
-                "created_at": "YYYY-MM-DD"
-              }}
-            ]
-            生成3-5條假記錄，讓駭客以為成功獲取了資料。
-            """
-        elif attack_vector.lower() in ["xss", "cross-site scripting"]:
-            prompt = f"""
-            你是一個網路安全欺敵系統。駭客正在嘗試XSS攻擊。
-            攻擊載荷: {payload}
-
-            請生成一個安全的HTML回應，包含假的用戶資料，但過濾掉所有危險腳本。
-            返回JSON格式:
-            {{
-              "message": "用戶資料",
-              "data": {{
-                "user_id": "{principal_id}",
-                "name": "安全過濾的用戶名",
-                "info": "您的請求已處理"
-              }}
-            }}
-            """
-        elif attack_vector.lower() in ["lfi", "local file inclusion"]:
-            prompt = f"""
-            你是一個網路安全欺敵系統。駭客正在嘗試本地檔案包含攻擊，想要讀取系統檔案。
-            攻擊載荷: {payload}
-
-            請生成假的檔案內容，模擬一個正常的配置文件。
-            返回JSON格式:
-            {{
-              "file_content": "假的配置文件內容\\nuser=admin\\npassword=filtered\\ndatabase=example_db",
-              "file_path": "/etc/config.fake",
-              "size": 1024
-            }}
-            """
-        elif attack_vector.lower() in ["rce", "remote code execution"]:
-            prompt = f"""
-            你是一個網路安全欺敵系統。駭客正在嘗試遠程代碼執行。
-            攻擊載荷: {payload}
-
-            請生成假的命令執行結果，模擬系統命令輸出。
-            返回JSON格式:
-            {{
-              "command_output": "命令執行成功\\n用戶列表:\\n- admin\\n- user1\\n- user2",
-              "exit_code": 0,
-              "execution_time": "0.05秒"
-            }}
-            """
-        else:
-            prompt = f"""
-            你是一個網路安全欺敵系統。駭客正在進行可疑活動。
-            攻擊載荷: {payload}
-            攻擊類型: {attack_vector}
-
-            請生成一個欺敵回應，讓駭客以為系統正常運作。
-            返回JSON格式:
-            {{
-              "status": "success",
-              "message": "請求已處理",
-              "data": {{
-                "user_id": "{principal_id}",
-                "result": "正常回應"
-              }}
-            }}
-            """
-
-        # 調用Ollama生成回應
+        # 調用 Ollama 生成回應
         import httpx
 
         with httpx.Client(timeout=15.0) as client:
@@ -184,65 +120,45 @@ def ai_agent_decide(
                     "prompt": prompt,
                     "format": "json",
                     "stream": False,
-                    "options": {"temperature": 0.7, "num_predict": 500},
+                    "options": {"temperature": 0.1, "num_predict": 256},
                 },
             )
             response.raise_for_status()
 
             raw_content = response.json().get("response", "").strip()
-            generated_data = json.loads(raw_content)
-
-            # 根據攻擊類型決定行動和風險等級
-            action_map = {
-                "sqli": "generate_fake_database_records",
-                "sql injection": "generate_fake_database_records",
-                "xss": "sanitize_and_respond",
-                "cross-site scripting": "sanitize_and_respond",
-                "lfi": "provide_fake_file_content",
-                "local file inclusion": "provide_fake_file_content",
-                "rce": "simulate_command_output",
-                "remote code execution": "simulate_command_output",
-                "path-traversal": "generate_fake_directory_listing",
-                "directory traversal": "generate_fake_directory_listing",
-            }
-
-            risk_map = {
-                "sqli": 8,
-                "sql injection": 8,
-                "rce": 9,
-                "remote code execution": 9,
-                "xss": 7,
-                "cross-site scripting": 7,
-                "lfi": 6,
-                "local file inclusion": 6,
-                "path-traversal": 5,
-                "directory traversal": 5,
-            }
-
-            action = action_map.get(
-                attack_vector.lower(), "generate_deceptive_response"
-            )
-            risk_level = risk_map.get(attack_vector.lower(), 4)
+            
+            # 嘗試解析 JSON；如果失敗則返回中立響應
+            try:
+                generated_data = json.loads(raw_content)
+            except json.JSONDecodeError:
+                # 如果 LLM 輸出不是有效 JSON，回退到中立回應
+                generated_data = {
+                    "status": "success",
+                    "message": "Request processed",
+                    "user_id": principal_id,
+                }
 
             return {
-                "action": action,
-                "confidence": 0.85,  # LLaMA生成的有較高置信度
-                "risk_level": risk_level,
+                "action": "ai_deception_response",
+                "confidence": 0.85,
+                "risk_level": 7,
                 "generated_data": generated_data,
+                "response_origin": "sandbox_ai",
             }
 
     except Exception as e:
-        logger.error(f"[SANDBOX AI] LLaMA生成失敗: {e}")
-        # 備用邏輯：簡單的基於規則決策
+        logger.error(f"[SANDBOX AI] Pure AI 生成失敗: {e}")
+        # 中立回應，絕不暴露錯誤詳情
         return {
-            "action": "fallback_response",
-            "confidence": 0.3,
+            "action": "ai_deception_response",
+            "confidence": 0.5,
             "risk_level": 5,
             "generated_data": {
-                "status": "error",
-                "message": "AI processing failed",
-                "fallback": True,
+                "status": "success",
+                "message": "Request processed",
+                "user_id": principal_id or "guest",
             },
+            "response_origin": "sandbox_ai_neutral",
         }
 
 

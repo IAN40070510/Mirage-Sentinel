@@ -869,59 +869,224 @@ async def _execute_deception_response(
     detection_target: str,
     attack_vector: str,
     risk_level: int,
+    upstream_path: str = "",
+    request_method: str = "GET",
+    body_text: str = "",
 ) -> tuple[bytes, int, dict[str, str], dict[str, object]]:
-    try:
-        from core.ai_agent_orchestrator import execute_sandbox_ai_agent
-
-        logger.info(
-            "[AI AGENT] 前置分流到沙盒AI Agent: %s - %s", client_ip, attack_vector
-        )
-
-        ai_response = await execute_sandbox_ai_agent(
-            client_ip=client_ip,
-            principal_id=principal_id,
-            raw_payload=detection_target,
-            attack_vector=attack_vector,
-            risk_level=max(1, risk_level // 10),
-        )
-
-        fake_data = ai_response.get("fake_data")
-        if isinstance(fake_data, dict) and fake_data:
-            return (
-                json.dumps(fake_data).encode("utf-8"),
-                200,
-                {"content-type": "application/json"},
-                {
-                    "mitigation_status": "ai_deception",
-                    "response_payload": fake_data,
-                    "response_origin": "sandbox_ai",
-                    "deception_mode": "sandbox_ai",
-                    "ai_action": ai_response.get("ai_decision", {}).get("action"),
-                    "ai_confidence": ai_response.get("ai_decision", {}).get(
-                        "confidence", 0
-                    ),
-                },
-            )
-    except Exception as ai_exc:
-        logger.error("[AI AGENT] 前置分流失敗，改用本機 Mirage 備援: %s", ai_exc)
-
-    # 使用新版 Mirage 假資料生成，傳入端點與攻擊向量
+    """
+    執行欺敵回應：
+    1. 根據端點類型調用 Mirage 生成假回應
+    2. 根據攻擊類型在欺敵資料庫中記錄信息（登入/轉帳/卡片等）
+    3. 返回符合該端點的假回應
+    """
     from core.mirage import generate_fake_data
-
-    endpoint = detection_target.split(" ", 1)[0] if detection_target else ""
-    fallback_payload = generate_fake_data(
+    from core.deception_db import (
+        save_deception_state,
+        create_fake_session_token,
+        record_fake_login,
+        record_fake_transaction,
+        record_fake_card,
+    )
+    
+    endpoint = (upstream_path or "").lower()
+    fake_response = generate_fake_data(
         principal_id, endpoint=endpoint, attack_vector=attack_vector
     )
+    
+    now_iso = datetime.now().isoformat(timespec="milliseconds")
+    fake_session_token = create_fake_session_token(client_ip, principal_id)
+    fake_username = str(fake_response.get("user_id", f"attacker_{principal_id}"))
+    
+    # 根據端點類型記錄到欺敵資料庫
+    if "/login" in endpoint or "/register" in endpoint:
+        # 登入攻擊：記錄假帳號/密碼
+        fake_password = str(fake_response.get("password", "honeypot_default_password"))
+        fake_account_id = str(fake_response.get("account_id", f"ACC-{fake_session_token[:8]}"))
+        record_fake_login(client_ip, principal_id, fake_username, fake_password, fake_account_id)
+        fake_response["session_token"] = fake_session_token
+        fake_response["status"] = "success"
+        fake_response["message"] = "Login successful"
+        
+    elif "/transfer" in endpoint:
+        # 轉帳攻擊：記錄假轉帳
+        try:
+            import json as json_lib
+            body_json = json_lib.loads(body_text) if body_text else {}
+        except Exception:
+            body_json = {}
+        
+        from_account = str(body_json.get("from_account", fake_response.get("from_account", f"ACC-001-{principal_id}")))
+        to_account = str(body_json.get("to_account", fake_response.get("to_account", f"ACC-002-FAKE")))
+        amount = float(body_json.get("amount", fake_response.get("amount", 1000)))
+        currency = str(body_json.get("currency", fake_response.get("currency", "USD")))
+        transaction_id = str(fake_response.get("transaction_id", f"TXN-{fake_session_token[:12]}"))
+        
+        record_fake_transaction(client_ip, principal_id, from_account, to_account, amount, currency, transaction_id)
+        fake_response["status"] = "success"
+        fake_response["message"] = "Transfer completed"
+        fake_response["confirmation_code"] = f"CONF-{fake_session_token[:12]}"
+        
+    elif "/upload" in endpoint or "/profile" in endpoint or "/card" in endpoint or "/add_card" in endpoint:
+        # 卡片/個人資料操作：記錄假卡片
+        fake_card_number = str(fake_response.get("card_number", "4111111111111111"))
+        fake_card_holder = str(fake_response.get("card_holder", fake_username or "Honeypot User"))
+        fake_expiry = str(fake_response.get("expiry", "12/28"))
+        fake_cvv = str(fake_response.get("cvv", "123"))
+        fake_card_type = str(fake_response.get("card_type", "VISA"))
+        
+        if "/card" in endpoint or "/add_card" in endpoint:
+            record_fake_card(client_ip, principal_id, fake_card_number, fake_card_holder, fake_expiry, fake_cvv, fake_card_type)
+        
+        fake_response["status"] = "success"
+        fake_response["message"] = "Operation completed"
+    
+    # 共通操作：保存欺敵狀態
+    save_deception_state(
+        client_ip=client_ip,
+        principal_id=principal_id,
+        vector=attack_vector,
+        risk=risk_level,
+        payload=fake_response
+    )
+    
+    fake_response["session_token"] = fake_session_token
+    fake_response["created_at"] = now_iso
+    
     return (
-        json.dumps(fallback_payload).encode("utf-8"),
+        json.dumps(fake_response, ensure_ascii=False).encode("utf-8"),
         200,
-        {"content-type": "application/json"},
+        {"content-type": "application/json; charset=utf-8"},
         {
-            "mitigation_status": "local_deception_fallback",
-            "response_payload": fallback_payload,
+            "mitigation_status": "mirage_deception",
+            "response_payload": fake_response,
             "response_origin": "mirage",
-            "deception_mode": "local_fallback",
+            "deception_mode": "fake_session",
+            "fake_session_token": fake_session_token,
         },
+    )
+
+
+async def _check_fake_session_and_respond(
+    client_ip: str,
+    principal_id: str,
+    upstream_path: str,
+    request: Request,
+    request_at: str,
+) -> tuple[bytes, int, dict[str, str], dict[str, object]] | None:
+    """
+    檢查請求是否來自之前被BLOCK的攻擊者（有假會話）。
+    如果有，從假資料庫返回虛假數據，而不是轉發到真實後端。
+    
+    返回: (response_content, status_code, headers, event_meta) 或 None
+    """
+    from core.deception_db import (
+        get_fake_session,
+        get_fake_account_for_attacker,
+        get_fake_transactions_for_attacker,
+        get_fake_cards_for_attacker,
+    )
+    
+    # 嘗試從請求中提取會話令牌
+    fake_session_token = None
+    
+    # 優先檢查自定義 header
+    fake_session_token = request.headers.get("X-Mirage-Session", "").strip()
+    
+    # 其次檢查 Authorization header
+    if not fake_session_token:
+        auth_header = request.headers.get("authorization", "").strip()
+        if auth_header.lower().startswith("bearer "):
+            fake_session_token = auth_header[7:].strip()
+    
+    # 最後檢查 Cookie
+    if not fake_session_token:
+        fake_session_token = request.cookies.get("mirage_session", "").strip()
+    
+    if not fake_session_token or not fake_session_token.startswith("mirage_session_"):
+        return None
+    
+    # 檢查這個令牌是否在假會話資料庫中
+    fake_session = get_fake_session(client_ip, principal_id)
+    if not fake_session or fake_session.get("fake_session_token") != fake_session_token:
+        return None
+    
+    # 找到假會話！根據端點類型返回虛假數據
+    endpoint = (upstream_path or "").lower()
+    now_iso = datetime.now().isoformat(timespec="milliseconds")
+    
+    fake_response: dict[str, object] = {
+        "status": "success",
+        "response_origin": "mirage_cached",
+        "user_id": principal_id,
+        "endpoint": endpoint,
+        "created_at": now_iso,
+        "message": "Retrieved from deception cache",
+    }
+    
+    # 根據端點類型返回相應的虛假數據
+    if "/login" in endpoint or "/dashboard" in endpoint or "/check_balance" in endpoint:
+        # 返回之前記錄的假帳戶信息
+        fake_account = get_fake_account_for_attacker(client_ip, principal_id)
+        if fake_account:
+            fake_response.update({
+                "username": fake_account.get("username"),
+                "account_id": fake_account.get("account_id"),
+                "account_number": f"ACC-{fake_account.get('account_id', 'UNKNOWN')}",
+                "balance": 50000.0,
+                "account_type": "Checking",
+            })
+    
+    if "/transactions" in endpoint or "/transaction" in endpoint:
+        # 返回之前記錄的假轉帳歷史
+        fake_txns = get_fake_transactions_for_attacker(client_ip, principal_id)
+        if fake_txns:
+            fake_response["transactions"] = fake_txns
+        else:
+            fake_response["transactions"] = []
+    
+    if "/transfer" in endpoint:
+        # 返回最近的假轉帳信息
+        fake_txns = get_fake_transactions_for_attacker(client_ip, principal_id)
+        if fake_txns:
+            latest_txn = fake_txns[0]
+            fake_response.update({
+                "status": "completed",
+                "from_account": latest_txn.get("from_account"),
+                "to_account": latest_txn.get("to_account"),
+                "amount": latest_txn.get("amount"),
+                "currency": latest_txn.get("currency"),
+                "transaction_id": latest_txn.get("transaction_id"),
+            })
+    
+    if "/card" in endpoint or "/cards" in endpoint:
+        # 返回虛假卡片列表
+        fake_cards = get_fake_cards_for_attacker(client_ip, principal_id)
+        if fake_cards:
+            fake_response["cards"] = fake_cards
+        else:
+            fake_response["cards"] = []
+    
+    logger.info(
+        "[FAKE SESSION HIT] %s:%s - endpoint=%s - returning cached deception data",
+        client_ip,
+        principal_id,
+        endpoint
+    )
+    
+    # 記錄這個假會話請求
+    event_meta = {
+        "mitigation_status": "fake_session_detected",
+        "response_origin": "deception_cache",
+        "deception_mode": "fake_session_hit",
+        "fake_session_token": fake_session_token,
+        "engagement_level": fake_session.get("engagement_level", 0),
+    }
+    
+    return (
+        json.dumps(fake_response, ensure_ascii=False).encode("utf-8"),
+        200,
+        {"content-type": "application/json; charset=utf-8"},
+        event_meta,
     )
 
 
@@ -958,6 +1123,35 @@ async def _proxy_banking_request(
         device_id=device_id,
         request_epoch_ms=request_epoch_ms,
     )
+    
+    # 【第一層檢測】檢查是否來自已建立的假會話
+    fake_session_response = await _check_fake_session_and_respond(
+        client_ip=client_ip,
+        principal_id=principal_id,
+        upstream_path=upstream_path,
+        request=request,
+        request_at=request_at,
+    )
+    if fake_session_response:
+        # 命中假會話！直接返回虛假數據，不再進行後續檢測
+        response_content, status_code, response_headers, event_meta = fake_session_response
+        response_payload = bytes(response_content)
+        end_perf = time.perf_counter()
+        process_ms = round((end_perf - start_perf) * 1000, 3)
+        
+        logger.info(f"[FAKE SESSION] 命中假會話記錄，直接返回虛假數據: {client_ip}:{principal_id}")
+        
+        response = Response(response_payload, status_code=status_code, headers=response_headers)
+        
+        # 可選：記錄到流量日誌
+        if background_tasks:
+            background_tasks.add_task(
+                lambda: logger.info(f"[FAKE SESSION LOG] {client_ip}:{principal_id} - {upstream_path} - {status_code}")
+            )
+        
+        return response
+    
+    # 【第二層檢測】正常 Sentinel 檢測流程
     normalized_upstream_path = "/" + upstream_path.lstrip("/")
     render_critical_path = _is_render_critical_path(normalized_upstream_path)
     business_context, banking_action = _classify_banking_surface(upstream_path)
@@ -1154,6 +1348,9 @@ async def _proxy_banking_request(
             detection_target=detection_target,
             attack_vector=attack_vector,
             risk_level=risk_level,
+            upstream_path=upstream_path,
+            request_method=request.method,
+            body_text=body_text,
         )
         event_payload.update(deception_meta)
         event_payload["flow_stage"] = "deception"

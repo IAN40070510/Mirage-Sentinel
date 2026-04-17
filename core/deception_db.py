@@ -62,6 +62,7 @@ def _ensure_unique_memory_key(conn: sqlite3.Connection):
 def setup_deception_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
+        # 主追蹤表：攻擊者基本信息
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS deception_memory (
@@ -69,12 +70,61 @@ def setup_deception_db():
                 client_ip TEXT,
                 principal_id TEXT,
                 fake_data_payload TEXT,
-                -- SQL 註解必須使用雙橫線 --
                 last_vector TEXT,
                 max_risk_seen INTEGER,
                 interaction_count INTEGER DEFAULT 1,
                 hits INTEGER DEFAULT 1,
-                last_seen TEXT
+                last_seen TEXT,
+                fake_session_token TEXT,
+                engagement_level INTEGER DEFAULT 1
+            )
+        """
+        )
+        # 假帳戶表：記錄攻擊者登入的假帳號和密碼
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS fake_accounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                client_ip TEXT,
+                principal_id TEXT,
+                fake_username TEXT,
+                fake_password TEXT,
+                fake_account_id TEXT,
+                created_at TEXT,
+                UNIQUE(client_ip, principal_id, fake_username)
+            )
+        """
+        )
+        # 假轉帳表：記錄攻擊者的轉帳操作
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS fake_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                client_ip TEXT,
+                principal_id TEXT,
+                from_account TEXT,
+                to_account TEXT,
+                amount REAL,
+                currency TEXT,
+                transaction_id TEXT,
+                status TEXT,
+                created_at TEXT
+            )
+        """
+        )
+        # 假卡片表：記錄攻擊者新增的卡片
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS fake_cards (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                client_ip TEXT,
+                principal_id TEXT,
+                card_number TEXT,
+                card_holder TEXT,
+                expiry TEXT,
+                cvv TEXT,
+                card_type TEXT,
+                created_at TEXT
             )
         """
         )
@@ -86,6 +136,8 @@ def setup_deception_db():
         _ensure_column(conn, "interaction_count INTEGER DEFAULT 1")
         _ensure_column(conn, "hits INTEGER DEFAULT 1")
         _ensure_column(conn, "last_seen TEXT")
+        _ensure_column(conn, "fake_session_token TEXT")
+        _ensure_column(conn, "engagement_level INTEGER DEFAULT 1")
         _ensure_unique_memory_key(conn)
     logger.info(f"Deception Memory Engine Ready: {DB_PATH}")
 
@@ -179,3 +231,199 @@ def get_attacker_intelligence(client_ip: str):
         if result:
             return {"vector": result[0], "risk": result[1], "count": result[2]}
     return None
+
+
+def create_fake_session_token(client_ip: str, principal_id: str) -> str:
+    """為攻擊者生成並記錄假會話令牌"""
+    import hashlib
+    import secrets
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    random_suffix = secrets.token_hex(8)
+    fake_token = f"mirage_session_{hashlib.sha256(f'{client_ip}|{principal_id}|{random_suffix}'.encode('utf-8')).hexdigest()[:16]}"
+    
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            """
+            UPDATE deception_memory
+            SET fake_session_token = ?, engagement_level = engagement_level + 1, last_seen = ?
+            WHERE client_ip = ? AND principal_id = ?
+            """,
+            (fake_token, now, client_ip, principal_id)
+        )
+    return fake_token
+
+
+def get_fake_session(client_ip: str, principal_id: str) -> dict[str, object] | None:
+    """獲取攻擊者的假會話信息"""
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.execute(
+            """
+            SELECT fake_session_token, engagement_level, last_seen
+            FROM deception_memory
+            WHERE client_ip = ? AND principal_id = ?
+            """,
+            (client_ip, principal_id)
+        )
+        result = cursor.fetchone()
+        if result:
+            return {
+                "fake_session_token": result[0],
+                "engagement_level": result[1],
+                "last_seen": result[2]
+            }
+    return None
+
+
+def record_fake_login(
+    client_ip: str,
+    principal_id: str,
+    fake_username: str,
+    fake_password: str,
+    fake_account_id: str,
+) -> bool:
+    """記錄攻擊者的假登入信息"""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute(
+                """
+                INSERT INTO fake_accounts (client_ip, principal_id, fake_username, fake_password, fake_account_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(client_ip, principal_id, fake_username)
+                DO UPDATE SET fake_password = excluded.fake_password
+                """,
+                (client_ip, principal_id, fake_username, fake_password, fake_account_id, now)
+            )
+        return True
+    except Exception as e:
+        logger.error(f"Failed to record fake login: {e}")
+        return False
+
+
+def record_fake_transaction(
+    client_ip: str,
+    principal_id: str,
+    from_account: str,
+    to_account: str,
+    amount: float,
+    currency: str,
+    transaction_id: str,
+    status: str = "completed",
+) -> bool:
+    """記錄攻擊者的假轉帳信息"""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute(
+                """
+                INSERT INTO fake_transactions (client_ip, principal_id, from_account, to_account, amount, currency, transaction_id, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (client_ip, principal_id, from_account, to_account, amount, currency, transaction_id, status, now)
+            )
+        return True
+    except Exception as e:
+        logger.error(f"Failed to record fake transaction: {e}")
+        return False
+
+
+def record_fake_card(
+    client_ip: str,
+    principal_id: str,
+    card_number: str,
+    card_holder: str,
+    expiry: str,
+    cvv: str,
+    card_type: str,
+) -> bool:
+    """記錄攻擊者的假卡片信息"""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute(
+                """
+                INSERT INTO fake_cards (client_ip, principal_id, card_number, card_holder, expiry, cvv, card_type, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (client_ip, principal_id, card_number, card_holder, expiry, cvv, card_type, now)
+            )
+        return True
+    except Exception as e:
+        logger.error(f"Failed to record fake card: {e}")
+        return False
+
+
+def get_fake_account_for_attacker(client_ip: str, principal_id: str) -> dict[str, object] | None:
+    """獲取攻擊者登入的假帳戶信息"""
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.execute(
+            """
+            SELECT fake_username, fake_password, fake_account_id
+            FROM fake_accounts
+            WHERE client_ip = ? AND principal_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (client_ip, principal_id)
+        )
+        result = cursor.fetchone()
+        if result:
+            return {
+                "username": result[0],
+                "password": result[1],
+                "account_id": result[2]
+            }
+    return None
+
+
+def get_fake_transactions_for_attacker(client_ip: str, principal_id: str) -> list[dict[str, object]]:
+    """獲取攻擊者的假轉帳歷史"""
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.execute(
+            """
+            SELECT from_account, to_account, amount, currency, transaction_id, status, created_at
+            FROM fake_transactions
+            WHERE client_ip = ? AND principal_id = ?
+            ORDER BY created_at DESC
+            """,
+            (client_ip, principal_id)
+        )
+        results = cursor.fetchall()
+        return [
+            {
+                "from_account": row[0],
+                "to_account": row[1],
+                "amount": row[2],
+                "currency": row[3],
+                "transaction_id": row[4],
+                "status": row[5],
+                "created_at": row[6]
+            }
+            for row in results
+        ]
+
+
+def get_fake_cards_for_attacker(client_ip: str, principal_id: str) -> list[dict[str, object]]:
+    """獲取攻擊者的假卡片"""
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.execute(
+            """
+            SELECT card_number, card_holder, expiry, cvv, card_type, created_at
+            FROM fake_cards
+            WHERE client_ip = ? AND principal_id = ?
+            ORDER BY created_at DESC
+            """,
+            (client_ip, principal_id)
+        )
+        results = cursor.fetchall()
+        return [
+            {
+                "card_number": row[0],
+                "card_holder": row[1],
+                "expiry": row[2],
+                "cvv": row[3],
+                "card_type": row[4],
+                "created_at": row[5]
+            }
+            for row in results
+        ]
