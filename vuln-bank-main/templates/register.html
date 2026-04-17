@@ -71,6 +71,13 @@
         // Vulnerability: No input sanitization
         // Vulnerability: No XSS protection
         document.addEventListener('DOMContentLoaded', function() {
+            const messageEl = document.getElementById('message');
+
+            function showMessage(message, className) {
+                messageEl.textContent = String(message || 'Registration failed. Please try again.');
+                messageEl.className = className;
+            }
+
             document.getElementById('registerForm').addEventListener('submit', async (event) => {
                 event.preventDefault();
                 
@@ -90,21 +97,17 @@
                     const data = await response.json();
                     
                     if (data.status === 'success') {
-                        // Vulnerability: innerHTML used instead of textContent
-                        document.getElementById('message').innerHTML = data.message;
-                        document.getElementById('message').className = 'success';
+                        showMessage(data.message || 'Registration successful! Proceed to login', 'success');
                         
                         // Redirect to login after 2 seconds
                         setTimeout(() => {
                             window.location.href = '/login';
                         }, 2000);
                     } else {
-                        document.getElementById('message').innerHTML = data.message;
-                        document.getElementById('message').className = 'error';
+                        showMessage(data.message, 'error');
                     }
                 } catch (error) {
-                    document.getElementById('message').innerHTML = 'Registration failed. Please try again.';
-                    document.getElementById('message').className = 'error';
+                    showMessage('Registration failed. Please try again.', 'error');
                 }
             });
         });

@@ -71,6 +71,14 @@
         // Vulnerability: Token stored in localStorage
         // Vulnerability: No XSS protection
         document.addEventListener('DOMContentLoaded', function() {
+            const messageEl = document.getElementById('message');
+
+            function showMessage(message, className) {
+                messageEl.textContent = String(message || 'Login failed. Please try again.');
+                messageEl.style.color = '';
+                messageEl.className = className;
+            }
+
             document.getElementById('loginForm').addEventListener('submit', async (event) => {
                 event.preventDefault();
                 
@@ -94,15 +102,10 @@
                         localStorage.setItem('jwt_token', data.token);
                         window.location.href = '/dashboard';
                     } else {
-                        // Vulnerability: innerHTML used instead of textContent
-                        document.getElementById('message').innerHTML = data.message || 'Login failed';
-                        document.getElementById('message').style.color = '';
-                        document.getElementById('message').className = 'error';
+                        showMessage(data.message, 'error');
                     }
                 } catch (error) {
-                    document.getElementById('message').innerHTML = 'Login failed. Please try again.';
-                    document.getElementById('message').style.color = '';
-                    document.getElementById('message').className = 'error';
+                    showMessage('Login failed. Please try again.', 'error');
                 }
             });
         });
