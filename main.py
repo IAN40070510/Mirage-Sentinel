@@ -195,15 +195,8 @@ def analyze_intent(text: str):
         return False, 0.0, "None", "PASS", bool(ai_sentinel)
 
     if not ai_sentinel:
-        # 模型未載入時回退到簽名規則引擎，避免入口完全失明。
-        is_attack, confidence, attack_vector = signature_analyze_intent(text)
-        return (
-            is_attack,
-            confidence,
-            attack_vector,
-            "BLOCK" if is_attack else "PASS",
-            False,
-        )
+        logger.warning("AI Sentinel model unavailable; returning neutral PASS.")
+        return False, 0.0, "None", "PASS", False
 
     try:
         df_input = pd.DataFrame({"payload": [str(text).lower().strip()]})
@@ -608,9 +601,6 @@ def _is_render_critical_path(path: str) -> bool:
         return True
 
     if normalized.startswith("/static/"):
-        return True
-
-    if normalized in {"/login", "/register", "/forgot-password", "/reset-password"}:
         return True
 
     ext = os.path.splitext(normalized)[1].lower()
@@ -1047,36 +1037,13 @@ async def _proxy_banking_request(
     req_time_var = 0.0
     amount_deviation = 0.0
 
-    # 只有非攻擊流量才查詢真實資料庫
-    # (should_intercept 需在下方風險判斷後才有值，這裡先預設，稍後再覆蓋)
     attack_vector = _normalize_attack_vector(attack_vector)
     model_attack_type = attack_vector
-    risk_reasons: list[str] = []
-
-    replication_risk, replication_reason = detect_replication_risk(
-        principal_id, detection_target
-    )
-    if replication_risk:
-        risk_reasons.append(replication_reason)
-
-    rate_risk, rate_reason = detect_rate_limiting_risk(client_ip)
-    if rate_risk:
-        risk_reasons.append(rate_reason)
-
-    amount_risk, amount_reason = detect_anomalous_amount_risk(
-        principal_id, int(amount_value) if amount_value is not None else None
-    )
-    if amount_risk:
-        risk_reasons.append(amount_reason)
-
-    if risk_reasons:
-        attack_vector = ", ".join(filter(None, [attack_vector, *risk_reasons]))
-
-    ml_intercept = is_attack and (sentinel_decision == "BLOCK" or confidence > 0.75)
-    should_intercept = (ml_intercept or bool(risk_reasons)) and not render_critical_path
-    effective_risk_reasons = risk_reasons if not render_critical_path else []
+    ml_intercept = is_attack and sentinel_decision == "BLOCK"
+    should_intercept = ml_intercept and not render_critical_path
+    effective_risk_reasons: list[str] = []
     decision_source = _decision_source(is_attack, effective_risk_reasons)
-    risk_level = max(int(confidence * 100), 80 if effective_risk_reasons else 0)
+    risk_level = int(confidence * 100)
     flow_stage, deception_score, trust_level, memory_hit = (
         _compute_deception_effectiveness(
             should_intercept=should_intercept,

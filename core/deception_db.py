@@ -18,6 +18,18 @@ def _migrate_attacker_ip_to_client_ip(conn: sqlite3.Connection):
         conn.execute(
             "ALTER TABLE deception_memory RENAME COLUMN attacker_ip TO client_ip"
         )
+    if "principal_id" not in columns and "query_id" in columns:
+        conn.execute(
+            "ALTER TABLE deception_memory RENAME COLUMN query_id TO principal_id"
+        )
+
+
+def _ensure_column(conn: sqlite3.Connection, column_sql: str):
+    column_name = column_sql.strip().split()[0]
+    cursor = conn.execute("PRAGMA table_info(deception_memory)")
+    columns = {row[1] for row in cursor.fetchall()}
+    if column_name not in columns:
+        conn.execute(f"ALTER TABLE deception_memory ADD COLUMN {column_sql}")
 
 
 def _ensure_unique_memory_key(conn: sqlite3.Connection):
@@ -32,6 +44,16 @@ def _ensure_unique_memory_key(conn: sqlite3.Connection):
         )
         """
     )
+
+    index_name = "idx_deception_memory_client_query"
+    index_list = conn.execute("PRAGMA index_list(deception_memory)").fetchall()
+    existing_index = next((row for row in index_list if row[1] == index_name), None)
+    if existing_index is not None:
+        index_info = conn.execute(f"PRAGMA index_info({index_name})").fetchall()
+        indexed_columns = [row[2] for row in index_info]
+        if indexed_columns != ["client_ip", "principal_id"]:
+            conn.execute(f"DROP INDEX IF EXISTS {index_name}")
+
     conn.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_deception_memory_client_query ON deception_memory(client_ip, principal_id)"
     )
@@ -57,6 +79,13 @@ def setup_deception_db():
         """
         )
         _migrate_attacker_ip_to_client_ip(conn)
+        _ensure_column(conn, "principal_id TEXT")
+        _ensure_column(conn, "fake_data_payload TEXT")
+        _ensure_column(conn, "last_vector TEXT")
+        _ensure_column(conn, "max_risk_seen INTEGER")
+        _ensure_column(conn, "interaction_count INTEGER DEFAULT 1")
+        _ensure_column(conn, "hits INTEGER DEFAULT 1")
+        _ensure_column(conn, "last_seen TEXT")
         _ensure_unique_memory_key(conn)
     logger.info(f"Deception Memory Engine Ready: {DB_PATH}")
 

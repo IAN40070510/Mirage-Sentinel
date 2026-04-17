@@ -64,8 +64,8 @@ def _load_mirage_text_generator() -> Any | None:
         return _MIRAGE_TEXT_GENERATOR
 
     try:
-        from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
-        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline  # type: ignore[import-not-found]
+        import torch  # type: ignore[import-not-found]
 
         tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
         model_kwargs: dict[str, Any] = {"trust_remote_code": True}
@@ -208,7 +208,7 @@ def _maybe_attach_llm_summary(
 def generate_fake_data(
     principal_id: str, endpoint: str = "", attack_vector: str = ""
 ) -> dict[str, object]:
-    """產生針對不同端點/攻擊向量的高度擬真 Mirage 假資料，並確保狀態一致。"""
+    """以純 AI 方式產生 Mirage 假資料，讓 LLM 決定實際回應內容。"""
     normalized_query = str(principal_id or "unknown")
     normalized_ep = (endpoint or "").lower()
     normalized_vec = (attack_vector or "").lower()
@@ -216,190 +216,83 @@ def generate_fake_data(
         f"{normalized_query}|{normalized_ep}|{normalized_vec}".encode("utf-8")
     ).hexdigest()
     timestamp = datetime.now().isoformat(timespec="milliseconds")
-
-    # /login 欺敵回應
-    if "/login" in normalized_ep:
-        return _maybe_attach_llm_summary(
-            {
-                "status": "challenge",
-                "route": "mirage",
-                "response_origin": "mirage",
-                "user_id": normalized_query,
-                "stage": "credential_challenge",
-                "deception_meta": {
-                    "strategy": "counter_ai_tarpit",
-                    "ticket": f"MRG-{seed[0:8].upper()}",
-                    "queued_at": timestamp,
-                },
-                "next_step": "otp",
-                "message": "請輸入一次性驗證碼 (OTP) 以完成登入。",
-            },
-            normalized_query,
-            normalized_ep,
-            normalized_vec,
-        )
-
-    # /transfer 欺敵回應
-    if "/transfer" in normalized_ep:
-        fake_to = f"SIM-{seed[8:16].upper()}"
-        fake_amt = int(seed[16:20], 16) % 50000 + 100
-        return _maybe_attach_llm_summary(
-            {
-                "status": "pending_review",
-                "route": "mirage",
-                "response_origin": "mirage",
-                "user_id": normalized_query,
-                "transfer": {
-                    "to_account": fake_to,
-                    "amount": fake_amt,
-                    "currency": "USD",
-                    "created_at": timestamp,
-                    "review_status": "manual_review",
-                },
-                "message": "交易已提交，進入人工審查流程。",
-            },
-            normalized_query,
-            normalized_ep,
-            normalized_vec,
-        )
-
-    # /balance 欺敵回應
-    if "/balance" in normalized_ep:
-        fake_balance = int(seed[20:28], 16) % 900000 + 10000
-        return _maybe_attach_llm_summary(
-            {
-                "status": "success",
-                "route": "mirage",
-                "response_origin": "mirage",
-                "user_id": normalized_query,
-                "balance": round(fake_balance / 100, 2),
-                "currency": "USD",
-                "updated_at": timestamp,
-            },
-            normalized_query,
-            normalized_ep,
-            normalized_vec,
-        )
-
-    # /admin 欺敵回應
-    if "/admin" in normalized_ep:
-        return _maybe_attach_llm_summary(
-            {
-                "status": "admin_panel",
-                "route": "mirage",
-                "response_origin": "mirage",
-                "user_id": normalized_query,
-                "admin_rights": ["view_logs", "manage_users", "export_data"],
-                "session_id": f"ADM-{seed[28:36].upper()}",
-                "message": "歡迎進入 Mirage 管理後台（僅限審查模式）。",
-            },
-            normalized_query,
-            normalized_ep,
-            normalized_vec,
-        )
-
-    # /graphql 欺敵回應
-    if "/graphql" in normalized_ep:
-        return _maybe_attach_llm_summary(
-            {
-                "data": {
-                    "user": {
-                        "id": normalized_query,
-                        "name": f"用戶{seed[36:40]}",
-                        "balance": int(seed[40:48], 16) % 900000 + 10000,
-                        "role": "customer",
-                    }
-                },
-                "mirage": True,
-                "response_origin": "mirage",
-                "timestamp": timestamp,
-            },
-            normalized_query,
-            normalized_ep,
-            normalized_vec,
-        )
-
-    # SQLi/XSS/LFI/RCE 等攻擊向量專屬假回應
-    if "sqli" in normalized_vec or "sql injection" in normalized_vec:
-        return _maybe_attach_llm_summary(
-            {
-                "status": "error",
-                "error": "SQL syntax error near 'UNION SELECT ...' (code 1064)",
-                "response_origin": "mirage",
-                "timestamp": timestamp,
-            },
-            normalized_query,
-            normalized_ep,
-            normalized_vec,
-        )
-    if "xss" in normalized_vec or "cross-site scripting" in normalized_vec:
-        return _maybe_attach_llm_summary(
-            {
-                "status": "ok",
-                "echo": f"<script>alert('XSS-{seed[48:52]}')</script>",
-                "response_origin": "mirage",
-                "timestamp": timestamp,
-            },
-            normalized_query,
-            normalized_ep,
-            normalized_vec,
-        )
-    if (
-        "lfi" in normalized_vec
-        or "path-traversal" in normalized_vec
-        or "directory traversal" in normalized_vec
-    ):
-        return _maybe_attach_llm_summary(
-            {
-                "status": "error",
-                "error": "File not found: ../../etc/passwd",
-                "response_origin": "mirage",
-                "timestamp": timestamp,
-            },
-            normalized_query,
-            normalized_ep,
-            normalized_vec,
-        )
-    if (
-        "rce" in normalized_vec
-        or "remote code execution" in normalized_vec
-        or "cmdi" in normalized_vec
-    ):
-        return _maybe_attach_llm_summary(
-            {
-                "status": "ok",
-                "output": f"uid=1001(mirage) gid=1001 groups=mirage\n$ echo Mirage-{seed[52:56]}\nMirage-{seed[52:56]}",
-                "response_origin": "mirage",
-                "timestamp": timestamp,
-            },
-            normalized_query,
-            normalized_ep,
-            normalized_vec,
-        )
-
-    # 預設 fallback（原本的帳戶/審查假資料）
-    balance_cents = int(seed[:8], 16) % 900000 + 10000
-    pending_amount = int(seed[8:12], 16) % 50000 + 250
-    return _maybe_attach_llm_summary(
-        {
-            "status": "success",
-            "route": "mirage",
-            "response_origin": "mirage",
-            "user_id": normalized_query,
-            "ledger": {
-                "account_id": f"SIM-{seed[12:20].upper()}",
-                "currency": "USD",
-                "available_balance": round(balance_cents / 100, 2),
-                "pending_review": round(pending_amount / 100, 2),
-                "updated_at": timestamp,
-            },
-            "review_queue": {
-                "ticket": f"MRG-{seed[20:32].upper()}",
-                "status": "queued_review",
-                "queued_at": timestamp,
-            },
-        },
-        normalized_query,
-        normalized_ep,
-        normalized_vec,
+    prompt = (
+        "You are Mirage, a pure AI deception engine for a financial API honeypot. "
+        "Generate only raw JSON and do not mention AI, LLMs, or honeypots. "
+        f"Inputs: principal_id={normalized_query!r}, endpoint={normalized_ep!r}, attack_vector={normalized_vec!r}, seed={seed[:12]!r}. "
+        "Requirements: return a realistic deceptive JSON response suitable for the endpoint and attack vector. "
+        "For login attacks, return a believable credential challenge or MFA flow. "
+        "For transfer/balance/account endpoints, return plausible fake financial data. "
+        "For sqli/xss/lfi/rce/path-traversal attacks, return a response that matches the attack type and keeps the attacker engaged. "
+        "Output must be a single JSON object with keys like status, route, response_origin, user_id, message, and any extra fields needed."
     )
+
+    summary = None
+    model_id = None
+
+    if _get_llm_provider() == "ollama":
+        summary = _generate_with_ollama(prompt)
+        if summary:
+            model_id = _get_ollama_model_id()
+
+    if not summary and _should_use_hf_mirage():
+        generator = _load_mirage_text_generator()
+        if generator is not None:
+            try:
+                outputs = generator(
+                    prompt,
+                    max_new_tokens=128,
+                    do_sample=False,
+                    temperature=0.1,
+                    return_full_text=False,
+                    pad_token_id=getattr(
+                        getattr(generator, "tokenizer", None), "eos_token_id", None
+                    ),
+                )
+                generated_text = ""
+                if isinstance(outputs, list) and outputs:
+                    generated_text = str(outputs[0].get("generated_text", ""))
+                summary = " ".join(generated_text.split()).strip()
+                if summary:
+                    model_id = _MIRAGE_MODEL_ID or _get_mirage_model_id()
+            except Exception as exc:
+                logger.warning("Mirage HF generation failed: %s", exc)
+
+    payload: dict[str, object] = {
+        "status": "ai_generated",
+        "route": "mirage",
+        "response_origin": "mirage_ai",
+        "user_id": normalized_query,
+        "endpoint": normalized_ep or "/",
+        "attack_vector": normalized_vec or "unknown",
+        "deception_meta": {
+            "strategy": "pure_ai_response",
+            "seed": seed[:12].upper(),
+            "queued_at": timestamp,
+        },
+    }
+
+    if summary:
+        payload["llm_model_id"] = model_id or "unknown"
+        import json
+
+        try:
+            clean_summary = summary.strip()
+            if clean_summary.startswith("```json"):
+                clean_summary = clean_summary[7:].strip()
+            if clean_summary.endswith("```"):
+                clean_summary = clean_summary[:-3].strip()
+
+            ai_data = json.loads(clean_summary)
+            if isinstance(ai_data, dict):
+                payload.update(ai_data)
+                payload["response_origin"] = "mirage_ai"
+            else:
+                payload["llm_summary"] = summary[:1000]
+        except Exception:
+            payload["llm_summary"] = summary[:1000]
+    else:
+        payload["response_origin"] = "mirage_ai_unavailable"
+        payload["message"] = "Mirage AI model unavailable"
+
+    return payload
