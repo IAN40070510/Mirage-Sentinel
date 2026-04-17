@@ -967,7 +967,7 @@ async def _execute_deception_response(
         record_fake_card,
     )
     
-    endpoint = (upstream_path or "").lower()
+    endpoint = "/" + (upstream_path or "").lstrip("/").lower()
     cached_memory = get_memory(client_ip, principal_id)
     fake_response: dict[str, object] | None = None
     if cached_memory and isinstance(cached_memory.get("payload"), dict):
@@ -1203,7 +1203,7 @@ async def _check_fake_session_and_respond(
         return None
     
     # 找到假會話！根據端點類型返回虛假數據
-    endpoint = (upstream_path or "").lower()
+    endpoint = "/" + (upstream_path or "").lstrip("/").lower()
     now_iso = datetime.now().isoformat(timespec="milliseconds")
 
     cached_memory = get_memory(client_ip, principal_id)
