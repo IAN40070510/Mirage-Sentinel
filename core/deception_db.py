@@ -522,7 +522,7 @@ def get_fake_cards_for_attacker(client_ip: str, principal_id: str) -> list[dict[
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.execute(
             """
-            SELECT card_number, card_holder, expiry, cvv, card_type, created_at
+            SELECT id, card_number, card_holder, expiry, cvv, card_type, created_at
             FROM fake_cards
             WHERE client_ip = ? AND principal_id = ?
             ORDER BY created_at DESC
@@ -532,12 +532,20 @@ def get_fake_cards_for_attacker(client_ip: str, principal_id: str) -> list[dict[
         results = cursor.fetchall()
         return [
             {
-                "card_number": row[0],
-                "card_holder": row[1],
-                "expiry": row[2],
-                "cvv": row[3],
-                "card_type": row[4],
-                "created_at": row[5]
+                "id": int(row[0]),
+                "card_number": row[1],
+                "card_holder": row[2],
+                "expiry": row[3],
+                "expiry_date": row[3],
+                "cvv": row[4],
+                "card_type": row[5],
+                "created_at": row[6],
+                # 與 dashboard.js 期待欄位對齊
+                "currency": "USD",
+                "balance": 0.0,
+                "current_balance": 0.0,
+                "card_limit": 100.0,
+                "is_frozen": False,
             }
             for row in results
         ]

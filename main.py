@@ -195,6 +195,25 @@ def _extract_json_or_form_fields(body_text: str, content_type: str) -> dict[str,
     return fields
 
 
+def _parse_optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.lower() in {"none", "null", "undefined", "nan"}:
+        return None
+    return int(text)
+
+
+def _generate_numeric_card_number(seed: str) -> str:
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+    numeric = "".join(ch for ch in digest if ch.isdigit())
+    if len(numeric) < 15:
+        numeric = (numeric + "0123456789012345")[:15]
+    return f"4{numeric[:15]}"
+
+
 def _derive_principal_id(
     upstream_path: str,
     body_text: str,
@@ -1253,7 +1272,9 @@ async def _execute_deception_response(
             amount = _coerce_amount(request_fields.get("amount", 0.0), fallback=0.0)
             payment_method = str(request_fields.get("payment_method") or "balance")
             card_raw = request_fields.get("card_id")
-            card_id = int(card_raw) if card_raw not in (None, "") else None
+            card_id = _parse_optional_int(card_raw)
+            if payment_method == "virtual_card" and card_id is None:
+                raise ValueError("Card is required for virtual card payment")
             description = str(request_fields.get("description") or "Bill Payment")
 
             payment_result = record_fake_bill_payment(
@@ -1547,7 +1568,9 @@ async def _check_fake_session_and_respond(
                 amount = _coerce_amount(request_fields.get("amount", 0.0), fallback=0.0)
                 payment_method = str(request_fields.get("payment_method") or "balance")
                 card_raw = request_fields.get("card_id")
-                card_id = int(card_raw) if card_raw not in (None, "") else None
+                card_id = _parse_optional_int(card_raw)
+                if payment_method == "virtual_card" and card_id is None:
+                    raise ValueError("Card is required for virtual card payment")
                 description = str(request_fields.get("description") or "Bill Payment")
 
                 payment_result = record_fake_bill_payment(
@@ -1661,7 +1684,7 @@ async def _check_fake_session_and_respond(
             )
             card_number = str(
                 request_fields.get("card_number")
-                or f"4{hashlib.sha256(f'{session_principal_id}|{time.time()}'.encode('utf-8')).hexdigest()[:15]}"
+                or _generate_numeric_card_number(f"{session_principal_id}|{time.time()}")
             )
             expiry = str(
                 request_fields.get("expiry")
@@ -2092,7 +2115,7 @@ async def _proxy_banking_request(
 
             # 正常登入流程（未被 Mirage 攔截）要清除舊的 mirage_session，
             # 避免同一瀏覽器因殘留 cookie 被誤導回欺敵資料庫。
-            if normalized_upstream_path in {"/login", "/banking/login"}:
+            if normalized_upstream_path in {"/login", "/banking/login", "/register", "/api/login", "/api/register"}:
                 response_headers["set-cookie"] = (
                     "mirage_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"
                 )
