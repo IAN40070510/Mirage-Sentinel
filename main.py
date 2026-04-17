@@ -1297,7 +1297,12 @@ async def _check_fake_session_and_respond(
     fake_response["created_at"] = now_iso
     
     # 根據端點類型返回相應的虛假數據
-    if "/login" in endpoint or "/dashboard" in endpoint or "/check_balance" in endpoint:
+    if (
+        "/login" in endpoint
+        or "/dashboard" in endpoint
+        or "/check_balance" in endpoint
+        or endpoint in {"/", "/banking", "/banking/"}
+    ):
         # 返回之前記錄的假帳戶信息
         fake_account = get_fake_account_for_attacker(client_ip, principal_id)
         if fake_account:
@@ -1310,7 +1315,8 @@ async def _check_fake_session_and_respond(
             })
 
     accept_header = (request.headers.get("accept") or "").lower()
-    if "/dashboard" in endpoint and request.method.upper() == "GET" and "text/html" in accept_header:
+    html_entry_paths = {"/", "/dashboard", "/banking", "/banking/"}
+    if endpoint in html_entry_paths and request.method.upper() == "GET" and "text/html" in accept_header:
         html_content = _build_mirage_dashboard_html(fake_response)
         event_meta = {
             "mitigation_status": "fake_session_detected",
