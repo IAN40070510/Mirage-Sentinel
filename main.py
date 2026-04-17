@@ -1100,6 +1100,7 @@ async def _execute_deception_response(
         record_fake_login,
         record_fake_transaction,
         record_fake_card,
+        apply_fake_transfer,
     )
     
     endpoint = "/" + (upstream_path or "").lstrip("/").lower()
@@ -1182,10 +1183,20 @@ async def _execute_deception_response(
             or f"ACC-{fake_session_token[:8]}"
         )
 
-        record_fake_login(client_ip, principal_id, fake_username, fake_password, fake_account_id)
+        login_balance = _coerce_amount(fake_response.get("balance", 50000.0), fallback=50000.0)
+
+        record_fake_login(
+            client_ip,
+            principal_id,
+            fake_username,
+            fake_password,
+            fake_account_id,
+            balance=login_balance,
+        )
         fake_response["username"] = fake_username
         fake_response["password"] = fake_password
         fake_response["account_number"] = fake_account_id
+        fake_response["balance"] = login_balance
         fake_response["session_token"] = fake_session_token
         fake_response["token"] = fake_session_token
         fake_response["status"] = "success"
@@ -1197,11 +1208,6 @@ async def _execute_deception_response(
         
     elif "/transfer" in endpoint or "/virtual_card" in endpoint or "/virtualcard" in endpoint:
         # 轉帳攻擊（包含虛擬卡轉帳）：記錄假轉帳，不做真轉帳
-        from_account = str(
-            request_fields.get("from_account")
-            or request_fields.get("fromaccount")
-            or fake_response.get("from_account", f"ACC-001-{principal_id}")
-        )
         to_account = str(
             request_fields.get("to_account")
             or request_fields.get("toaccount")
@@ -1217,18 +1223,26 @@ async def _execute_deception_response(
         )
         currency = str(request_fields.get("currency", fake_response.get("currency", "USD")))
         transaction_id = str(fake_response.get("transaction_id", f"TXN-{fake_session_token[:12]}"))
-        
-        # 記錄假轉帳到欺敵資料庫，不做真轉帳
-        record_fake_transaction(client_ip, principal_id, from_account, to_account, amount, currency, transaction_id)
+        transfer_result = apply_fake_transfer(
+            client_ip=client_ip,
+            principal_id=principal_id,
+            to_account=to_account,
+            amount=amount,
+            currency=currency,
+            description=description,
+            transaction_id=transaction_id,
+        )
         fake_response["status"] = "success"
         fake_response["message"] = "Transfer completed" if "/transfer" in endpoint else "Virtual card transfer completed"
         fake_response["confirmation_code"] = f"CONF-{fake_session_token[:12]}"
-        fake_response["from_account"] = from_account
-        fake_response["to_account"] = to_account
-        fake_response["amount"] = amount
-        fake_response["description"] = description
-        fake_response["currency"] = currency
-        fake_response["transaction_id"] = transaction_id
+        fake_response["from_account"] = transfer_result["from_account"]
+        fake_response["to_account"] = transfer_result["to_account"]
+        fake_response["amount"] = transfer_result["amount"]
+        fake_response["description"] = transfer_result["description"]
+        fake_response["currency"] = transfer_result["currency"]
+        fake_response["transaction_id"] = transfer_result["transaction_id"]
+        fake_response["new_balance"] = transfer_result["new_balance"]
+        fake_response["balance"] = transfer_result["new_balance"]
         
     elif "/new_card" in endpoint or "/newcard" in endpoint or "/add_card" in endpoint or "/upload" in endpoint or "/profile" in endpoint or "/card" in endpoint:
         # 卡片/個人資料操作：記錄假卡片
@@ -1298,6 +1312,7 @@ async def _check_fake_session_and_respond(
         get_fake_account_for_attacker,
         get_fake_transactions_for_attacker,
         get_fake_cards_for_attacker,
+        apply_fake_transfer,
     )
     
     # 嘗試從請求中提取會話令牌
@@ -1360,11 +1375,12 @@ async def _check_fake_session_and_respond(
         fake_account = get_fake_account_for_attacker(client_ip, session_principal_id)
         if fake_account:
             account_id_text = str(fake_account.get("account_id") or "UNKNOWN")
+            account_balance = _coerce_amount(fake_account.get("balance", 50000.0), fallback=50000.0)
             fake_response.update({
                 "username": fake_account.get("username"),
                 "account_id": account_id_text,
                 "account_number": account_id_text,
-                "balance": 50000.0,
+                "balance": account_balance,
                 "account_type": "Checking",
             })
 
@@ -1405,18 +1421,61 @@ async def _check_fake_session_and_respond(
             fake_response["transactions"] = []
     
     if "/transfer" in endpoint:
-        # 返回最近的假轉帳信息
-        fake_txns = get_fake_transactions_for_attacker(client_ip, session_principal_id)
-        if fake_txns:
-            latest_txn = fake_txns[0]
+        if request.method.upper() == "POST":
+            body_bytes = await request.body()
+            body_text = body_bytes.decode("utf-8", errors="ignore") if body_bytes else ""
+            content_type = request.headers.get("content-type", "")
+            request_fields = _extract_json_or_form_fields(body_text, content_type)
+            to_account = str(
+                request_fields.get("to_account")
+                or request_fields.get("toaccount")
+                or "ACC-002-FAKE"
+            )
+            amount = _coerce_amount(request_fields.get("amount", 0.0), fallback=0.0)
+            description = str(
+                request_fields.get("description")
+                or request_fields.get("memo")
+                or request_fields.get("note")
+                or "Transfer"
+            )
+            currency = str(request_fields.get("currency", "USD"))
+            txid = f"TXN-{fake_session_token[-8:]}-{int(time.time() * 1000) % 100000}"
+
+            transfer_result = apply_fake_transfer(
+                client_ip=client_ip,
+                principal_id=session_principal_id,
+                to_account=to_account,
+                amount=amount,
+                currency=currency,
+                description=description,
+                transaction_id=txid,
+            )
             fake_response.update({
-                "status": "completed",
-                "from_account": latest_txn.get("from_account"),
-                "to_account": latest_txn.get("to_account"),
-                "amount": latest_txn.get("amount"),
-                "currency": latest_txn.get("currency"),
-                "transaction_id": latest_txn.get("transaction_id"),
+                "status": "success",
+                "message": "Transfer completed",
+                "from_account": transfer_result.get("from_account"),
+                "to_account": transfer_result.get("to_account"),
+                "amount": transfer_result.get("amount"),
+                "description": transfer_result.get("description"),
+                "currency": transfer_result.get("currency"),
+                "transaction_id": transfer_result.get("transaction_id"),
+                "new_balance": transfer_result.get("new_balance"),
+                "balance": transfer_result.get("new_balance"),
             })
+        else:
+            # 返回最近的假轉帳信息
+            fake_txns = get_fake_transactions_for_attacker(client_ip, session_principal_id)
+            if fake_txns:
+                latest_txn = fake_txns[0]
+                fake_response.update({
+                    "status": "completed",
+                    "from_account": latest_txn.get("from_account"),
+                    "to_account": latest_txn.get("to_account"),
+                    "amount": latest_txn.get("amount"),
+                    "currency": latest_txn.get("currency"),
+                    "description": latest_txn.get("description"),
+                    "transaction_id": latest_txn.get("transaction_id"),
+                })
     
     if "/card" in endpoint or "/cards" in endpoint:
         # 返回虛假卡片列表

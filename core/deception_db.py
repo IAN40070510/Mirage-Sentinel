@@ -32,6 +32,14 @@ def _ensure_column(conn: sqlite3.Connection, column_sql: str):
         conn.execute(f"ALTER TABLE deception_memory ADD COLUMN {column_sql}")
 
 
+def _ensure_table_column(conn: sqlite3.Connection, table: str, column_sql: str):
+    column_name = column_sql.strip().split()[0]
+    cursor = conn.execute(f"PRAGMA table_info({table})")
+    columns = {row[1] for row in cursor.fetchall()}
+    if column_name not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column_sql}")
+
+
 def _ensure_unique_memory_key(conn: sqlite3.Connection):
     # 清理重複紀錄後建立唯一鍵，確保同一 client_ip + principal_id 只有一筆狀態
     conn.execute(
@@ -90,6 +98,7 @@ def setup_deception_db():
                 fake_username TEXT,
                 fake_password TEXT,
                 fake_account_id TEXT,
+                fake_balance REAL DEFAULT 50000.0,
                 created_at TEXT,
                 UNIQUE(client_ip, principal_id, fake_username)
             )
@@ -107,6 +116,7 @@ def setup_deception_db():
                 amount REAL,
                 currency TEXT,
                 transaction_id TEXT,
+                description TEXT,
                 status TEXT,
                 created_at TEXT
             )
@@ -138,6 +148,8 @@ def setup_deception_db():
         _ensure_column(conn, "last_seen TEXT")
         _ensure_column(conn, "fake_session_token TEXT")
         _ensure_column(conn, "engagement_level INTEGER DEFAULT 1")
+        _ensure_table_column(conn, "fake_accounts", "fake_balance REAL DEFAULT 50000.0")
+        _ensure_table_column(conn, "fake_transactions", "description TEXT")
         _ensure_unique_memory_key(conn)
     logger.info(f"Deception Memory Engine Ready: {DB_PATH}")
 
@@ -285,6 +297,7 @@ def record_fake_login(
     fake_username: str,
     fake_password: str,
     fake_account_id: str,
+    balance: float = 50000.0,
 ) -> bool:
     """記錄攻擊者的假登入信息"""
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
@@ -292,12 +305,15 @@ def record_fake_login(
         with sqlite3.connect(DB_PATH) as conn:
             conn.execute(
                 """
-                INSERT INTO fake_accounts (client_ip, principal_id, fake_username, fake_password, fake_account_id, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO fake_accounts (client_ip, principal_id, fake_username, fake_password, fake_account_id, fake_balance, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(client_ip, principal_id, fake_username)
-                DO UPDATE SET fake_password = excluded.fake_password
+                DO UPDATE SET
+                    fake_password = excluded.fake_password,
+                    fake_balance = excluded.fake_balance,
+                    fake_account_id = excluded.fake_account_id
                 """,
-                (client_ip, principal_id, fake_username, fake_password, fake_account_id, now)
+                (client_ip, principal_id, fake_username, fake_password, fake_account_id, balance, now)
             )
         return True
     except Exception as e:
@@ -313,6 +329,7 @@ def record_fake_transaction(
     amount: float,
     currency: str,
     transaction_id: str,
+    description: str = "Transfer",
     status: str = "completed",
 ) -> bool:
     """記錄攻擊者的假轉帳信息"""
@@ -321,10 +338,21 @@ def record_fake_transaction(
         with sqlite3.connect(DB_PATH) as conn:
             conn.execute(
                 """
-                INSERT INTO fake_transactions (client_ip, principal_id, from_account, to_account, amount, currency, transaction_id, status, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO fake_transactions (client_ip, principal_id, from_account, to_account, amount, currency, transaction_id, description, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (client_ip, principal_id, from_account, to_account, amount, currency, transaction_id, status, now)
+                (
+                    client_ip,
+                    principal_id,
+                    from_account,
+                    to_account,
+                    amount,
+                    currency,
+                    transaction_id,
+                    description,
+                    status,
+                    now,
+                )
             )
         return True
     except Exception as e:
@@ -363,20 +391,33 @@ def get_fake_account_for_attacker(client_ip: str, principal_id: str) -> dict[str
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.execute(
             """
-            SELECT fake_username, fake_password, fake_account_id
+            SELECT fake_username, fake_password, fake_account_id, fake_balance
             FROM fake_accounts
-            WHERE client_ip = ? AND principal_id = ?
+            WHERE principal_id = ?
             ORDER BY created_at DESC
             LIMIT 1
             """,
-            (client_ip, principal_id)
+            (principal_id,)
         )
         result = cursor.fetchone()
+        if not result:
+            cursor = conn.execute(
+                """
+                SELECT fake_username, fake_password, fake_account_id, fake_balance
+                FROM fake_accounts
+                WHERE client_ip = ? AND principal_id = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (client_ip, principal_id),
+            )
+            result = cursor.fetchone()
         if result:
             return {
                 "username": result[0],
                 "password": result[1],
-                "account_id": result[2]
+                "account_id": result[2],
+                "balance": float(result[3]) if result[3] is not None else 50000.0,
             }
     return None
 
@@ -386,12 +427,12 @@ def get_fake_transactions_for_attacker(client_ip: str, principal_id: str) -> lis
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.execute(
             """
-            SELECT from_account, to_account, amount, currency, transaction_id, status, created_at
+            SELECT from_account, to_account, amount, currency, transaction_id, description, status, created_at
             FROM fake_transactions
-            WHERE client_ip = ? AND principal_id = ?
+            WHERE principal_id = ?
             ORDER BY created_at DESC
             """,
-            (client_ip, principal_id)
+            (principal_id,)
         )
         results = cursor.fetchall()
         return [
@@ -401,8 +442,9 @@ def get_fake_transactions_for_attacker(client_ip: str, principal_id: str) -> lis
                 "amount": row[2],
                 "currency": row[3],
                 "transaction_id": row[4],
-                "status": row[5],
-                "created_at": row[6]
+                "description": row[5],
+                "status": row[6],
+                "created_at": row[7],
             }
             for row in results
         ]
@@ -432,3 +474,85 @@ def get_fake_cards_for_attacker(client_ip: str, principal_id: str) -> list[dict[
             }
             for row in results
         ]
+
+
+def apply_fake_transfer(
+    client_ip: str,
+    principal_id: str,
+    to_account: str,
+    amount: float,
+    currency: str,
+    description: str,
+    transaction_id: str,
+) -> dict[str, object]:
+    """Apply transfer within deception DB only and return updated fake balance."""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    amount_value = abs(float(amount))
+    with sqlite3.connect(DB_PATH) as conn:
+        row = conn.execute(
+            """
+            SELECT id, fake_account_id, fake_balance
+            FROM fake_accounts
+            WHERE principal_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (principal_id,),
+        ).fetchone()
+
+        if not row:
+            fallback_account_id = f"ACC-{principal_id[:12]}"
+            conn.execute(
+                """
+                INSERT INTO fake_accounts (client_ip, principal_id, fake_username, fake_password, fake_account_id, fake_balance, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (client_ip, principal_id, principal_id, "honeypot_default_password", fallback_account_id, 50000.0, now),
+            )
+            row = conn.execute(
+                """
+                SELECT id, fake_account_id, fake_balance
+                FROM fake_accounts
+                WHERE principal_id = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (principal_id,),
+            ).fetchone()
+
+        account_id = str(row[1])
+        current_balance = float(row[2]) if row[2] is not None else 50000.0
+        new_balance = max(current_balance - amount_value, 0.0)
+
+        conn.execute(
+            "UPDATE fake_accounts SET fake_balance = ? WHERE id = ?",
+            (new_balance, row[0]),
+        )
+
+        conn.execute(
+            """
+            INSERT INTO fake_transactions (client_ip, principal_id, from_account, to_account, amount, currency, transaction_id, description, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
+            """,
+            (
+                client_ip,
+                principal_id,
+                account_id,
+                to_account,
+                amount_value,
+                currency,
+                transaction_id,
+                description,
+                now,
+            ),
+        )
+
+    return {
+        "from_account": account_id,
+        "to_account": to_account,
+        "amount": amount_value,
+        "currency": currency,
+        "description": description,
+        "transaction_id": transaction_id,
+        "new_balance": new_balance,
+    }
