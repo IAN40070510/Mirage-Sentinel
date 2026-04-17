@@ -541,6 +541,11 @@ def _inject_mouse_tracker_html(content: bytes, content_type: str | None) -> byte
     return text.encode("utf-8")
 
 
+def _build_mirage_cookie_header(fake_session_token: str) -> str:
+    """Build Mirage session cookie header for deception-flow stickiness."""
+    return f"mirage_session={fake_session_token}; Path=/; HttpOnly; SameSite=Lax"
+
+
 @app.get("/")
 async def root() -> dict[str, object]:
     """服務根節點：提供健康入口與文件連結。"""
@@ -1007,7 +1012,10 @@ async def _execute_deception_response(
         return (
             json.dumps(error_payload, ensure_ascii=False).encode("utf-8"),
             200,  # 改為 200，使前端能正確解析此回應
-            {"content-type": "application/json; charset=utf-8"},
+            {
+                "content-type": "application/json; charset=utf-8",
+                "set-cookie": _build_mirage_cookie_header(fake_session_token),
+            },
             {
                 "mitigation_status": "mirage_unavailable",
                 "response_payload": error_payload,
@@ -1150,7 +1158,10 @@ async def _execute_deception_response(
     return (
         json.dumps(fake_response, ensure_ascii=False).encode("utf-8"),
         200,
-        {"content-type": "application/json; charset=utf-8"},
+        {
+            "content-type": "application/json; charset=utf-8",
+            "set-cookie": _build_mirage_cookie_header(fake_session_token),
+        },
         {
             "mitigation_status": "mirage_deception",
             "response_payload": fake_response,
@@ -1299,7 +1310,10 @@ async def _check_fake_session_and_respond(
     return (
         json.dumps(fake_response, ensure_ascii=False).encode("utf-8"),
         200,
-        {"content-type": "application/json; charset=utf-8"},
+        {
+            "content-type": "application/json; charset=utf-8",
+            "set-cookie": _build_mirage_cookie_header(fake_session_token),
+        },
         event_meta,
     )
 
