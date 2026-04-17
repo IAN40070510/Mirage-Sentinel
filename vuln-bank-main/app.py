@@ -1725,21 +1725,6 @@ def get_virtual_cards(current_user):
 @token_required
 def toggle_card_freeze(current_user, card_id):
     try:
-        card_query = """
-            SELECT id, user_id, card_number, cvv, expiry_date, card_limit, current_balance, is_frozen, is_active, created_at, last_used_at, card_type, currency
-            FROM virtual_cards
-            WHERE id = %s
-        """
-        card_result = execute_query(card_query, (card_id,))
-
-        if not card_result:
-            return jsonify({
-                'status': 'error',
-                'message': 'Card not found'
-            }), 404
-
-        card = card_result[0]
-
         # Vulnerability: No CSRF protection
         # Vulnerability: BOLA - no verification if card belongs to user
         query = f"""
@@ -1752,26 +1737,9 @@ def toggle_card_freeze(current_user, card_id):
         result = execute_query(query)
         
         if result:
-            updated_is_frozen = bool(result[0][0])
-            normalized_currency = normalize_card_currency(card[12])
             return jsonify({
                 'status': 'success',
-                'message': f"Card {'frozen' if updated_is_frozen else 'unfrozen'} successfully",
-                'card_details': {
-                    'id': card[0],
-                    'card_number': card[2],
-                    'cvv': card[3],
-                    'expiry_date': card[4],
-                    'limit': float(card[5]),
-                    'balance': float(card[6]),
-                    'is_frozen': updated_is_frozen,
-                    'is_active': card[8],
-                    'created_at': str(card[9]),
-                    'last_used_at': str(card[10]) if card[10] else None,
-                    'card_type': card[11],
-                    'currency': normalized_currency,
-                    'currency_symbol': CARD_CURRENCY_RATES[normalized_currency]['symbol']
-                }
+                'message': f"Card {'frozen' if result[0][0] else 'unfrozen'} successfully"
             })
             
         return jsonify({
@@ -1904,7 +1872,7 @@ def fund_virtual_card(current_user, card_id):
         user_result = execute_query(user_query, (current_user['user_id'],))
 
         card_query = """
-            SELECT id, user_id, card_number, cvv, expiry_date, card_limit, current_balance, is_frozen, is_active, created_at, last_used_at, card_type, currency
+            SELECT id, user_id, card_number, card_limit, current_balance, is_frozen, currency, card_type
             FROM virtual_cards
             WHERE id = %s
         """
@@ -1918,7 +1886,7 @@ def fund_virtual_card(current_user, card_id):
 
         user_account_number, user_balance = user_result[0]
         card = card_result[0]
-        card_currency = normalize_card_currency(card[12])
+        card_currency = normalize_card_currency(card[6])
         funding_context = {
             'amount': data.get('amount', 0),
             'exchange_rate': CARD_CURRENCY_RATES[card_currency]['rate']
@@ -1938,7 +1906,7 @@ def fund_virtual_card(current_user, card_id):
                 'message': 'Funding amount must be greater than zero'
             }), 400
 
-        if card[7]:
+        if card[5]:
             return jsonify({
                 'status': 'error',
                 'message': 'Card is frozen'
@@ -1954,9 +1922,9 @@ def fund_virtual_card(current_user, card_id):
             usd_amount * exchange_rate,
             CARD_CURRENCY_RATES[card_currency]['precision']
         )
-        new_card_balance = float(card[6]) + converted_amount
+        new_card_balance = float(card[4]) + converted_amount
 
-        if new_card_balance > float(card[5]):
+        if new_card_balance > float(card[3]):
             return jsonify({
                 'status': 'error',
                 'message': 'Funding would exceed the card limit'
@@ -2009,25 +1977,10 @@ def fund_virtual_card(current_user, card_id):
         return jsonify({
             'status': 'success',
             'message': 'Card funded successfully',
-            'card_details': {
-                'id': card[0],
-                'card_number': card[2],
-                'cvv': card[3],
-                'expiry_date': card[4],
-                'limit': float(card[5]),
-                'balance': new_card_balance,
-                'is_frozen': card[7],
-                'is_active': card[8],
-                'created_at': str(card[9]),
-                'last_used_at': str(datetime.now()),
-                'card_type': card[11],
-                'currency': card_currency,
-                'currency_symbol': CARD_CURRENCY_RATES[card_currency]['symbol']
-            },
             'funding': {
                 'card_id': card_id,
                 'card_currency': card_currency,
-                'card_type': card[11],
+                'card_type': card[7],
                 'usd_amount': round(usd_amount, 2),
                 'converted_amount': converted_amount,
                 'exchange_rate': exchange_rate,
