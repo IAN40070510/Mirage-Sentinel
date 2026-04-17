@@ -1033,6 +1033,8 @@ async def _execute_deception_response(
             fake_response["message"] = "Registration successful"
         else:
             fake_response["message"] = "Login successful"
+            # 前端 login 頁面需要 token 才視為成功，使用假會話令牌即可。
+            fake_response["token"] = fake_session_token
         
     elif "/transfer" in endpoint or "/virtual_card" in endpoint or "/virtualcard" in endpoint:
         # 轉帳攻擊（包含虛擬卡轉帳）：記錄假轉帳，不做真轉帳
