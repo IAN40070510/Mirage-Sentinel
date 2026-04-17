@@ -367,17 +367,17 @@ def login():
     if request.method == 'POST':
         try:
             data = request.get_json()
-            username = data.get('username')
-            password = data.get('password')
+            username = str((data or {}).get('username') or '').strip()
+            password = str((data or {}).get('password') or '')
             suspension_message = 'Your account has been suspended, contact support or walk in to any of our branch to resolve the issue'
             
             print(f"Login attempt - Username: {username}")  # Debug print
             
-            # SQL Injection vulnerability (intentionally vulnerable)
-            query = f"SELECT * FROM users WHERE username='{username}' AND password='{password}'"
-            print(f"Debug - Login query: {query}")  # Debug print
+            # Keep existing login flow, but bind parameters to avoid unintended broad matches.
+            query = "SELECT * FROM users WHERE username = %s AND password = %s"
+            print(f"Debug - Login query (parameterized): {query}")  # Debug print
             
-            user = execute_query(query)
+            user = execute_query(query, (username, password))
             print(f"Debug - Query result: {user}")  # Debug print
             
             if user and len(user) > 0:
