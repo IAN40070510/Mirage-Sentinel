@@ -122,6 +122,21 @@ VULN_BANK_BASE_URL = os.getenv("VULN_BANK_BASE_URL", "http://vuln-bank-main:80")
 )
 
 
+def _get_vuln_bank_base_url_candidates() -> list[str]:
+    primary = VULN_BANK_BASE_URL
+    candidates: list[str] = [primary]
+    for url in (
+        "http://localhost:80",
+        "http://127.0.0.1:80",
+        "http://localhost:5000",
+        "http://127.0.0.1:5000",
+    ):
+        normalized = url.rstrip("/")
+        if normalized not in candidates:
+            candidates.append(normalized)
+    return candidates
+
+
 def _is_private_or_loopback_ip(ip_text: str) -> bool:
     try:
         ip_obj = ipaddress.ip_address(ip_text)
@@ -1416,21 +1431,33 @@ async def _proxy_banking_request(
             "high" if event_payload.get("deception_score", 0) >= 80 else "medium"
         )
     else:
-        upstream_url = f"{VULN_BANK_BASE_URL}/{upstream_path.lstrip('/')}"
-        if query_text:
-            upstream_url = f"{upstream_url}?{query_text}"
-
         event_payload["upstream_attempted"] = 1
         try:
-            async with httpx.AsyncClient(
-                timeout=20.0, follow_redirects=False
-            ) as client:
-                upstream_response = await client.request(
-                    method=request.method,
-                    url=upstream_url,
-                    content=body_bytes if body_bytes else None,
-                    headers=_build_upstream_headers(request),
-                )
+            upstream_response = None
+            last_exc: Exception | None = None
+            for base_url in _get_vuln_bank_base_url_candidates():
+                upstream_url = f"{base_url}/{upstream_path.lstrip('/')}"
+                if query_text:
+                    upstream_url = f"{upstream_url}?{query_text}"
+                try:
+                    async with httpx.AsyncClient(
+                        timeout=20.0, follow_redirects=False
+                    ) as client:
+                        upstream_response = await client.request(
+                            method=request.method,
+                            url=upstream_url,
+                            content=body_bytes if body_bytes else None,
+                            headers=_build_upstream_headers(request),
+                        )
+                    break
+                except httpx.RequestError as exc:
+                    last_exc = exc
+                    logger.warning("Upstream connect failed (%s): %s", base_url, exc)
+                    continue
+
+            if upstream_response is None:
+                raise last_exc or RuntimeError("No upstream response from vuln-bank")
+
             status_code = upstream_response.status_code
             response_content = _inject_mouse_tracker_html(
                 upstream_response.content,
@@ -1482,7 +1509,7 @@ async def _proxy_banking_request(
             event_payload["flow_stage"] = "upstream"
         except Exception as exc:
             logger.error("banking proxy upstream failed: %s", exc)
-            response_content = b'{"detail":"upstream unavailable"}'
+            response_content = b'{"status":"error","message":"upstream unavailable","detail":"upstream unavailable"}'
             response_headers = {"content-type": "application/json"}
             event_payload["mitigation_status"] = "upstream_error"
             event_payload["response_origin"] = "upstream_error"

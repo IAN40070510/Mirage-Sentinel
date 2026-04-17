@@ -45,6 +45,15 @@ def _get_ollama_url() -> str:
     return os.getenv("MIRAGE_OLLAMA_URL", "http://ollama:11434").strip().rstrip("/")
 
 
+def _get_ollama_url_candidates() -> list[str]:
+    primary = _get_ollama_url()
+    candidates: list[str] = [primary]
+    for url in ("http://localhost:11434", "http://127.0.0.1:11434"):
+        if url not in candidates:
+            candidates.append(url)
+    return candidates
+
+
 def _get_ollama_model_id() -> str:
     return os.getenv("MIRAGE_OLLAMA_MODEL", "foundation-sec:8b-q4").strip()
 
@@ -88,33 +97,33 @@ def _load_mirage_text_generator() -> Any | None:
 
 def _generate_with_ollama(prompt: str) -> str | None:
     """使用 Ollama API 生成文本。"""
-    url = f"{_get_ollama_url()}/api/generate"
     model = _get_ollama_model_id()
-    try:
-        payload = {
-            "model": model,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": 0.1,
-                "num_predict": 96,
-                "stop": ["\n", "User:", "Assistant:"],
-            },
-        }
-        with httpx.Client(timeout=60.0) as client:
-            resp = client.post(url, json=payload)
-            if resp.is_success:
-                data = resp.json()
-                return str(data.get("response", "")).strip()
-            else:
+    payload = {
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": 0.1,
+            "num_predict": 96,
+            "stop": ["\n", "User:", "Assistant:"],
+        },
+    }
+    for base_url in _get_ollama_url_candidates():
+        url = f"{base_url}/api/generate"
+        try:
+            with httpx.Client(timeout=60.0) as client:
+                resp = client.post(url, json=payload)
+                if resp.is_success:
+                    data = resp.json()
+                    return str(data.get("response", "")).strip()
                 logger.warning(
                     "Ollama API error: %s (url=%s, model=%s)",
                     resp.status_code,
                     url,
                     model,
                 )
-    except Exception as exc:
-        logger.warning("Ollama connection failed: %s", exc)
+        except Exception as exc:
+            logger.warning("Ollama connection failed (%s): %s", base_url, exc)
     return None
 
 
