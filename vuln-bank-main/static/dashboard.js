@@ -476,6 +476,42 @@ function setMainBalanceValue(amount) {
     document.getElementById('balance').textContent = formatCurrencyAmount(amount, 'USD');
 }
 
+function normalizeVirtualCard(card) {
+    if (!card || typeof card !== 'object') {
+        return null;
+    }
+
+    return {
+        id: Number(card.id),
+        card_number: String(card.card_number || ''),
+        cvv: String(card.cvv || ''),
+        expiry_date: String(card.expiry_date || ''),
+        limit: Number(card.limit ?? 0),
+        balance: Number(card.balance ?? 0),
+        is_frozen: Boolean(card.is_frozen),
+        is_active: Boolean(card.is_active),
+        created_at: card.created_at || '',
+        last_used_at: card.last_used_at || null,
+        card_type: String(card.card_type || 'standard'),
+        currency: String(card.currency || 'USD').toUpperCase(),
+        currency_symbol: card.currency_symbol || getCardCurrencyMeta(card.currency).symbol
+    };
+}
+
+function upsertVirtualCard(cardUpdate) {
+    const normalizedCard = normalizeVirtualCard(cardUpdate);
+    if (!normalizedCard) return;
+
+    const cardIndex = virtualCards.findIndex(card => Number(card.id) === normalizedCard.id);
+    if (cardIndex >= 0) {
+        virtualCards[cardIndex] = { ...virtualCards[cardIndex], ...normalizedCard };
+    } else {
+        virtualCards.push(normalizedCard);
+    }
+
+    renderVirtualCards();
+}
+
 async function fetchVirtualCards() {
     try {
         const response = await fetch('/api/virtual-cards', {
@@ -486,7 +522,9 @@ async function fetchVirtualCards() {
 
         const data = await response.json();
         if (data.status === 'success') {
-            virtualCards = data.cards;
+            virtualCards = Array.isArray(data.cards)
+                ? data.cards.map(normalizeVirtualCard).filter(Boolean)
+                : [];
             renderVirtualCards();
         } else {
             document.getElementById('virtual-cards-list').innerHTML = '<div class="cards-empty-state">No virtual cards found</div>';
@@ -498,16 +536,17 @@ async function fetchVirtualCards() {
 
 function renderVirtualCards() {
     const container = document.getElementById('virtual-cards-list');
-    if (virtualCards.length === 0) {
+    const cardsToRender = virtualCards.map(normalizeVirtualCard).filter(Boolean);
+
+    if (cardsToRender.length === 0) {
         container.innerHTML = '<div class="cards-empty-state">No virtual cards found. Create one to get started.</div>';
         return;
     }
     
-    // Vulnerability: XSS possible in card rendering
-    container.innerHTML = virtualCards.map(card => `
-        <div class="virtual-card ${String(card.card_type || '').toLowerCase()} ${card.is_frozen ? 'frozen' : ''}" id="card-${card.id}">
+    container.innerHTML = cardsToRender.map(card => `
+        <div class="virtual-card ${String(card.card_type || 'standard').toLowerCase()} ${card.is_frozen ? 'frozen' : ''}" id="card-${card.id}">
             <div class="card-topline">
-                <div class="card-type">${card.card_type.toUpperCase()}</div>
+                <div class="card-type">${String(card.card_type || 'standard').toUpperCase()}</div>
                 <div class="card-currency-badge">${card.currency || 'USD'}</div>
             </div>
             <div class="card-number">${formatCardNumber(card.card_number)}</div>
@@ -531,7 +570,8 @@ function renderVirtualCards() {
 }
 
 function formatCardNumber(number) {
-    return number.match(/.{1,4}/g).join(' ');
+    const cardNumber = String(number || '').replace(/\s+/g, '');
+    return cardNumber.match(/.{1,4}/g)?.join(' ') || cardNumber;
 }
 
 function showCreateCardModal() {
@@ -567,7 +607,7 @@ function showCardDetails(cardId) {
         </div>
         <div class="form-group">
             <label>Card Type</label>
-            <p>${card.card_type}</p>
+            <p>${String(card.card_type || 'standard').toUpperCase()}</p>
         </div>
         <div class="form-group">
             <label>Currency</label>
@@ -697,7 +737,11 @@ async function handleFundCard(event) {
         if (data.status === 'success') {
             hideFundCardModal();
             setMainBalanceValue(data.funding.main_balance_after);
-            await fetchVirtualCards();
+            if (data.card_details) {
+                upsertVirtualCard(data.card_details);
+            } else {
+                await fetchVirtualCards();
+            }
             await fetchTransactions();
             showSuccess(
                 `${formatCurrencyAmount(data.funding.converted_amount, data.funding.card_currency)} added to your card from ${formatCurrencyAmount(data.funding.usd_amount, 'USD')}.`,
@@ -722,7 +766,11 @@ async function toggleCardFreeze(cardId) {
 
         const data = await response.json();
         if (data.status === 'success') {
-            await fetchVirtualCards();
+            if (data.card_details) {
+                upsertVirtualCard(data.card_details);
+            } else {
+                await fetchVirtualCards();
+            }
         } else {
             showError(data.message, 'Action Failed');
         }
@@ -947,7 +995,7 @@ async function loadVirtualCardsForPayment() {
             // Only show non-frozen cards with available balance
             select.innerHTML = `
                 <option value="">Select Card</option>
-                ${data.cards.filter(card => !card.is_frozen).map(card => `
+                ${(Array.isArray(data.cards) ? data.cards : []).map(normalizeVirtualCard).filter(card => card && !card.is_frozen).map(card => `
                     <option value="${card.id}">
                         Card ending in ${card.card_number.slice(-4)} 
                         (${card.currency}: ${formatCurrencyAmount(card.balance, card.currency)})
