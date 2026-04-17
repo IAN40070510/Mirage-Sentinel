@@ -242,14 +242,18 @@ def create_fake_session_token(client_ip: str, principal_id: str) -> str:
     fake_token = f"mirage_session_{hashlib.sha256(f'{client_ip}|{principal_id}|{random_suffix}'.encode('utf-8')).hexdigest()[:16]}"
     
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            """
-            UPDATE deception_memory
-            SET fake_session_token = ?, engagement_level = engagement_level + 1, last_seen = ?
-            WHERE client_ip = ? AND principal_id = ?
-            """,
-            (fake_token, now, client_ip, principal_id)
-        )
+            conn.execute(
+                """
+                INSERT INTO deception_memory (client_ip, principal_id, fake_session_token, engagement_level, last_seen, interaction_count, hits)
+                VALUES (?, ?, ?, 1, ?, 0, 0)
+                ON CONFLICT(client_ip, principal_id)
+                DO UPDATE SET
+                    fake_session_token = excluded.fake_session_token,
+                    engagement_level = engagement_level + 1,
+                    last_seen = excluded.last_seen
+                """,
+                (client_ip, principal_id, fake_token, now)
+            )
     return fake_token
 
 

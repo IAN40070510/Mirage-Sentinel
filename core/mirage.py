@@ -304,8 +304,11 @@ def _build_endpoint_specific_prompt(
 
 def generate_fake_data(
     principal_id: str, endpoint: str = "", attack_vector: str = ""
-) -> dict[str, object]:
-    """以純 AI 方式產生 Mirage 假資料，讓 LLM 根據具體 API 端點生成符合格式的回應。"""
+) -> dict[str, object] | None:
+    """
+    以 Mirage 模型產生假資料。
+    僅接受模型回應；若模型不可用或輸出非 JSON，回傳 None。
+    """
     normalized_query = str(principal_id or "unknown")
     normalized_ep = (endpoint or "").lower()
     normalized_vec = (attack_vector or "").lower()
@@ -325,11 +328,13 @@ def generate_fake_data(
     summary = None
     model_id = None
 
+    # 優先嘗試 Ollama
     if _get_llm_provider() == "ollama":
         summary = _generate_with_ollama(prompt)
         if summary:
             model_id = _get_ollama_model_id()
 
+    # 如果 Ollama 失敗，嘗試 HuggingFace
     if not summary and _should_use_hf_mirage():
         generator = _load_mirage_text_generator()
         if generator is not None:
@@ -353,22 +358,22 @@ def generate_fake_data(
             except Exception as exc:
                 logger.warning("Mirage HF generation failed: %s", exc)
 
-    payload: dict[str, object] = {
-        "status": "ai_generated",
-        "route": "mirage",
-        "response_origin": "mirage_ai",
-        "user_id": normalized_query,
-        "endpoint": normalized_ep or "/",
-        "attack_vector": normalized_vec or "unknown",
-        "deception_meta": {
-            "strategy": "pure_ai_response",
-            "seed": seed[:12].upper(),
-            "queued_at": timestamp,
-        },
-    }
-
     if summary:
-        payload["llm_model_id"] = model_id or "unknown"
+        payload: dict[str, object] = {
+            "status": "success",
+            "route": "mirage",
+            "response_origin": "mirage_llm",
+            "user_id": normalized_query,
+            "endpoint": normalized_ep or "/",
+            "attack_vector": normalized_vec or "unknown",
+            "llm_model_id": model_id or "unknown",
+            "deception_meta": {
+                "strategy": "mirage_llm_generated",
+                "seed": seed[:12].upper(),
+                "timestamp": timestamp,
+            },
+        }
+        
         import json
 
         try:
@@ -381,10 +386,12 @@ def generate_fake_data(
             ai_data = json.loads(clean_summary)
             if isinstance(ai_data, dict):
                 payload.update(ai_data)
-                payload["response_origin"] = "mirage_ai"
-            else:
-                payload["llm_summary"] = summary[:1000]
-        except Exception:
-            payload["llm_summary"] = summary[:1000]
+                return payload
+            logger.warning("Mirage model returned non-dict JSON (endpoint=%s)", normalized_ep)
+            return None
+        except Exception as exc:
+            logger.warning("Failed to parse Mirage LLM response as JSON: %s", exc)
+            return None
 
-    return payload
+    logger.warning("Mirage model unavailable (endpoint=%s, principal_id=%s)", normalized_ep, normalized_query)
+    return None

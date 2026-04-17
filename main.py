@@ -881,6 +881,7 @@ async def _execute_deception_response(
     """
     from core.mirage import generate_fake_data
     from core.deception_db import (
+        get_memory,
         save_deception_state,
         create_fake_session_token,
         record_fake_login,
@@ -889,9 +890,39 @@ async def _execute_deception_response(
     )
     
     endpoint = (upstream_path or "").lower()
-    fake_response = generate_fake_data(
-        principal_id, endpoint=endpoint, attack_vector=attack_vector
-    )
+    cached_memory = get_memory(client_ip, principal_id)
+    fake_response: dict[str, object] | None = None
+    if cached_memory and isinstance(cached_memory.get("payload"), dict):
+        fake_response = cast(dict[str, object], cached_memory["payload"])
+        fake_response["response_origin"] = "deception_db"
+        fake_response["deception_mode"] = "db_reuse"
+    else:
+        fake_response = generate_fake_data(
+            principal_id, endpoint=endpoint, attack_vector=attack_vector
+        )
+
+    # 嚴格模式：Mirage 只能模型回應，模型不可用時不啟用任何備援流程。
+    if not fake_response:
+        error_payload = {
+            "status": "error",
+            "route": "mirage",
+            "response_origin": "mirage_unavailable",
+            "message": "Mirage model unavailable",
+            "endpoint": endpoint,
+            "user_id": principal_id,
+            "created_at": datetime.now().isoformat(timespec="milliseconds"),
+        }
+        return (
+            json.dumps(error_payload, ensure_ascii=False).encode("utf-8"),
+            503,
+            {"content-type": "application/json; charset=utf-8"},
+            {
+                "mitigation_status": "mirage_unavailable",
+                "response_payload": error_payload,
+                "response_origin": "mirage",
+                "deception_mode": "model_only",
+            },
+        )
     
     now_iso = datetime.now().isoformat(timespec="milliseconds")
     fake_session_token = create_fake_session_token(client_ip, principal_id)
@@ -981,6 +1012,8 @@ async def _check_fake_session_and_respond(
     """
     from core.deception_db import (
         get_fake_session,
+        get_memory,
+        save_deception_state,
         get_fake_account_for_attacker,
         get_fake_transactions_for_attacker,
         get_fake_cards_for_attacker,
@@ -1013,15 +1046,28 @@ async def _check_fake_session_and_respond(
     # 找到假會話！根據端點類型返回虛假數據
     endpoint = (upstream_path or "").lower()
     now_iso = datetime.now().isoformat(timespec="milliseconds")
-    
-    fake_response: dict[str, object] = {
+
+    cached_memory = get_memory(client_ip, principal_id)
+    cached_payload = (
+        cached_memory.get("payload")
+        if cached_memory and isinstance(cached_memory.get("payload"), dict)
+        else None
+    )
+
+    fake_response: dict[str, object] = cast(
+        dict[str, object],
+        cached_payload if isinstance(cached_payload, dict) else {
         "status": "success",
         "response_origin": "mirage_cached",
         "user_id": principal_id,
         "endpoint": endpoint,
         "created_at": now_iso,
         "message": "Retrieved from deception cache",
-    }
+    },
+    )
+    fake_response["response_origin"] = "mirage_cached"
+    fake_response["endpoint"] = endpoint
+    fake_response["created_at"] = now_iso
     
     # 根據端點類型返回相應的虛假數據
     if "/login" in endpoint or "/dashboard" in endpoint or "/check_balance" in endpoint:
@@ -1081,6 +1127,15 @@ async def _check_fake_session_and_respond(
         "fake_session_token": fake_session_token,
         "engagement_level": fake_session.get("engagement_level", 0),
     }
+
+    # 命中假會話也要回寫欺敵狀態，累積互動深度與命中次數。
+    save_deception_state(
+        client_ip=client_ip,
+        principal_id=principal_id,
+        vector="cached_session",
+        risk=0,
+        payload=fake_response,
+    )
     
     return (
         json.dumps(fake_response, ensure_ascii=False).encode("utf-8"),
