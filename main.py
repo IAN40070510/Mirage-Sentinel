@@ -1194,7 +1194,11 @@ async def _execute_deception_response(
             or f"ACC-{fake_session_token[:8]}"
         )
 
-        login_balance = _coerce_amount(fake_response.get("balance", 50000.0), fallback=50000.0)
+        existing_fake_account = get_fake_account_for_attacker(client_ip, principal_id)
+        if existing_fake_account:
+            login_balance = _coerce_amount(existing_fake_account.get("balance", 50000.0), fallback=50000.0)
+        else:
+            login_balance = _coerce_amount(fake_response.get("balance", 50000.0), fallback=50000.0)
         mirror_is_admin = bool(fake_response.get("is_admin", False))
         mirror_profile_picture = (
             str(fake_response.get("profile_picture"))
