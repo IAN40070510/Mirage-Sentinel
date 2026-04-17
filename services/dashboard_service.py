@@ -31,7 +31,16 @@ async def dashboard_command_heatmap(request: Request):
 @app.get("/api/v1/dashboard/traffic_compare")
 async def dashboard_traffic_compare(request: Request):
     require_api_key(request)
-    return compare_traffic()
+    # 從查詢參數取得 limit，預設 1000，最大 50000
+    try:
+        limit = int(request.query_params.get("limit", 1000))
+        if limit < 1:
+            limit = 1
+        elif limit > 50000:
+            limit = 50000
+    except Exception:
+        limit = 1000
+    return compare_traffic(limit)
 
 
 # 與新版 API 相容的 alias 路由，供 SOC 前端存取
@@ -124,8 +133,15 @@ async def dashboard_ip_detail(client_ip: str, request: Request):
 
 @app.get("/api/v1/dashboard/compare")
 async def dashboard_compare(request: Request):
+    from fastapi import Query
+
+    limit = request.query_params.get("limit")
+    try:
+        limit = int(limit) if limit is not None else 1000
+    except Exception:
+        limit = 1000
     require_api_key(request)
-    return compare_traffic()
+    return compare_traffic(limit)
 
 
 @app.get("/api/v1/dashboard/heatmap")
