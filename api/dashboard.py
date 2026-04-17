@@ -101,7 +101,7 @@ async def get_attack_timeline(
 
 @router.get("/recent_traffic", summary="獲取近期流量日誌")
 async def get_recent_traffic(
-    limit: int = Query(100, ge=1, le=500, description="筆數上限"),
+    limit: int = Query(100, ge=1, le=50000, description="筆數上限 (最大50000)"),
     mode: str = Query(
         "all", pattern="^(all|attacks)$", description="all=全流量, attacks=僅攻擊"
     ),
@@ -221,7 +221,7 @@ async def get_hacker_report(
 
 @router.get("/live_ips", summary="取得資料庫中所有 IP 與簡易流量資訊")
 async def get_live_ips(
-    limit: int = Query(500, ge=1, le=2000, description="IP 筆數上限"),
+    limit: int = Query(500, ge=1, le=50000, description="IP 筆數上限 (最大50000)"),
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ):
     verify_api_key(x_api_key)
@@ -234,7 +234,7 @@ async def get_live_ips(
 
 @router.get("/traffic_compare", summary="取得正常與攻擊流量比較")
 async def get_traffic_compare(
-    limit: int = Query(1000, ge=1, le=10000, description="統計筆數上限"),
+    limit: int = Query(1000, ge=1, le=50000, description="統計筆數上限 (最大50000)"),
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ):
     verify_api_key(x_api_key)
@@ -335,7 +335,7 @@ async def get_ip_bundle(
 
 @router.get("/statistics/country", summary="按國家統計攻擊數與連線")
 async def get_country_stats(
-    limit: int = Query(20, ge=1, le=100, description="國家數上限"),
+    limit: int = Query(20, ge=1, le=50000, description="國家數上限 (最大50000)"),
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ):
     verify_api_key(x_api_key)
@@ -362,7 +362,7 @@ async def get_attack_vectors(
 
 @router.get("/statistics/top_source_ips", summary="源 IP 熱點分布")
 async def get_source_ips(
-    limit: int = Query(20, ge=1, le=100, description="IP 筆數上限"),
+    limit: int = Query(20, ge=1, le=50000, description="IP 筆數上限 (最大50000)"),
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ):
     verify_api_key(x_api_key)
@@ -400,7 +400,7 @@ async def get_time_series(
 )
 async def get_events_by_route(
     route: str,
-    limit: int = Query(100, ge=1, le=500, description="筆數上限"),
+    limit: int = Query(100, ge=1, le=50000, description="筆數上限 (最大50000)"),
     offset: int = Query(0, ge=0, description="分頁偏移"),
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ):
@@ -420,7 +420,7 @@ async def get_events_by_route(
 async def get_events_by_risk_score(
     min_score: int = Query(0, ge=0, le=100, description="最低風險分數"),
     max_score: int = Query(100, ge=0, le=100, description="最高風險分數"),
-    limit: int = Query(100, ge=1, le=500, description="筆數上限"),
+    limit: int = Query(100, ge=1, le=50000, description="筆數上限 (最大50000)"),
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ):
     verify_api_key(x_api_key)
