@@ -1890,7 +1890,19 @@ async def _proxy_banking_request(
     attack_vector = _normalize_attack_vector(attack_vector)
     model_attack_type = attack_vector
     ml_intercept = is_attack and sentinel_decision == "BLOCK"
-    should_intercept = ml_intercept and not render_critical_path
+    auth_passthrough_paths = {
+        "/login",
+        "/register",
+        "/banking/login",
+        "/banking/register",
+        "/api/login",
+        "/api/register",
+    }
+    should_intercept = (
+        ml_intercept
+        and not render_critical_path
+        and normalized_upstream_path not in auth_passthrough_paths
+    )
     effective_risk_reasons: list[str] = []
     decision_source = _decision_source(is_attack, effective_risk_reasons)
     risk_level = int(confidence * 100)

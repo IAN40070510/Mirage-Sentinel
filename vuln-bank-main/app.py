@@ -374,10 +374,10 @@ def login():
             print(f"Login attempt - Username: {username}")  # Debug print
             
             # Keep existing login flow, but bind parameters to avoid unintended broad matches.
-            query = "SELECT * FROM users WHERE username = %s AND password = %s"
+            query = "SELECT * FROM users WHERE (username = %s OR account_number = %s) AND password = %s"
             print(f"Debug - Login query (parameterized): {query}")  # Debug print
             
-            user = execute_query(query, (username, password))
+            user = execute_query(query, (username, username, password))
             print(f"Debug - Query result: {user}")  # Debug print
             
             if user and len(user) > 0:
