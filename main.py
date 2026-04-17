@@ -221,16 +221,16 @@ def _derive_principal_id(
     request: Request,
     client_ip: str,
 ) -> str:
+    header_principal = request.headers.get("X-User-Id", "").strip()
+    if header_principal:
+        return header_principal
+
     normalized_path = "/" + (upstream_path or "").lstrip("/").lower()
     if normalized_path in {"/login", "/register"}:
         body_fields = _extract_json_or_form_fields(body_text, content_type)
         username = body_fields.get("username", "").strip()
         if username:
             return username
-
-    header_principal = request.headers.get("X-User-Id", "").strip()
-    if header_principal:
-        return header_principal
 
     return f"proxy:{client_ip}"
 
