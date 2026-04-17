@@ -386,8 +386,5 @@ def generate_fake_data(
                 payload["llm_summary"] = summary[:1000]
         except Exception:
             payload["llm_summary"] = summary[:1000]
-    else:
-        payload["response_origin"] = "mirage_ai_unavailable"
-        payload["message"] = "Mirage AI model unavailable"
 
     return payload
