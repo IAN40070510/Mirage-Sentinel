@@ -858,6 +858,69 @@ def _extract_loan_details_text(
     return "&".join(collected)
 
 
+def _collect_scalar_values(data: Any, out: list[str]) -> None:
+    if data is None:
+        return
+    if isinstance(data, dict):
+        for value in data.values():
+            _collect_scalar_values(value, out)
+        return
+    if isinstance(data, (list, tuple, set)):
+        for item in data:
+            _collect_scalar_values(item, out)
+        return
+    text = str(data).strip()
+    if text:
+        out.append(text)
+
+
+def _build_values_only_detection_target(
+    query_text: str,
+    body_text: str,
+    content_type: str,
+) -> str:
+    """Build XGBoost input using user-provided values only (exclude field names)."""
+    values: list[str] = []
+
+    if query_text:
+        for _, value in parse_qsl(query_text, keep_blank_values=True):
+            v = (value or "").strip()
+            if v:
+                values.append(v)
+
+    lowered_content_type = (content_type or "").lower()
+    body = (body_text or "").strip()
+
+    if body:
+        parsed = False
+
+        if "application/json" in lowered_content_type or body.startswith("{") or body.startswith("["):
+            try:
+                payload = json.loads(body)
+                _collect_scalar_values(payload, values)
+                parsed = True
+            except Exception:
+                pass
+
+        if (
+            not parsed
+            and (
+                "application/x-www-form-urlencoded" in lowered_content_type
+                or ("=" in body and "&" in body)
+            )
+        ):
+            for _, value in parse_qsl(body, keep_blank_values=True):
+                v = (value or "").strip()
+                if v:
+                    values.append(v)
+            parsed = True
+
+        if not parsed:
+            values.append(body)
+
+    return " ".join(values).strip()
+
+
 def _local_deception_payload(
     principal_id: str,
     attack_vector: str,
@@ -1257,9 +1320,13 @@ async def _proxy_banking_request(
         raw_payload_text = (f"{body_text}\n" if body_text else "") + "\n".join(
             payload_fragments
         )
-    detection_target = " ".join(
-        filter(None, [query_text, raw_payload_text])
-    ).strip()
+    detection_target = _build_values_only_detection_target(
+        query_text=query_text,
+        body_text=body_text,
+        content_type=content_type,
+    )
+    if not detection_target:
+        detection_target = " ".join(filter(None, [query_text, body_text])).strip()
 
     # 先預設為 None，稍後根據是否攻擊流量決定來源
     req_interval_ms = None
