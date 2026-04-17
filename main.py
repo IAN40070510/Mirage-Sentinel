@@ -2049,16 +2049,77 @@ async def _proxy_banking_request(
         response_payload = bytes(response_content)
         end_perf = time.perf_counter()
         process_ms = round((end_perf - start_perf) * 1000, 3)
+        normalized_upstream_path = "/" + upstream_path.lstrip("/")
+        business_context, banking_action = _classify_banking_surface(upstream_path)
+
+        parsed_response_payload: object
+        content_type_value = str(response_headers.get("content-type", "")).lower()
+        if "application/json" in content_type_value:
+            try:
+                parsed_response_payload = json.loads(response_payload.decode("utf-8", errors="ignore"))
+            except Exception:
+                parsed_response_payload = response_payload.decode("utf-8", errors="ignore")
+        else:
+            parsed_response_payload = response_payload.decode("utf-8", errors="ignore")
+
+        log_event_payload = {
+            "request_at": request_at,
+            "response_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+            "process_ms": int(process_ms),
+            "client_ip": client_ip,
+            "location": request.headers.get("CF-IPCountry") or request.headers.get("X-Country") or request.headers.get("X-Country-Code"),
+            "is_proxy": detect_proxy(request),
+            "user_agent": user_agent,
+            "tls_fingerprint": tls_fingerprint,
+            "raw_payload": body_text,
+            "input_string": body_text,
+            "principal_id": principal_id,
+            "session_chain_id": session_chain_id,
+            "method": request.method,
+            "endpoint": normalized_upstream_path,
+            "query_string": query_text,
+            "authorization": authorization,
+            "content_type": content_type,
+            "content_length": content_length,
+            "header_count": header_count,
+            "all_headers": headers_dict,
+            "referer": referer,
+            "business_context": business_context,
+            "banking_action": banking_action,
+            "response_payload": parsed_response_payload,
+            "attack_vector": event_meta.get("deception_mode") or "cached_session",
+            "risk_level": 0,
+            "is_attack": 1,
+            "mitigation_status": event_meta.get("mitigation_status") or "fake_session_detected",
+            "decision_source": "rule",
+            "route_before": "banking_proxy",
+            "route_after": "mirage",
+            "deception_reason": "fake_session_replay",
+            "policy_hit": event_meta.get("deception_mode") or "cached_session",
+            "upstream_attempted": 0,
+            "upstream_status_code": status_code,
+            "deception_engaged": 1,
+            "deception_mode": event_meta.get("deception_mode") or "fake_session_hit",
+            "real_backend_touched": 0,
+            "response_origin": event_meta.get("response_origin") or "deception_cache",
+            "flow_stage": "deception",
+            "deception_score": 80,
+            "trust_level": "low",
+            "memory_hit": 1,
+            "hits": 0,
+            "interaction_depth": 0,
+            "dwell_time": 0.0,
+        }
         
         logger.info(f"[FAKE SESSION] 命中假會話記錄，直接返回虛假數據: {client_ip}:{principal_id}")
         
         response = Response(response_payload, status_code=status_code, headers=response_headers)
         
-        # 可選：記錄到流量日誌
+        # 命中假會話也必須進 SOC 事件流，否則戰情室看不到異常用戶銀行功能。
         if background_tasks:
-            background_tasks.add_task(
-                lambda: logger.info(f"[FAKE SESSION LOG] {client_ip}:{principal_id} - {upstream_path} - {status_code}")
-            )
+            background_tasks.add_task(log_traffic_event, log_event_payload)
+        else:
+            log_traffic_event(log_event_payload)
         
         return response
     
