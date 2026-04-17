@@ -365,22 +365,6 @@ def record_fake_login(
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     try:
         with sqlite3.connect(DB_PATH) as conn:
-            existing_balance_row = conn.execute(
-                """
-                SELECT fake_balance
-                FROM fake_accounts
-                WHERE principal_id = ?
-                ORDER BY created_at DESC
-                LIMIT 1
-                """,
-                (principal_id,),
-            ).fetchone()
-
-            effective_balance = float(balance)
-            if existing_balance_row and existing_balance_row[0] is not None:
-                # Keep previous deception state on re-login instead of resetting to default.
-                effective_balance = float(existing_balance_row[0])
-
             conn.execute(
                 """
                 INSERT INTO fake_accounts (client_ip, principal_id, fake_username, fake_password, fake_account_id, fake_balance, created_at)
@@ -388,9 +372,10 @@ def record_fake_login(
                 ON CONFLICT(client_ip, principal_id, fake_username)
                 DO UPDATE SET
                     fake_password = excluded.fake_password,
+                    fake_balance = excluded.fake_balance,
                     fake_account_id = excluded.fake_account_id
                 """,
-                (client_ip, principal_id, fake_username, fake_password, fake_account_id, effective_balance, now)
+                (client_ip, principal_id, fake_username, fake_password, fake_account_id, balance, now)
             )
             conn.execute(
                 """
@@ -406,7 +391,7 @@ def record_fake_login(
                     fake_username,
                     fake_password,
                     fake_account_id,
-                    effective_balance,
+                    float(balance),
                     1 if is_admin else 0,
                     profile_picture,
                     reset_pin,
