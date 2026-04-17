@@ -373,17 +373,22 @@ def login():
     if request.method == 'POST':
         try:
             data = request.get_json()
-            username = data.get('username')
-            password = data.get('password')
+            username = str((data or {}).get('username') or '').strip()
+            password = str((data or {}).get('password') or '')
             suspension_message = 'Your account has been suspended, contact support or walk in to any of our branch to resolve the issue'
+
+            if not username or not password:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Username and password are required'
+                }), 400
             
             print(f"Login attempt - Username: {username}")  # Debug print
             
-            # SQL Injection vulnerability (intentionally vulnerable)
-            query = f"SELECT * FROM users WHERE username='{username}' AND password='{password}'"
-            print(f"Debug - Login query: {query}")  # Debug print
-            
-            user = execute_query(query)
+            user = execute_query(
+                "SELECT * FROM users WHERE username = %s AND password = %s",
+                (username, password),
+            )
             print(f"Debug - Query result: {user}")  # Debug print
             
             if user and len(user) > 0:
@@ -531,25 +536,48 @@ def check_balance(account_number):
 def transfer(current_user):
     try:
         data = request.get_json()
-        # Vulnerability: No input validation on amount
-        # Vulnerability: Negative amounts allowed
-        amount = float(data.get('amount'))
-        to_account = data.get('to_account')
+        amount = float((data or {}).get('amount', 0))
+        to_account = str((data or {}).get('to_account') or '').strip()
+
+        if amount <= 0:
+            return jsonify({
+                'status': 'error',
+                'message': 'Transfer amount must be greater than zero'
+            }), 400
+
+        if not to_account:
+            return jsonify({
+                'status': 'error',
+                'message': 'Destination account is required'
+            }), 400
         
         # Get sender's account number
-        # Race condition vulnerability in checking balance
-        sender_data = execute_query(
+        sender_rows = execute_query(
             "SELECT account_number, balance FROM users WHERE id = %s",
             (current_user['user_id'],)
-        )[0]
-        
+        )
+        if not sender_rows:
+            return jsonify({
+                'status': 'error',
+                'message': 'Sender account not found'
+            }), 404
+
+        recipient_rows = execute_query(
+            "SELECT id FROM users WHERE account_number = %s",
+            (to_account,),
+        )
+        if not recipient_rows:
+            return jsonify({
+                'status': 'error',
+                'message': 'Destination account not found'
+            }), 404
+
+        sender_data = sender_rows[0]
         from_account = sender_data[0]
         balance = float(sender_data[1])
         
-        if balance >= abs(amount):  # Check against absolute value of amount
+        if balance >= amount:
             try:
-                # Vulnerability: Negative transfers possible
-                # Vulnerability: No transaction atomicity
                 queries = [
                     (
                         "UPDATE users SET balance = balance - %s WHERE id = %s",
@@ -568,11 +596,17 @@ def transfer(current_user):
                     )
                 ]
                 execute_transaction(queries)
+
+                new_balance_rows = execute_query(
+                    "SELECT balance FROM users WHERE id = %s",
+                    (current_user['user_id'],),
+                )
+                new_balance = float(new_balance_rows[0][0]) if new_balance_rows else balance - amount
                 
                 return jsonify({
                     'status': 'success',
                     'message': 'Transfer Completed',
-                    'new_balance': balance - amount
+                    'new_balance': new_balance
                 })
                 
             except Exception as e:
