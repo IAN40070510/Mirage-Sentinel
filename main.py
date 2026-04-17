@@ -171,6 +171,51 @@ def _extract_client_ip(request: Request) -> str:
     return peer_ip
 
 
+def _extract_json_or_form_fields(body_text: str, content_type: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    body = (body_text or "").strip()
+    lowered_content_type = (content_type or "").lower()
+
+    if not body:
+        return fields
+
+    if "application/json" in lowered_content_type or body.startswith("{") or body.startswith("["):
+        try:
+            payload = json.loads(body)
+            if isinstance(payload, dict):
+                for key, value in payload.items():
+                    fields[str(key).lower()] = str(value).strip()
+        except Exception:
+            pass
+
+    if "application/x-www-form-urlencoded" in lowered_content_type or ("=" in body and "&" in body):
+        for key, value in parse_qsl(body, keep_blank_values=True):
+            fields[str(key).lower()] = str(value).strip()
+
+    return fields
+
+
+def _derive_principal_id(
+    upstream_path: str,
+    body_text: str,
+    content_type: str,
+    request: Request,
+    client_ip: str,
+) -> str:
+    header_principal = request.headers.get("X-User-Id", "").strip()
+    if header_principal:
+        return header_principal
+
+    normalized_path = "/" + (upstream_path or "").lstrip("/").lower()
+    if normalized_path in {"/login", "/register"}:
+        body_fields = _extract_json_or_form_fields(body_text, content_type)
+        username = body_fields.get("username", "").strip()
+        if username:
+            return username
+
+    return f"proxy:{client_ip}"
+
+
 async def verify_dashboard_access(
     request: Request,
     x_dashboard_key: str | None = Header(default=None, alias="X-Dashboard-Key"),
@@ -545,6 +590,15 @@ def _inject_mouse_tracker_html(content: bytes, content_type: str | None) -> byte
 def _build_mirage_cookie_header(fake_session_token: str) -> str:
     """Build Mirage session cookie header for deception-flow stickiness."""
     return f"mirage_session={fake_session_token}; Path=/; HttpOnly; SameSite=Lax"
+
+
+def _coerce_amount(value: object, fallback: float = 1000.0) -> float:
+    try:
+        if isinstance(value, (int, float, str)):
+            return float(value)
+    except Exception:
+        pass
+    return fallback
 
 
 def _build_mirage_dashboard_html(fake_response: dict[str, object]) -> str:
@@ -1084,14 +1138,36 @@ async def _execute_deception_response(
     now_iso = datetime.now().isoformat(timespec="milliseconds")
     fake_session_token = create_fake_session_token(client_ip, principal_id)
     fake_username = str(fake_response.get("user_id", f"attacker_{principal_id}"))
+    request_fields = _extract_json_or_form_fields(body_text, "application/json")
+    request_fields.update(_extract_json_or_form_fields(body_text, "application/x-www-form-urlencoded"))
     
     # 根據端點類型記錄到欺敵資料庫
     if "/login" in endpoint or "/register" in endpoint:
         # 登入/註冊攻擊：記錄假帳號/密碼
-        fake_password = str(fake_response.get("password", "honeypot_default_password"))
-        fake_account_id = str(fake_response.get("account_id", f"ACC-{fake_session_token[:8]}"))
+        req_username = str(request_fields.get("username", "")).strip()
+        req_password = str(request_fields.get("password", "")).strip()
+        model_username = str(
+            fake_response.get("username")
+            or fake_response.get("user_id")
+            or fake_response.get("account_id")
+            or ""
+        ).strip()
+        model_password = str(fake_response.get("password", "")).strip()
+
+        fake_username = req_username or model_username or f"attacker_{principal_id}"
+        fake_password = req_password or model_password or "honeypot_default_password"
+        fake_account_id = str(
+            fake_response.get("account_number")
+            or fake_response.get("account_id")
+            or f"ACC-{fake_session_token[:8]}"
+        )
+
         record_fake_login(client_ip, principal_id, fake_username, fake_password, fake_account_id)
+        fake_response["username"] = fake_username
+        fake_response["password"] = fake_password
+        fake_response["account_number"] = fake_account_id
         fake_response["session_token"] = fake_session_token
+        fake_response["token"] = fake_session_token
         fake_response["status"] = "success"
         # 區分 login 和 register 回應
         if "/register" in endpoint:
@@ -1101,16 +1177,25 @@ async def _execute_deception_response(
         
     elif "/transfer" in endpoint or "/virtual_card" in endpoint or "/virtualcard" in endpoint:
         # 轉帳攻擊（包含虛擬卡轉帳）：記錄假轉帳，不做真轉帳
-        try:
-            import json as json_lib
-            body_json = json_lib.loads(body_text) if body_text else {}
-        except Exception:
-            body_json = {}
-        
-        from_account = str(body_json.get("from_account", fake_response.get("from_account", f"ACC-001-{principal_id}")))
-        to_account = str(body_json.get("to_account", fake_response.get("to_account", f"ACC-002-FAKE")))
-        amount = float(body_json.get("amount", fake_response.get("amount", 1000)))
-        currency = str(body_json.get("currency", fake_response.get("currency", "USD")))
+        from_account = str(
+            request_fields.get("from_account")
+            or request_fields.get("fromaccount")
+            or fake_response.get("from_account", f"ACC-001-{principal_id}")
+        )
+        to_account = str(
+            request_fields.get("to_account")
+            or request_fields.get("toaccount")
+            or fake_response.get("to_account", "ACC-002-FAKE")
+        )
+        amount = _coerce_amount(request_fields.get("amount", fake_response.get("amount", 1000)))
+        description = str(
+            request_fields.get("description")
+            or request_fields.get("memo")
+            or request_fields.get("note")
+            or fake_response.get("description")
+            or "Transfer"
+        )
+        currency = str(request_fields.get("currency", fake_response.get("currency", "USD")))
         transaction_id = str(fake_response.get("transaction_id", f"TXN-{fake_session_token[:12]}"))
         
         # 記錄假轉帳到欺敵資料庫，不做真轉帳
@@ -1118,20 +1203,31 @@ async def _execute_deception_response(
         fake_response["status"] = "success"
         fake_response["message"] = "Transfer completed" if "/transfer" in endpoint else "Virtual card transfer completed"
         fake_response["confirmation_code"] = f"CONF-{fake_session_token[:12]}"
+        fake_response["from_account"] = from_account
+        fake_response["to_account"] = to_account
+        fake_response["amount"] = amount
+        fake_response["description"] = description
+        fake_response["currency"] = currency
+        fake_response["transaction_id"] = transaction_id
         
     elif "/new_card" in endpoint or "/newcard" in endpoint or "/add_card" in endpoint or "/upload" in endpoint or "/profile" in endpoint or "/card" in endpoint:
         # 卡片/個人資料操作：記錄假卡片
-        fake_card_number = str(fake_response.get("card_number", "4111111111111111"))
-        fake_card_holder = str(fake_response.get("card_holder", fake_username or "Honeypot User"))
-        fake_expiry = str(fake_response.get("expiry", "12/28"))
-        fake_cvv = str(fake_response.get("cvv", "123"))
-        fake_card_type = str(fake_response.get("card_type", "VISA"))
+        fake_card_number = str(request_fields.get("card_number") or fake_response.get("card_number", "4111111111111111"))
+        fake_card_holder = str(request_fields.get("card_holder") or fake_response.get("card_holder", fake_username or "Honeypot User"))
+        fake_expiry = str(request_fields.get("expiry") or request_fields.get("expiry_date") or fake_response.get("expiry", "12/28"))
+        fake_cvv = str(request_fields.get("cvv") or fake_response.get("cvv", "123"))
+        fake_card_type = str(request_fields.get("card_type") or fake_response.get("card_type", "VISA"))
         
         if "/card" in endpoint or "/add_card" in endpoint:
             record_fake_card(client_ip, principal_id, fake_card_number, fake_card_holder, fake_expiry, fake_cvv, fake_card_type)
         
         fake_response["status"] = "success"
         fake_response["message"] = "Operation completed"
+        fake_response["card_number"] = fake_card_number
+        fake_response["card_holder"] = fake_card_holder
+        fake_response["expiry_date"] = fake_expiry
+        fake_response["cvv"] = fake_cvv
+        fake_response["card_type"] = fake_card_type
     
     # 共通操作：保存欺敵狀態
     save_deception_state(
@@ -1185,18 +1281,8 @@ async def _check_fake_session_and_respond(
     )
     
     # 嘗試從請求中提取會話令牌
-    fake_session_token = None
-    
-    # 優先檢查自定義 header
     fake_session_token = request.headers.get("X-Mirage-Session", "").strip()
-    
-    # 其次檢查 Authorization header
-    if not fake_session_token:
-        auth_header = request.headers.get("authorization", "").strip()
-        if auth_header.lower().startswith("bearer "):
-            fake_session_token = auth_header[7:].strip()
-    
-    # 最後檢查 Cookie
+
     if not fake_session_token:
         fake_session_token = request.cookies.get("mirage_session", "").strip()
     
@@ -1204,8 +1290,8 @@ async def _check_fake_session_and_respond(
         return None
     
     # 檢查這個令牌是否在假會話資料庫中
-    fake_session = get_fake_session(client_ip, principal_id)
-    if not fake_session or fake_session.get("fake_session_token") != fake_session_token:
+    fake_session = get_fake_session(fake_session_token)
+    if not fake_session:
         return None
     
     # 找到假會話！根據端點類型返回虛假數據
@@ -1372,7 +1458,13 @@ async def _proxy_banking_request(
     authorization = headers_dict.get("authorization", "")
     # principal_id 表示「互動主體識別」，目前優先對應到 vuln-bank-main 的
     # X-User-Id / CIF / customer id。若缺失則回退成 proxy:<client_ip>。
-    principal_id = request.headers.get("X-User-Id", "").strip() or f"proxy:{client_ip}"
+    principal_id = _derive_principal_id(
+        upstream_path=upstream_path,
+        body_text=body_text,
+        content_type=content_type,
+        request=request,
+        client_ip=client_ip,
+    )
     session_chain_id = _derive_session_chain_id(
         client_ip=client_ip,
         principal_id=principal_id,

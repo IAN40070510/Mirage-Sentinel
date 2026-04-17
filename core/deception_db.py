@@ -257,23 +257,24 @@ def create_fake_session_token(client_ip: str, principal_id: str) -> str:
     return fake_token
 
 
-def get_fake_session(client_ip: str, principal_id: str) -> dict[str, object] | None:
-    """獲取攻擊者的假會話信息"""
+def get_fake_session(fake_session_token: str) -> dict[str, object] | None:
+    """獲取攻擊者的假會話信息（以 token 為主，不再依賴 IP）"""
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.execute(
             """
-            SELECT fake_session_token, engagement_level, last_seen
+            SELECT fake_session_token, principal_id, engagement_level, last_seen
             FROM deception_memory
-            WHERE client_ip = ? AND principal_id = ?
+            WHERE fake_session_token = ?
             """,
-            (client_ip, principal_id)
+            (fake_session_token,)
         )
         result = cursor.fetchone()
         if result:
             return {
                 "fake_session_token": result[0],
-                "engagement_level": result[1],
-                "last_seen": result[2]
+                "principal_id": result[1],
+                "engagement_level": result[2],
+                "last_seen": result[3]
             }
     return None
 
