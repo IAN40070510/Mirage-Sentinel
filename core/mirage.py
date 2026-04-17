@@ -4,6 +4,8 @@ import hashlib
 import logging
 import os
 import httpx
+import json
+import re
 from datetime import datetime
 from typing import Any
 
@@ -115,7 +117,6 @@ def _generate_with_ollama(prompt: str) -> str | None:
             "num_predict": 512,  # 增加 token 限制以生成完整 JSON
             "top_p": 0.9,
             "top_k": 40,
-            "stop": ["\n\n", "---"],  # 僅在雙換行時停止
         },
     }
     
@@ -338,6 +339,47 @@ def _build_endpoint_specific_prompt(
         )
 
 
+def _parse_json_dict(raw_text: str) -> dict[str, Any] | None:
+    """Best-effort parse for model outputs that may contain wrappers/noise."""
+    clean = (raw_text or "").strip()
+    if not clean:
+        return None
+
+    if clean.startswith("```json"):
+        clean = clean[7:].strip()
+    if clean.startswith("```"):
+        clean = clean[3:].strip()
+    if clean.endswith("```"):
+        clean = clean[:-3].strip()
+
+    candidates: list[str] = [clean]
+    left = clean.find("{")
+    right = clean.rfind("}")
+    if left != -1 and right != -1 and right > left:
+        candidates.append(clean[left : right + 1])
+
+    regex_match = re.search(r"\{[\s\S]*\}", clean)
+    if regex_match:
+        candidates.append(regex_match.group(0))
+
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            repaired = re.sub(r",(\s*[}\]])", r"\1", candidate)
+            try:
+                parsed = json.loads(repaired)
+                if isinstance(parsed, dict):
+                    return parsed
+            except Exception:
+                continue
+        except Exception:
+            continue
+    return None
+
+
 def generate_fake_data(
     principal_id: str, endpoint: str = "", attack_vector: str = ""
 ) -> dict[str, object] | None:
@@ -409,54 +451,14 @@ def generate_fake_data(
                 "timestamp": timestamp,
             },
         }
-        
-        import json
-        import re
+        ai_data = _parse_json_dict(summary)
+        if ai_data is not None:
+            payload.update(ai_data)
+            logger.info("Mirage successfully generated and parsed JSON response")
+            return payload
 
-        clean_summary = summary.strip()
-        try:
-            # 移除 markdown 代碼區塊標記
-            if clean_summary.startswith("```json"):
-                clean_summary = clean_summary[7:].strip()
-            if clean_summary.startswith("```"):
-                clean_summary = clean_summary[3:].strip()
-            if clean_summary.endswith("```"):
-                clean_summary = clean_summary[:-3].strip()
-            
-            # 嘗試提取 JSON 物件（在模型輸出中查找 {...}）
-            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', clean_summary, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(0)
-            else:
-                json_str = clean_summary
-            
-            # 嘗試 JSON 解析
-            ai_data = json.loads(json_str)
-            if isinstance(ai_data, dict):
-                payload.update(ai_data)
-                logger.info("Mirage successfully generated and parsed JSON response")
-                return payload
-            
-            logger.warning("Mirage model returned non-dict JSON (endpoint=%s)", normalized_ep)
-            return None
-        except json.JSONDecodeError as exc:
-            # 嘗試修復常見的 JSON 問題
-            logger.debug("JSON decode failed, attempting repair: %s", exc)
-            try:
-                # 移除尾部逗號
-                repaired = re.sub(r',(\s*[}\]])', r'\1', clean_summary)
-                ai_data = json.loads(repaired)
-                if isinstance(ai_data, dict):
-                    payload.update(ai_data)
-                    logger.info("Mirage response repaired and parsed successfully")
-                    return payload
-            except Exception:
-                logger.warning("Failed to repair Mirage LLM response as JSON (endpoint=%s)", normalized_ep)
-                pass
-            return None
-        except Exception as exc:
-            logger.warning("Unexpected error parsing Mirage response: %s", exc)
-            return None
+        logger.warning("Failed to parse Mirage LLM response as JSON (endpoint=%s)", normalized_ep)
+        return None
 
     logger.warning("Mirage model unavailable (endpoint=%s, principal_id=%s)", normalized_ep, normalized_query)
     return None

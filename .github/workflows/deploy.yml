@@ -61,8 +61,20 @@ jobs:
               ollama pull "$ollama_model"
 
             # Verify Mirage generation path inside backend_public container (not local machine).
-            $COMPOSE_CMD --profile demo-ui --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml exec -T backend_public \
-              python -c "import json; from core.mirage import generate_fake_data; r = generate_fake_data('oracle_probe','/register','sqli'); print(json.dumps(r, ensure_ascii=False) if r else 'MIRAGE_NONE'); raise SystemExit(0 if r else 1)"
+            mirage_ok=0
+            for i in $(seq 1 3); do
+              echo "[deploy] mirage probe attempt: $i"
+              if $COMPOSE_CMD --profile demo-ui --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml exec -T backend_public \
+                python -c "import json; from core.mirage import generate_fake_data; r = generate_fake_data('oracle_probe','/register','sqli'); print(json.dumps(r, ensure_ascii=False) if r else 'MIRAGE_NONE'); raise SystemExit(0 if r else 1)"; then
+                mirage_ok=1
+                break
+              fi
+            done
+            if [ "$mirage_ok" -ne 1 ]; then
+              echo "[deploy] ERROR: Mirage probe failed after retries"
+              $COMPOSE_CMD --profile demo-ui --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml logs --tail=120 backend_public ollama
+              exit 1
+            fi
 
             for i in $(seq 1 30); do
               if curl -fsS http://127.0.0.1:8000/healthz >/dev/null 2>&1; then
