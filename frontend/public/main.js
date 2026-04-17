@@ -499,7 +499,7 @@ function apiFetchTopAttackMethods() {
 }
 
 function apiFetchTrafficCompare() {
-  return fetchJson(`${API_BASE}/traffic_compare?limit=1000`);
+  return fetchJson(`${API_BASE}/traffic_compare?limit=50000`);
 }
 
 function apiAutoUpdateCheck() {
@@ -1281,7 +1281,7 @@ const apiCommandMap = {
   },
   command_heatmap: async () => fetchJson(`${API_BASE}/command_heatmap`),
   traffic_compare: async (args) => {
-    const limit = Number(args[0] || 1000);
+    const limit = Number(args[0] || 50000);
     return fetchJson(`${API_BASE}/traffic_compare?limit=${encodeURIComponent(limit)}`);
   },
   auto_updates: async () => fetchJson(`${API_BASE}/auto_updates`)
