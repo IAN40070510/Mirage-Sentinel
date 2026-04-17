@@ -2104,10 +2104,7 @@ async def _proxy_banking_request(
 
             # 正常登入流程（未被 Mirage 攔截）要清除舊的 mirage_session，
             # 避免同一瀏覽器因殘留 cookie 被誤導回欺敵資料庫。
-            if normalized_upstream_path in {"/login", "/banking/login"}:
-                response_headers["set-cookie"] = (
-                    "mirage_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"
-                )
+            should_clear_mirage_cookie = normalized_upstream_path in {"/login", "/banking/login"}
 
             event_payload["upstream_status_code"] = status_code
             event_payload["real_backend_touched"] = 1
@@ -2131,11 +2128,19 @@ async def _proxy_banking_request(
     else:
         log_traffic_event(event_payload)
 
-    return Response(
+    response = Response(
         content=response_content,
         status_code=status_code,
         headers=response_headers,
     )
+
+    if not should_intercept and 'should_clear_mirage_cookie' in locals() and should_clear_mirage_cookie:
+        response.headers.append(
+            "set-cookie",
+            "mirage_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax",
+        )
+
+    return response
 
 
 @app.api_route(
