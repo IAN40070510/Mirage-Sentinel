@@ -602,7 +602,7 @@ def _coerce_amount(value: object, fallback: float = 1000.0) -> float:
 
 
 def _build_mirage_dashboard_html(fake_response: dict[str, object]) -> str:
-        """Return a lightweight fake dashboard HTML for browser navigations."""
+        """Render a shadow dashboard using the same template shape as real banking UI."""
         username = str(fake_response.get("username") or fake_response.get("user_id") or "guest")
         account_number = str(
                 fake_response.get("account_number")
@@ -623,38 +623,57 @@ def _build_mirage_dashboard_html(fake_response: dict[str, object]) -> str:
         safe_account = html.escape(account_number)
         safe_balance = html.escape(balance_text)
 
-        return f"""<!DOCTYPE html>
-<html lang=\"en\">
-<head>
-    <meta charset=\"UTF-8\" />
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
-    <title>Bank Dashboard</title>
-    <style>
-        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #f3f6fb; color: #1f2937; }}
-        .wrap {{ max-width: 860px; margin: 48px auto; padding: 0 16px; }}
-        .card {{ background: #fff; border-radius: 14px; padding: 24px; box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08); }}
-        h1 {{ margin: 0 0 8px; font-size: 24px; }}
-        .muted {{ color: #64748b; margin-bottom: 18px; }}
-        .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}
-        .tile {{ background: #f8fafc; border-radius: 10px; padding: 14px; }}
-        .label {{ font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }}
-        .value {{ font-size: 20px; margin-top: 6px; font-weight: 600; }}
-    </style>
-</head>
-<body>
-    <div class=\"wrap\">
-        <div class=\"card\">
-            <h1>Welcome back, {safe_username}</h1>
-            <div class=\"muted\">Your session is active.</div>
-            <div class=\"grid\">
-                <div class=\"tile\"><div class=\"label\">Account Number</div><div class=\"value\">{safe_account}</div></div>
-                <div class=\"tile\"><div class=\"label\">Available Balance</div><div class=\"value\">${safe_balance}</div></div>
-            </div>
-        </div>
-    </div>
-</body>
-</html>
-"""
+        template_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "vuln-bank-main",
+            "templates",
+            "dashboard.html",
+        )
+        try:
+            with open(template_path, "r", encoding="utf-8") as f:
+                template = f.read()
+        except Exception:
+            return (
+                "<!DOCTYPE html><html><body>"
+                f"<h1>Welcome back, {safe_username}</h1>"
+                f"<p>Account: {safe_account}</p>"
+                f"<p>Balance: ${safe_balance}</p>"
+                "</body></html>"
+            )
+
+        # Core substitutions used by the real dashboard layout.
+        template = template.replace("{{ username | safe }}", safe_username)
+        template = template.replace("{{ username }}", safe_username)
+        template = template.replace("{{ account_number }}", safe_account)
+        template = template.replace("{{ balance }}", safe_balance)
+        template = template.replace("{{ user_bio|safe }}", "")
+        template = template.replace(
+            "{{ url_for('static', filename='uploads/' + user.profile_picture) if user.profile_picture else url_for('static', filename='user.png') }}",
+            "/static/user.png",
+        )
+        template = re.sub(
+            r"\{\{\s*url_for\('static',\s*filename='([^']+)'\)\s*\}\}",
+            lambda m: f"/static/{m.group(1)}",
+            template,
+        )
+
+        # Remove unresolved Jinja control blocks/vars so browser receives plain HTML.
+        template = re.sub(r"\{%[^%]*%\}", "", template)
+        template = re.sub(r"\{\{[^}]*\}\}", "", template)
+
+        # Keep frontend logic intact by seeding the shadow token expected by dashboard.js.
+        bootstrap = (
+            "<script>"
+            f"localStorage.setItem('jwt_token', '{html.escape(str(fake_response.get('token') or fake_response.get('session_token') or ''))}');"
+            "</script>"
+        )
+        marker = "</head>"
+        if marker in template:
+            template = template.replace(marker, bootstrap + marker, 1)
+        else:
+            template = bootstrap + template
+
+        return template
 
 
 @app.get("/")
@@ -1084,6 +1103,7 @@ async def _execute_deception_response(
     )
     
     endpoint = "/" + (upstream_path or "").lstrip("/").lower()
+
     cached_memory = get_memory(client_ip, principal_id)
     fake_response: dict[str, object] | None = None
     if cached_memory and isinstance(cached_memory.get("payload"), dict):
@@ -1293,12 +1313,17 @@ async def _check_fake_session_and_respond(
     fake_session = get_fake_session(fake_session_token)
     if not fake_session:
         return None
+    session_principal_id = str(fake_session.get("principal_id") or principal_id)
     
     # 找到假會話！根據端點類型返回虛假數據
     endpoint = "/" + (upstream_path or "").lstrip("/").lower()
     now_iso = datetime.now().isoformat(timespec="milliseconds")
 
-    cached_memory = get_memory(client_ip, principal_id)
+    # 允許使用者重新進入登入/註冊流程，避免瀏覽器返回時直接顯示 Mirage JSON。
+    if "/login" in endpoint or "/register" in endpoint:
+        return None
+
+    cached_memory = get_memory(client_ip, session_principal_id)
     cached_payload = (
         cached_memory.get("payload")
         if cached_memory and isinstance(cached_memory.get("payload"), dict)
@@ -1310,7 +1335,7 @@ async def _check_fake_session_and_respond(
         cached_payload if isinstance(cached_payload, dict) else {
         "status": "success",
         "response_origin": "mirage_cached",
-        "user_id": principal_id,
+        "user_id": session_principal_id,
         "endpoint": endpoint,
         "created_at": now_iso,
         "message": "Retrieved from deception cache",
@@ -1328,12 +1353,13 @@ async def _check_fake_session_and_respond(
         or endpoint in {"/", "/banking", "/banking/"}
     ):
         # 返回之前記錄的假帳戶信息
-        fake_account = get_fake_account_for_attacker(client_ip, principal_id)
+        fake_account = get_fake_account_for_attacker(client_ip, session_principal_id)
         if fake_account:
+            account_id_text = str(fake_account.get("account_id") or "UNKNOWN")
             fake_response.update({
                 "username": fake_account.get("username"),
-                "account_id": fake_account.get("account_id"),
-                "account_number": f"ACC-{fake_account.get('account_id', 'UNKNOWN')}",
+                "account_id": account_id_text,
+                "account_number": account_id_text,
                 "balance": 50000.0,
                 "account_type": "Checking",
             })
@@ -1351,7 +1377,7 @@ async def _check_fake_session_and_respond(
         }
         save_deception_state(
             client_ip=client_ip,
-            principal_id=principal_id,
+            principal_id=session_principal_id,
             vector="cached_session",
             risk=0,
             payload=fake_response,
@@ -1368,7 +1394,7 @@ async def _check_fake_session_and_respond(
     
     if "/transactions" in endpoint or "/transaction" in endpoint:
         # 返回之前記錄的假轉帳歷史
-        fake_txns = get_fake_transactions_for_attacker(client_ip, principal_id)
+        fake_txns = get_fake_transactions_for_attacker(client_ip, session_principal_id)
         if fake_txns:
             fake_response["transactions"] = fake_txns
         else:
@@ -1376,7 +1402,7 @@ async def _check_fake_session_and_respond(
     
     if "/transfer" in endpoint:
         # 返回最近的假轉帳信息
-        fake_txns = get_fake_transactions_for_attacker(client_ip, principal_id)
+        fake_txns = get_fake_transactions_for_attacker(client_ip, session_principal_id)
         if fake_txns:
             latest_txn = fake_txns[0]
             fake_response.update({
@@ -1390,7 +1416,7 @@ async def _check_fake_session_and_respond(
     
     if "/card" in endpoint or "/cards" in endpoint:
         # 返回虛假卡片列表
-        fake_cards = get_fake_cards_for_attacker(client_ip, principal_id)
+        fake_cards = get_fake_cards_for_attacker(client_ip, session_principal_id)
         if fake_cards:
             fake_response["cards"] = fake_cards
         else:
@@ -1415,7 +1441,7 @@ async def _check_fake_session_and_respond(
     # 命中假會話也要回寫欺敵狀態，累積互動深度與命中次數。
     save_deception_state(
         client_ip=client_ip,
-        principal_id=principal_id,
+        principal_id=session_principal_id,
         vector="cached_session",
         risk=0,
         payload=fake_response,
