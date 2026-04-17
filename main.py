@@ -1023,74 +1023,9 @@ async def _execute_deception_response(
     # 根據端點類型記錄到欺敵資料庫
     if "/login" in endpoint or "/register" in endpoint:
         # 登入/註冊攻擊：記錄假帳號/密碼
-        try:
-            import json as json_lib
-            auth_body = json_lib.loads(body_text) if body_text else {}
-        except Exception:
-            auth_body = {}
-
-        req_username = str(auth_body.get("username", "")).strip()
-        req_password = str(auth_body.get("password", "")).strip()
-
-        model_username = str(
-            fake_response.get("username")
-            or fake_response.get("user_id")
-            or fake_response.get("account_id")
-            or ""
-        ).strip()
-        model_password = str(fake_response.get("password", "")).strip()
-
-        fake_username = req_username or model_username or f"attacker_{principal_id}"
-        fake_password = req_password or model_password or "honeypot_default_password"
-        fake_account_id = str(
-            fake_response.get("account_number")
-            or fake_response.get("account_id")
-            or f"ACC-{fake_session_token[:8]}"
-        )
-
-        raw_balance = fake_response.get("balance", 1000.0)
-        try:
-            if isinstance(raw_balance, (int, float, str)):
-                mirror_balance = float(raw_balance)
-            else:
-                mirror_balance = 1000.0
-        except (TypeError, ValueError):
-            mirror_balance = 1000.0
-        mirror_is_admin = bool(fake_response.get("is_admin", False))
-        mirror_profile_picture = (
-            str(fake_response.get("profile_picture"))
-            if fake_response.get("profile_picture") is not None
-            else None
-        )
-        mirror_reset_pin = (
-            str(fake_response.get("reset_pin"))
-            if fake_response.get("reset_pin") is not None
-            else None
-        )
-        mirror_bio = (
-            str(fake_response.get("bio"))
-            if fake_response.get("bio") is not None
-            else None
-        )
-        mirror_is_suspended = bool(fake_response.get("is_suspended", False))
-
-        record_fake_login(
-            client_ip,
-            principal_id,
-            fake_username,
-            fake_password,
-            fake_account_id,
-            balance=mirror_balance,
-            is_admin=mirror_is_admin,
-            profile_picture=mirror_profile_picture,
-            reset_pin=mirror_reset_pin,
-            bio=mirror_bio,
-            is_suspended=mirror_is_suspended,
-        )
-
-        fake_response["username"] = fake_username
-        fake_response["password"] = fake_password
-        fake_response["account_number"] = fake_account_id
+        fake_password = str(fake_response.get("password", "honeypot_default_password"))
+        fake_account_id = str(fake_response.get("account_id", f"ACC-{fake_session_token[:8]}"))
+        record_fake_login(client_ip, principal_id, fake_username, fake_password, fake_account_id)
         fake_response["session_token"] = fake_session_token
         fake_response["status"] = "success"
         # 區分 login 和 register 回應
@@ -1186,9 +1121,14 @@ async def _check_fake_session_and_respond(
     # 嘗試從請求中提取會話令牌
     fake_session_token = None
     
-    # 僅接受 Mirage 專用通道，避免與真實 JWT/Authorization 混淆。
     # 優先檢查自定義 header
     fake_session_token = request.headers.get("X-Mirage-Session", "").strip()
+    
+    # 其次檢查 Authorization header
+    if not fake_session_token:
+        auth_header = request.headers.get("authorization", "").strip()
+        if auth_header.lower().startswith("bearer "):
+            fake_session_token = auth_header[7:].strip()
     
     # 最後檢查 Cookie
     if not fake_session_token:
