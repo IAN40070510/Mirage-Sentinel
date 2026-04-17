@@ -2,7 +2,9 @@ import sqlite3
 import json
 import os
 import logging
+import time
 from datetime import datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +172,7 @@ def setup_deception_db():
         _ensure_column(conn, "engagement_level INTEGER DEFAULT 1")
         _ensure_table_column(conn, "fake_accounts", "fake_balance REAL DEFAULT 50000.0")
         _ensure_table_column(conn, "fake_transactions", "description TEXT")
+        _ensure_billing_tables(conn)
         _ensure_unique_memory_key(conn)
     logger.info(f"Deception Memory Engine Ready: {DB_PATH}")
 
@@ -199,9 +202,6 @@ def get_memory(client_ip: str, principal_id: str):
                 "hits": result[3],
             }
     return None
-
-
-from typing import Any
 
 
 def save_deception_state(
@@ -637,3 +637,319 @@ def apply_fake_transfer(
         "transaction_id": transaction_id,
         "new_balance": new_balance,
     }
+
+
+def _seed_fake_billing_data(conn: sqlite3.Connection) -> None:
+    category_count = conn.execute("SELECT COUNT(1) FROM fake_bill_categories").fetchone()
+    if int((category_count or [0])[0]) == 0:
+        conn.executemany(
+            """
+            INSERT INTO fake_bill_categories (id, name, description, is_active)
+            VALUES (?, ?, ?, 1)
+            """,
+            [
+                (1, "Utilities", "Water, Electricity, Gas bills"),
+                (2, "Telecommunications", "Mobile, Internet, Cable TV"),
+                (3, "Insurance", "Insurance premium payments"),
+                (4, "Credit Cards", "Credit card bill payments"),
+            ],
+        )
+
+    biller_count = conn.execute("SELECT COUNT(1) FROM fake_billers").fetchone()
+    if int((biller_count or [0])[0]) == 0:
+        conn.executemany(
+            """
+            INSERT INTO fake_billers (
+                id, category_id, name, account_number, description,
+                minimum_amount, maximum_amount, is_active
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+            """,
+            [
+                (1, 1, "City Water Authority", "BILL-UTIL-001", "Water utility payments", 10.0, 5000.0),
+                (2, 1, "National Power Grid", "BILL-UTIL-002", "Electricity utility payments", 10.0, 10000.0),
+                (3, 2, "Global Telecom", "BILL-TEL-001", "Mobile and internet subscriptions", 5.0, 3000.0),
+                (4, 3, "Secure Life Insurance", "BILL-INS-001", "Insurance premium payments", 20.0, 20000.0),
+                (5, 4, "Universal Bank Card", "BILL-CC-001", "Credit card payments", 50.0, 50000.0),
+            ],
+        )
+
+
+def _ensure_billing_tables(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS fake_bill_categories (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            is_active INTEGER DEFAULT 1
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS fake_billers (
+            id INTEGER PRIMARY KEY,
+            category_id INTEGER,
+            name TEXT NOT NULL,
+            account_number TEXT,
+            description TEXT,
+            minimum_amount REAL DEFAULT 0,
+            maximum_amount REAL,
+            is_active INTEGER DEFAULT 1
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS fake_bill_payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_ip TEXT,
+            principal_id TEXT,
+            biller_id INTEGER,
+            amount REAL NOT NULL,
+            payment_method TEXT NOT NULL,
+            card_id INTEGER,
+            reference_number TEXT,
+            status TEXT DEFAULT 'completed',
+            created_at TEXT,
+            processed_at TEXT,
+            description TEXT
+        )
+        """
+    )
+    _seed_fake_billing_data(conn)
+
+
+def get_fake_bill_categories() -> list[dict[str, object]]:
+    with sqlite3.connect(DB_PATH) as conn:
+        _ensure_billing_tables(conn)
+        rows = conn.execute(
+            """
+            SELECT id, name, description
+            FROM fake_bill_categories
+            WHERE is_active = 1
+            ORDER BY id ASC
+            """
+        ).fetchall()
+    return [
+        {"id": int(row[0]), "name": row[1], "description": row[2]}
+        for row in rows
+    ]
+
+
+def get_fake_billers_by_category(category_id: int) -> list[dict[str, object]]:
+    with sqlite3.connect(DB_PATH) as conn:
+        _ensure_billing_tables(conn)
+        rows = conn.execute(
+            """
+            SELECT id, name, account_number, description, minimum_amount, maximum_amount
+            FROM fake_billers
+            WHERE category_id = ? AND is_active = 1
+            ORDER BY id ASC
+            """,
+            (int(category_id),),
+        ).fetchall()
+    return [
+        {
+            "id": int(row[0]),
+            "name": row[1],
+            "account_number": row[2],
+            "description": row[3],
+            "minimum_amount": float(row[4] or 0.0),
+            "maximum_amount": float(row[5]) if row[5] is not None else None,
+        }
+        for row in rows
+    ]
+
+
+def record_fake_bill_payment(
+    client_ip: str,
+    principal_id: str,
+    biller_id: int,
+    amount: float,
+    payment_method: str,
+    card_id: int | None,
+    description: str,
+) -> dict[str, object]:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    amount_value = abs(float(amount))
+    method = str(payment_method or "balance")
+
+    with sqlite3.connect(DB_PATH) as conn:
+        _ensure_billing_tables(conn)
+
+        biller_row = conn.execute(
+            """
+            SELECT b.account_number, b.name, c.name
+            FROM fake_billers b
+            JOIN fake_bill_categories c ON b.category_id = c.id
+            WHERE b.id = ?
+            """,
+            (int(biller_id),),
+        ).fetchone()
+        if not biller_row:
+            raise ValueError("Biller or user account not found")
+
+        account_row = conn.execute(
+            """
+            SELECT id, fake_account_id, fake_balance
+            FROM fake_accounts
+            WHERE principal_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (principal_id,),
+        ).fetchone()
+        if not account_row:
+            fallback_account_id = f"ACC-{principal_id[:12]}"
+            conn.execute(
+                """
+                INSERT INTO fake_accounts (
+                    client_ip, principal_id, fake_username, fake_password,
+                    fake_account_id, fake_balance, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    client_ip,
+                    principal_id,
+                    principal_id,
+                    "honeypot_default_password",
+                    fallback_account_id,
+                    50000.0,
+                    now,
+                ),
+            )
+            account_row = conn.execute(
+                """
+                SELECT id, fake_account_id, fake_balance
+                FROM fake_accounts
+                WHERE principal_id = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (principal_id,),
+            ).fetchone()
+
+        account_id = str(account_row[1])
+        current_balance = float(account_row[2]) if account_row[2] is not None else 50000.0
+        if method == "balance" and amount_value > current_balance:
+            raise ValueError("Insufficient balance")
+
+        new_balance = current_balance
+        if method == "balance":
+            new_balance = max(current_balance - amount_value, 0.0)
+            conn.execute(
+                "UPDATE fake_accounts SET fake_balance = ? WHERE id = ?",
+                (new_balance, int(account_row[0])),
+            )
+            conn.execute(
+                """
+                UPDATE mirror_users
+                SET balance = ?
+                WHERE id = (
+                    SELECT id
+                    FROM mirror_users
+                    WHERE principal_id = ?
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                )
+                """,
+                (new_balance, principal_id),
+            )
+
+        reference = f"BILL{int(time.time())}"
+        conn.execute(
+            """
+            INSERT INTO fake_bill_payments (
+                client_ip, principal_id, biller_id, amount, payment_method,
+                card_id, reference_number, status, created_at, processed_at, description
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?)
+            """,
+            (
+                client_ip,
+                principal_id,
+                int(biller_id),
+                amount_value,
+                method,
+                int(card_id) if card_id is not None else None,
+                reference,
+                now,
+                now,
+                description or "Bill Payment",
+            ),
+        )
+
+        txn_description = description or f"{biller_row[2]} payment to {biller_row[1]}"
+        conn.execute(
+            """
+            INSERT INTO fake_transactions (
+                client_ip, principal_id, from_account, to_account, amount,
+                currency, transaction_id, description, status, created_at
+            ) VALUES (?, ?, ?, ?, ?, 'USD', ?, ?, 'completed', ?)
+            """,
+            (
+                client_ip,
+                principal_id,
+                account_id,
+                str(biller_row[0]),
+                amount_value,
+                reference,
+                txn_description,
+                now,
+            ),
+        )
+
+    return {
+        "reference": reference,
+        "amount": amount_value,
+        "payment_method": method,
+        "card_id": int(card_id) if card_id is not None else None,
+        "timestamp": now,
+        "processed_by": principal_id,
+        "new_balance": new_balance,
+    }
+
+
+def get_fake_bill_payments_history(client_ip: str, principal_id: str) -> list[dict[str, object]]:
+    with sqlite3.connect(DB_PATH) as conn:
+        _ensure_billing_tables(conn)
+        rows = conn.execute(
+            """
+            SELECT
+                bp.id,
+                bp.amount,
+                bp.payment_method,
+                bp.reference_number,
+                bp.status,
+                bp.created_at,
+                bp.processed_at,
+                bp.description,
+                b.name,
+                c.name,
+                vc.card_number
+            FROM fake_bill_payments bp
+            JOIN fake_billers b ON bp.biller_id = b.id
+            JOIN fake_bill_categories c ON b.category_id = c.id
+            LEFT JOIN fake_cards vc ON vc.id = bp.card_id
+            WHERE bp.principal_id = ?
+            ORDER BY bp.created_at DESC
+            """,
+            (principal_id,),
+        ).fetchall()
+
+    return [
+        {
+            "id": int(row[0]),
+            "amount": float(row[1] or 0.0),
+            "payment_method": row[2],
+            "card_number": row[10],
+            "reference": row[3],
+            "status": row[4] or "completed",
+            "created_at": row[5],
+            "processed_at": row[6],
+            "description": row[7],
+            "biller_name": row[8],
+            "category_name": row[9],
+        }
+        for row in rows
+    ]

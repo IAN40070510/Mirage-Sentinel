@@ -1101,6 +1101,10 @@ async def _execute_deception_response(
         record_fake_transaction,
         record_fake_card,
         apply_fake_transfer,
+        get_fake_bill_categories,
+        get_fake_billers_by_category,
+        record_fake_bill_payment,
+        get_fake_bill_payments_history,
     )
     
     endpoint = "/" + (upstream_path or "").lstrip("/").lower()
@@ -1228,6 +1232,63 @@ async def _execute_deception_response(
             fake_response["message"] = "Registration successful"
         else:
             fake_response["message"] = "Login successful"
+
+    elif "/bill-categories" in endpoint:
+        fake_response = {
+            "status": "success",
+            "categories": get_fake_bill_categories(),
+        }
+
+    elif "/billers/by-category/" in endpoint:
+        category_match = re.search(r"/billers/by-category/(\d+)", endpoint)
+        category_id = int(category_match.group(1)) if category_match else 0
+        fake_response = {
+            "status": "success",
+            "billers": get_fake_billers_by_category(category_id),
+        }
+
+    elif "/bill-payments/create" in endpoint:
+        try:
+            biller_id = int(request_fields.get("biller_id") or 0)
+            amount = _coerce_amount(request_fields.get("amount", 0.0), fallback=0.0)
+            payment_method = str(request_fields.get("payment_method") or "balance")
+            card_raw = request_fields.get("card_id")
+            card_id = int(card_raw) if card_raw not in (None, "") else None
+            description = str(request_fields.get("description") or "Bill Payment")
+
+            payment_result = record_fake_bill_payment(
+                client_ip=client_ip,
+                principal_id=principal_id,
+                biller_id=biller_id,
+                amount=amount,
+                payment_method=payment_method,
+                card_id=card_id,
+                description=description,
+            )
+            fake_response = {
+                "status": "success",
+                "message": "Payment processed successfully",
+                "payment_details": {
+                    "reference": payment_result.get("reference"),
+                    "amount": payment_result.get("amount"),
+                    "payment_method": payment_result.get("payment_method"),
+                    "card_id": payment_result.get("card_id"),
+                    "timestamp": payment_result.get("timestamp"),
+                    "processed_by": payment_result.get("processed_by"),
+                },
+                "new_balance": payment_result.get("new_balance"),
+            }
+        except ValueError as exc:
+            fake_response = {
+                "status": "error",
+                "message": str(exc),
+            }
+
+    elif "/bill-payments/history" in endpoint:
+        fake_response = {
+            "status": "success",
+            "payments": get_fake_bill_payments_history(client_ip, principal_id),
+        }
         
     elif "/transfer" in endpoint or "/virtual_card" in endpoint or "/virtualcard" in endpoint:
         # 轉帳攻擊（包含虛擬卡轉帳）：記錄假轉帳，不做真轉帳
@@ -1350,6 +1411,10 @@ async def _check_fake_session_and_respond(
         get_fake_transactions_for_attacker,
         get_fake_cards_for_attacker,
         apply_fake_transfer,
+        get_fake_bill_categories,
+        get_fake_billers_by_category,
+        record_fake_bill_payment,
+        get_fake_bill_payments_history,
     )
     
     # 嘗試從請求中提取會話令牌
@@ -1456,6 +1521,73 @@ async def _check_fake_session_and_respond(
             fake_response["transactions"] = fake_txns
         else:
             fake_response["transactions"] = []
+
+    if "/bill-categories" in endpoint:
+        fake_response = {
+            "status": "success",
+            "categories": get_fake_bill_categories(),
+        }
+
+    if "/billers/by-category/" in endpoint:
+        category_match = re.search(r"/billers/by-category/(\d+)", endpoint)
+        category_id = int(category_match.group(1)) if category_match else 0
+        fake_response = {
+            "status": "success",
+            "billers": get_fake_billers_by_category(category_id),
+        }
+
+    if "/bill-payments/create" in endpoint:
+        if request.method.upper() == "POST":
+            body_bytes = await request.body()
+            body_text = body_bytes.decode("utf-8", errors="ignore") if body_bytes else ""
+            content_type = request.headers.get("content-type", "")
+            request_fields = _extract_json_or_form_fields(body_text, content_type)
+            try:
+                biller_id = int(request_fields.get("biller_id") or 0)
+                amount = _coerce_amount(request_fields.get("amount", 0.0), fallback=0.0)
+                payment_method = str(request_fields.get("payment_method") or "balance")
+                card_raw = request_fields.get("card_id")
+                card_id = int(card_raw) if card_raw not in (None, "") else None
+                description = str(request_fields.get("description") or "Bill Payment")
+
+                payment_result = record_fake_bill_payment(
+                    client_ip=client_ip,
+                    principal_id=session_principal_id,
+                    biller_id=biller_id,
+                    amount=amount,
+                    payment_method=payment_method,
+                    card_id=card_id,
+                    description=description,
+                )
+                fake_response = {
+                    "status": "success",
+                    "message": "Payment processed successfully",
+                    "payment_details": {
+                        "reference": payment_result.get("reference"),
+                        "amount": payment_result.get("amount"),
+                        "payment_method": payment_result.get("payment_method"),
+                        "card_id": payment_result.get("card_id"),
+                        "timestamp": payment_result.get("timestamp"),
+                        "processed_by": payment_result.get("processed_by"),
+                    },
+                    "new_balance": payment_result.get("new_balance"),
+                }
+            except ValueError as exc:
+                fake_response = {
+                    "status": "error",
+                    "message": str(exc),
+                }
+        else:
+            fake_response = {
+                "status": "error",
+                "message": "Method not allowed",
+            }
+
+    if "/bill-payments/history" in endpoint:
+        fake_response = {
+            "status": "success",
+            "payments": get_fake_bill_payments_history(client_ip, session_principal_id),
+        }
     
     if "/transfer" in endpoint:
         if request.method.upper() == "POST":
