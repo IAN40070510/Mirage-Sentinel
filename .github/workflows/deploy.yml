@@ -76,6 +76,10 @@ jobs:
               exit 1
             fi
 
+            # Oracle model sanity check with explicit auth SQLi payload requested by SOC.
+            $COMPOSE_CMD --profile demo-ui --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml exec -T backend_public \
+              python -c "import asyncio, json; from main import _execute_deception_response; from core.deception_db import get_fake_account_for_attacker; payload = '{\"username\":\"admin \'or 10=10 --\",\"password\":\"admin \'or 10=10 --\"}'; rb, _, _, _ = asyncio.run(_execute_deception_response(client_ip='oracle_probe_ip', principal_id='oracle_probe_user', detection_target='admin \'or 10=10 --admin \'or 10=10 --', attack_vector='sqli', risk_level=99, upstream_path='/login', request_method='POST', body_text=payload)); print(rb.decode('utf-8', errors='ignore')); account = get_fake_account_for_attacker('oracle_probe_ip', 'oracle_probe_user'); print(json.dumps(account, ensure_ascii=False) if account else 'NO_FAKE_ACCOUNT'); raise SystemExit(0 if account else 1)"
+
             for i in $(seq 1 30); do
               if curl -fsS http://127.0.0.1:8000/healthz >/dev/null 2>&1; then
                 echo "[deploy] banking proxy gate passed"

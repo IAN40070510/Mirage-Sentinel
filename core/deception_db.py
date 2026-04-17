@@ -95,6 +95,26 @@ def setup_deception_db():
             )
         """
         )
+        # 與 vuln-bank users 欄位對齊的鏡像表，避免串接時欄位不一致。
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS mirror_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                client_ip TEXT,
+                principal_id TEXT,
+                username TEXT NOT NULL,
+                password TEXT NOT NULL,
+                account_number TEXT NOT NULL,
+                balance REAL DEFAULT 1000.0,
+                is_admin INTEGER DEFAULT 0,
+                profile_picture TEXT,
+                reset_pin TEXT,
+                bio TEXT,
+                is_suspended INTEGER DEFAULT 0,
+                created_at TEXT
+            )
+        """
+        )
         # 假轉帳表：記錄攻擊者的轉帳操作
         conn.execute(
             """
@@ -284,6 +304,12 @@ def record_fake_login(
     fake_username: str,
     fake_password: str,
     fake_account_id: str,
+    balance: float = 1000.0,
+    is_admin: bool = False,
+    profile_picture: str | None = None,
+    reset_pin: str | None = None,
+    bio: str | None = None,
+    is_suspended: bool = False,
 ) -> bool:
     """記錄攻擊者的假登入信息"""
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
@@ -297,6 +323,29 @@ def record_fake_login(
                 DO UPDATE SET fake_password = excluded.fake_password
                 """,
                 (client_ip, principal_id, fake_username, fake_password, fake_account_id, now)
+            )
+            conn.execute(
+                """
+                INSERT INTO mirror_users (
+                    client_ip, principal_id, username, password, account_number,
+                    balance, is_admin, profile_picture, reset_pin, bio, is_suspended, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    client_ip,
+                    principal_id,
+                    fake_username,
+                    fake_password,
+                    fake_account_id,
+                    balance,
+                    1 if is_admin else 0,
+                    profile_picture,
+                    reset_pin,
+                    bio,
+                    1 if is_suspended else 0,
+                    now,
+                ),
             )
         return True
     except Exception as e:
@@ -360,6 +409,32 @@ def record_fake_card(
 def get_fake_account_for_attacker(client_ip: str, principal_id: str) -> dict[str, object] | None:
     """獲取攻擊者登入的假帳戶信息"""
     with sqlite3.connect(DB_PATH) as conn:
+        mirror_cursor = conn.execute(
+            """
+            SELECT username, password, account_number, balance, is_admin, profile_picture,
+                   reset_pin, bio, is_suspended
+            FROM mirror_users
+            WHERE client_ip = ? AND principal_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (client_ip, principal_id),
+        )
+        mirror_row = mirror_cursor.fetchone()
+        if mirror_row:
+            return {
+                "username": mirror_row[0],
+                "password": mirror_row[1],
+                "account_id": mirror_row[2],
+                "account_number": mirror_row[2],
+                "balance": float(mirror_row[3]) if mirror_row[3] is not None else 1000.0,
+                "is_admin": bool(mirror_row[4]),
+                "profile_picture": mirror_row[5],
+                "reset_pin": mirror_row[6],
+                "bio": mirror_row[7],
+                "is_suspended": bool(mirror_row[8]),
+            }
+
         cursor = conn.execute(
             """
             SELECT fake_username, fake_password, fake_account_id
