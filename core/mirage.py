@@ -108,6 +108,7 @@ def _generate_with_ollama(prompt: str) -> str | None:
     payload = {
         "model": model,
         "prompt": prompt,
+        "format": "json",
         "stream": False,
         "options": {
             "temperature": 0.3,  # 降低溫度以增加確定性
@@ -229,9 +230,9 @@ def _maybe_attach_llm_summary(
         # 嘗試解析 LLM 返回的內容是否為 JSON
         import json
 
+        clean_summary = summary.strip()
         try:
             # 移除可能存在的 Markdown 代碼塊標記
-            clean_summary = summary.strip()
             if clean_summary.startswith("```json"):
                 clean_summary = clean_summary[7:].strip()
             if clean_summary.endswith("```"):
@@ -412,9 +413,8 @@ def generate_fake_data(
         import json
         import re
 
+        clean_summary = summary.strip()
         try:
-            clean_summary = summary.strip()
-            
             # 移除 markdown 代碼區塊標記
             if clean_summary.startswith("```json"):
                 clean_summary = clean_summary[7:].strip()

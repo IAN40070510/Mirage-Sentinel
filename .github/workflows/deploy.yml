@@ -50,6 +50,20 @@ jobs:
             $COMPOSE_CMD --profile demo-ui --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml down
             $COMPOSE_CMD --profile demo-ui --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml up -d --build --remove-orphans
 
+            # Mirage gate (Oracle): ensure ollama service is reachable and configured model exists.
+            ollama_model="$(grep '^MIRAGE_OLLAMA_MODEL=' .env.oracle.public | cut -d '=' -f2- | tr -d '\r')"
+            if [ -z "$ollama_model" ]; then
+              echo "[deploy] ERROR: MIRAGE_OLLAMA_MODEL not set in .env.oracle.public"
+              exit 1
+            fi
+            echo "[deploy] ensure ollama model exists: $ollama_model"
+            $COMPOSE_CMD --profile demo-ui --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml exec -T ollama \
+              ollama pull "$ollama_model"
+
+            # Verify Mirage generation path inside backend_public container (not local machine).
+            $COMPOSE_CMD --profile demo-ui --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml exec -T backend_public \
+              python -c "import json; from core.mirage import generate_fake_data; r = generate_fake_data('oracle_probe','/register','sqli'); print(json.dumps(r, ensure_ascii=False) if r else 'MIRAGE_NONE'); raise SystemExit(0 if r else 1)"
+
             for i in $(seq 1 30); do
               if curl -fsS http://127.0.0.1:8000/healthz >/dev/null 2>&1; then
                 echo "[deploy] banking proxy gate passed"
