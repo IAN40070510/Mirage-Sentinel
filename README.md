@@ -1,470 +1,326 @@
 # Mirage-Sentinel
 
-Mirage-Sentinel 是一個基於人工智慧 (AI) 的主動防禦與欺敵系統 (Active Defense and Deception System)。
+最後更新：2026-06-01
 
-面對現代自動化與 AI 驅動的網路攻擊，傳統的靜態防禦與誘餌已難以發揮效用。本專案透過動態生成的沙盒誘餌網路、嚴格的實體資料庫解耦，以及 AI 驅動的動態響應與反制機制（Counter-AI），旨在精準捕獲駭客手法、消耗攻擊方資源，並為資安團隊提供即時且具備實用價值的威脅情報。
----
+Mirage-Sentinel 是一個金融 API 主動防禦與欺敵系統原型。現階段的重點不是一般靜態 honeypot，而是把疑似攻擊流量在觸及真實上游前導入 Mirage 欺敵路徑，並把完整互動寫入鑑識事件庫，供 SOC 查詢、回放與成效分析。
 
-## 核心防禦目標 (Core Objectives)
-本專案的核心目標在於建立一個具備高度感知與自適應能力的防禦體系，專注於以下三大技術維度：
+目前專案狀態：可運行整合原型。
 
-1. 深度行為追蹤與威脅情報收集 (Threat Intelligence & Technique Capture)
-不同於傳統僅記錄 IP 或連線時間的誘餌，本系統旨在完整還原攻擊者的操作行為鏈。
+- 公開入口由 `main.py` 的 FastAPI Gateway 承接。
+- 正常流量會代理到 `vuln-bank-main` 金融 Demo 上游。
+- 高風險流量會進入 Mirage 欺敵回應與 `mirage_memory.db` 狀態記憶。
+- SOC Dashboard API 已能查詢近期流量、分流結果、攻擊鏈回放與 Mirage 成效統計。
+- OCI / Docker Compose 部署、PR smoke、post-deploy smoke 與 Semgrep 掃描已建立。
 
-全封包與指令審計： 透過核心層級或反向代理層的監控，擷取攻擊者輸入的每一條指令、上傳的惡意載荷 (Payload) 以及採用的自動化工具特徵。
+## 目前架構
 
-攻擊手法建模： 將捕獲的行為資料轉化為可分析的威脅情報，協助安全團隊理解當前最前線的入侵路徑與漏洞利用策略。
-
-2. 高交互性與動態狀態保持 (Stateful Deception)
-為了解決傳統靜態誘餌容易被識破的問題，本系統著重於建立「真假難辨」的虛擬環境。
-
-動態環境響應： 系統具備狀態保持能力，能對攻擊者的操作給予邏輯連貫的回饋。例如，若攻擊者在誘餌環境中建立帳號或修改設定，系統後續的查詢結果將會如實反映這些變化，大幅延長攻擊者受困於誘餌中的時間。
-
-環境拟真與延遲模擬： 透過精細的系統特徵模擬與隨機化的網路延遲注入，規避常見的欺敵偵測腳本。
-
-3. AI 對抗性防禦與 AI API 攻擊抑制 (Counter-AI & API Security)
-針對現代 AI 驅動的掃描器與自動化攻擊代理，本系統整合了對抗性的防禦機制。
-
-AI 掃描器對抗： 利用動態變異的 API 結構與錯誤回應，破壞 AI 自動化分析工具的解析邏輯，並透過冗長回應技術 (Tarpitting) 消耗攻擊方 AI 的運算資源與 Token 額度。
-
-反向提示注入防護： 在 API 回應中策略性地佈置防護機制，防範攻擊者利用 LLM 進行自動化的漏洞挖掘或 API 邏輯探測。
-
-*(詳細的系統規格與非功能性需求，請參閱 [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md))*
-
-## 金融 API 攻擊場景矩陣 (Defense-First Roadmap)
-
-以下場景以「可觀測、可欺敵、可回放」為實作原則，避免提供攻擊實作細節，同時強化 SOC 可用情報。
-
-1. 身分與授權類 (Identity & Authorization)
-- 帳號枚舉、暴力登入、憑證填充、弱密碼嘗試。
-- Token 竊用、過期繞過、權限提升與橫向越權。
-- 防禦重點：風險評分、速率限制、裝置指紋、JWT 驗證與 RBAC/ABAC。
-
-2. 交易流程類 (Transaction Logic Abuse)
-- 重放請求、冪等鍵濫用、同帳戶迴圈轉帳、拆單繞過。
-- 金額邏輯與幣別轉換異常、手續費邊界繞過。
-- 防禦重點：交易狀態機、風控閾值、行為序列分析、不可逆稽核鏈。
-
-3. 資料層類 (Data Exfiltration & Tampering)
-- 物件層級存取控制缺陷（BOLA/IDOR）。
-- 大量查詢與批次匯出探測、假合法查詢濫用。
-- 防禦重點：物件授權檢查、查詢配額、異常資料存取告警、資料最小揭露。
-
-4. API 協議與輸入類 (Protocol & Input Abuse)
-- 參數汙染、結構異常、Header 偽造與代理鏈混淆。
-- 不正常序列化/反序列化負載、異常編碼與格式探測。
-- 防禦重點：嚴格 Schema 驗證、標準化輸入管線、異常分級回應策略。
-
-5. 自動化掃描與 AI 攻擊代理類 (Automation & AI-driven Probing)
-- 高頻低噪探測、語義拼接探測、提示注入與策略測試。
-- API 文件與錯誤訊息逆向推理。
-- 防禦重點：動態回應擾動、欺敵分流、Tarpitting、提示防護與蜜標記。
-
-6. 基礎設施與供應鏈類 (Infra & Supply Chain)
-- 服務發現、健康檢查端點探測、容器權限邊界試探。
-- 部署流程與 CI/CD 錯誤配置利用。
-- 防禦重點：最小權限容器、內外網分層、部署後健康閘門、失敗自動取證。
-
-### 實作優先順序 (Implementation Priority)
-
-1. 先完成「身分/授權」與「交易流程」兩大場景，直接降低實害風險。
-2. 再擴充「資料層」與「API 協議」場景，提升偵測精度與誤報控制。
-3. 最後優化「AI 攻擊代理」與「基礎設施」場景，強化長期對抗能力。
-
-### 驗收標準 (Definition of Done)
-
-1. 每一種場景都能產生對應事件（包含毫秒時間戳、來源、策略、結果）。
-2. 每一種場景都能被導入欺敵路徑，且不影響真實使用者流程。
-
-### 兩週實作 Backlog (Actionable Backlog)
-
-第 1 週到第 2 週的舊銀行 backlog 已移除。銀行入口目前由 `Commando-X/vuln-bank` 直接承接，Mirage 不再維護自己的銀行模組與回歸清單。
-    - 當請求同時滿足「未授權（缺少或非法 `X-User-Id`）」與「可疑（高風險/可疑 UA/Sentinel 命中）」時
-    - 不再回一般欺敵業務資料，改回 `deception_auth` challenge（自動啟動登入狀態機）
-  - CI 迴歸新增 `scripts/ci/deception-auth-smoke.sh`
-
-2. AI 掃描器對抗策略（P1）
-- 目標：加入回應擾動、Tarpitting、語義噪音注入。
-- 落點：`core/api_mirage.py`、`model/llama.py`。
-- 完成條件：高頻自動化探測命中率下降且 token 消耗上升。
-- 目前進度（2026-04）：已將 counter-AI 策略套用至 Banking 欺敵回應
-  - 新增 `core/api_mirage.py::harden_deception_response()`
-  - 自動化探測（如 `sqlmap/curl/python-requests` 或高風險）觸發：
-    - Tarpitting（可控延遲）
-    - Semantic noise (`consistency_hints`)
-    - Reverse prompt 欄位 (`error_context.llm_guardrail`)
-  - 非自動化流量套用輕量回應擾動
-
-3. 部署與回歸安全閘門（P1）
-- 目標：部署後自動跑健康檢查 + 風險路由 smoke test。
-- 落點：`.github/workflows/deploy.yml`。
-- 完成條件：任何回歸都在 CI 階段失敗並附帶可讀 logs。
-
-4. 事件回放與運維手冊（P1）
-- 目標：新增故障與攻擊回放 Runbook。
-- 落點：`docs/README.md` 或新增 `docs/RUNBOOK.md`。
-- 完成條件：新成員可依文件完成部署、排障、攻擊回放。
-
-### 文件入口 (Documentation Index)
-
-- 需求規格：[`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md)
-- 開發規範：[`docs/DEVELOPMENT_GUIDELINES.md`](docs/DEVELOPMENT_GUIDELINES.md)
-- SecLists 維護：[`docs/SECLISTS_UPDATE_GUIDE.md`](docs/SECLISTS_UPDATE_GUIDE.md)
-- 運維與回放：[`docs/RUNBOOK.md`](docs/RUNBOOK.md)
-
----
-
-## 系統架構亮點 (Architecture Highlights)
-
-* **無縫流量轉發與欺敵 (Seamless Traffic Routing)：** 當「哨兵閘道」偵測到惡意攻擊或異常探測時，系統**不會斷開連線**，而是即時將該流量無縫導向至 Docker 沙盒環境中，觸發 Mirage 引擎進行深度的欺敵工程。
-* **Harness Engineering 與沙盒邊界：** 運用 Docker 容器化技術，將欺敵環境嚴格限縮在隔離網路內，禁用特權模式，防止容器逃逸與橫向移動。
-* **資料庫實體解耦 (Database Decoupling)：**
-  * 鑑識追蹤日誌 (`traffic_logs.db`) 與欺敵狀態記憶 (`mirage_memory.db`) 進行實體分離。
-  * 阻斷反鑑識操作，並消除時間側信道 (Timing Side-Channel) 指紋。
-* **毫秒級精度 (Millisecond Precision)：** 全系統強制 NTP 時鐘同步與毫秒級日誌記錄，確保攻擊鏈重構的絕對正確性。
-* **SOC 資安戰情室：** 整合宏觀的趨勢統計與微觀的即時攻擊指令串流（透過 WebSocket），提供上帝視角的威脅視覺化介面。
-
----
-
-## 工具棧 (Tech Stack)
-
-本專案採用以下技術架構來平衡高效能攔截與高複雜度 AI 分析：
-
-* **程式語言：** Python
-* **哨兵閘道 (Sentinel Gateway)：** FastAPI + NGINX (負責流量代理與無縫導向)
-* **意圖分析 (Sentinel)：** XGBoost (負責極速特徵辨識與意圖判定)
-* **假資料生成 (Mirage)：** Llama 3.1 8B
-* **資料庫：** PostgreSQL (測試與開發階段使用 SQLite 以加速迭代)
-* **沙盒環境：** Docker (負責環境隔離與誘餌部署)
-* **底層作業系統：** Canonical Ubuntu 24.04
-* **雲端平台：** Oracle Cloud Infrastructure (OCI)
-* **開發工具：** VS Code, GitHub, GitHub Copilot
-
----
-
-## 雲端部署架構 (Cloud Deployment Architecture)
-
-本專案支援部署於 Oracle Cloud Infrastructure (OCI) 或同等級公有雲環境，採用嚴格的 **VCN 分層隔離架構**，確保防禦核心的絕對安全。
-
-* **公用子網 (Public Subnet) - 誘餌交戰區：**
-  * **公開 API 服務 (Honeypot)：** 部署高度受限的 Docker 誘餌容器，偽裝為對外開放的金融服務 API。
-  * **負載平衡器 (Load Balancer)：** 接收外部流量並齊一化回應時間，協助隱藏後端真實拓撲並消除時間側信道指紋。
-* **專用子網 (Private Subnet) - 戰略指揮區：**
-  * **SOC 後端與 AI 引擎：** 接收誘餌單向傳送的流量複本，進行 AI 意圖判定。完全阻斷來自網際網路的直接存取。
-  * **解耦資料庫集群：** `traffic_logs.db` 與 `mirage_memory.db` 獨立運行，落實最小權限原則。
-  * **SOC 戰情室前端：** 管理員視覺化介面。嚴禁對外暴露(測試例外)，僅限透過 API Gateway 或 Bastion Host (跳板機) 建立安全隧道進行存取。
-
-
-
-## 專案目錄結構 (Project Structure)
-
+```mermaid
+flowchart LR
+    A["Client / Scanner"] --> B["Nginx / Public Entry"]
+    B --> C["FastAPI Gateway<br/>main.py"]
+    C --> D{"Sentinel Decision"}
+    D -->|"benign / pass"| E["vuln-bank-main<br/>Flask banking demo"]
+    D -->|"high risk / block"| F["Mirage Deception<br/>core.mirage + core.deception_db"]
+    F --> G["mirage_memory.db<br/>discardable deception state"]
+    C --> H["traffic_logs.db + feature_store.db<br/>forensic event append path"]
+    H --> I["SOC APIs<br/>api.dashboard / services.dashboard_service"]
+    I --> J["SOC Frontend<br/>frontend/soc-server.js"]
 ```
+
+### 核心元件
+
+| 元件 | 目前作用 |
+| --- | --- |
+| `main.py` | FastAPI API Gateway。處理 `/banking/{path}` 與 catch-all 代理、Sentinel 判斷、Mirage 分流、毫秒級事件欄位與背景寫入。 |
+| `core/sentinel.py` | 簽名與行為風險檢測基礎。 |
+| `model/Sentinel/XGBoost/` | 本機 AI Sentinel 模型與推論器。模型不可用時會降級為中立 PASS。 |
+| `core/mirage.py` | 產生金融 API 欺敵資料，可接 Ollama / Hugging Face / fallback 模板。 |
+| `core/deception_db.py` | `mirage_memory.db` 欺敵記憶，保存假登入、假交易、假卡片、假帳單與 fake session。 |
+| `core/traffic_db.py` | `traffic_logs.db` 鑑識事件落地，另以 `feature_store.db` 保存衍生特徵。 |
+| `api/dashboard.py` | 掛在 Gateway 內的 SOC Dashboard API router，路徑前綴為 `/api/v1/dashboard`。 |
+| `services/dashboard_service.py` | 可獨立啟動的 SOC 後端，提供事件查詢、攻擊鏈回放、統計與 IP bundle。 |
+| `frontend/` | Node/Express 前端。`soc-server.js` 是 SOC 入口，`customer-server.js` 是獨立客戶 demo 入口。 |
+| `sandbox_service.py` | 隔離式 AI sandbox 服務基礎，目前 Compose 會啟動，嚴格接入主分流仍屬待收斂項。 |
+| `vuln-bank-main/` | 外部銀行 Demo 上游，包含 Flask app、GraphQL、交易、虛擬卡與 AI chat 測試面。 |
+
+## 安全邊界
+
+Mirage-Sentinel 的 README 以目前實作為準，不把尚未完成的安全控制寫成已完成。
+
+### 資料庫分工
+
+- `data/traffic_logs.db`
+  - 鑑識事件庫，設計上應只走 append-only 寫入路徑。
+  - SOC / 後台分析模組可以讀取它。
+  - 公開 honeypot / 欺敵決策不應依賴讀取此庫。
+
+- `data/feature_store.db`
+  - 衍生特徵資料庫，由 `core/traffic_db.py` attach 使用。
+  - 用於 SOC 顯示 header entropy、時間特徵、Sentinel 分數、deception score 等欄位。
+
+- `data/mirage_memory.db`
+  - 欺敵狀態記憶庫，可拋棄、可讀寫。
+  - 保存攻擊者 fake session、假帳戶、假交易、假卡片與帳單狀態。
+  - 不可混入真實業務資料。
+
+- PostgreSQL
+  - 可選真實 demo data backend，透過 `DATABASE_URL` 啟用。
+  - `vuln-bank-main` 在完整 Compose Demo 中使用自己的 PostgreSQL。
+
+### 時間與側信道
+
+- 事件欄位如 `request_at`、`response_at` 以毫秒格式寫入，例如 `YYYY-MM-DD HH:MM:SS.mmm`。
+- Mirage 回應中的 `created_at` / `queued_at` 使用帶毫秒的 ISO 8601。
+- Gateway 會透過 FastAPI `BackgroundTasks` 寫入鑑識事件，避免一般 API 回應被日誌 I/O 明顯拖慢。
+- 待補強：仍需把所有同步 fallback 寫入路徑與讀取鑑識庫的風險特徵 helper 全面遷出公開決策路徑。
+
+### 容器隔離
+
+- `sandbox` 服務在 Compose 中已設定：
+  - `user: "1000:1000"`
+  - `read_only: true`
+  - `privileged: false`
+  - `cap_drop: [ALL]`
+  - `security_opt: no-new-privileges:true`
+
+- 待補強：主 backend Dockerfile 目前仍使用 `python:3.11-slim` 預設使用者，尚未完全對齊 sandbox 的非 root / read-only 基線。
+
+## 專案結構
+
+```text
 Mirage-Sentinel/
-├── AGENTS.md
-├── AI_AGENT_README.md
-├── DATABASE_SETUP.md
-├── Dockerfile
-├── README.md
-├── docker-compose.yml
-├── docker-compose.oracle.yml
-├── docker-compose.oracle.dual-demo.yml
-├── main.py
-├── pyrightconfig.json
-├── requirements.txt
-├── sandbox_service.py
-├── test_ai_agent.py
-├── test_e2e_sqli_login.py
-├── test_fake_session_detection.py
-├── test_mirage_full_flow.py
-├── test_pre_upstream_interception.py
-├── VIRTUAL_CARD_CONFIG.md
-│
-├── api/
-│   ├── __init__.py
-│   ├── dashboard.py
-│   └── db/
-│       ├── __init__.py
-│       ├── models.py
-│       └── session.py
-│
+├── main.py                         # FastAPI Gateway / public proxy / Mirage routing
+├── sandbox_service.py              # isolated sandbox service foundation
 ├── core/
-│   ├── __init__.py
-│   ├── ai_agent_orchestrator.py
-│   ├── analytics_engine.py
-│   ├── deception_db.py
-│   ├── deception_engine.py
-│   ├── feature_store.py
-│   ├── mirage.py
-│   ├── sandbox.py
-│   ├── sentinel.py
-│   ├── traffic_db.py
-│   └── web_attack_dection.py
-│
-├── data/
-│   ├── attack_signatures.json
-│   ├── attack_signatures.txt
-│   └── payloads/
-│       ├── Command_Injection.md
-│       └── SQL_Injection.md
-│
-├── deploy/
-│   └── nginx/
-│       ├── dual-demo.conf
-│       └── oracle.conf
-│
-├── docs/
-│   ├── DEVELOPMENT_GUIDELINES.md
-│   ├── README.md
-│   ├── REQUIREMENTS.md
-│   ├── RUNBOOK.md
-│   ├── SECLISTS_UPDATE_GUIDE.md
-│   └── STATUS_REPORT.md
-│
-├── frontend/
-│   ├── customer-server.js
-│   ├── Dockerfile
-│   ├── package.json
-│   ├── README.md
-│   ├── server.js
-│   ├── soc-server.js
-│   └── public/
-│       ├── banking_demo.css
-│       ├── banking_demo.html
-│       ├── banking_demo.js
-│       ├── index.html
-│       ├── main.js
-│       ├── style.css
-│       └── traffic-logs.html
-│
-├── model/
-│   ├── README.txt
-│   └── Mirage/
-├── scripts/
-│   ├── generate_sample_traffic_logs.py
-│   ├── generate_signatures.py
-│   ├── setup_vuln_bank.sh
-│   ├── update_seclists.py
-│   ├── upgrade_attack_details_schema.py
-│   └── ci/
-│       ├── authz-smoke.sh
-│       ├── deception-auth-smoke.sh
-│       ├── event-query-smoke.sh
-│       ├── run-local-smoke.ps1
-│       ├── run-local-smoke.sh
-│       ├── smoke.sh
-│       └── transaction-risk-smoke.sh
-│   └── data/
-│       ├── attack_signatures.json
-│       ├── attack_signatures.txt
-│       └── payloads/
-│
+│   ├── sentinel.py                 # signature and behavioral detection
+│   ├── mirage.py                   # deceptive response generation
+│   ├── deception_db.py             # mirage_memory.db state
+│   ├── traffic_db.py               # forensic event writes
+│   ├── feature_store.py            # Redis-backed short-term graph features
+│   └── analytics_engine.py         # SOC-only forensic analysis helpers
+├── api/
+│   ├── dashboard.py                # /api/v1/dashboard router
+│   └── db/                         # optional SQLAlchemy banking demo models
 ├── services/
-│   ├── __init__.py
-├── vuln-bank-main/
-│   ├── ai_agent_deepseek.py
-│   ├── app.py
-│   ├── auth.py
-│   ├── database.py
-│   ├── docker-compose.yml
-│   ├── Dockerfile
-│   ├── LICENSE.md
-│   ├── README.md
-│   ├── requirements.txt
-│   ├── transaction_graphql.py
-│   ├── graphql/
-│   ├── static/
-│   └── templates/
+│   └── dashboard_service.py        # standalone SOC backend
+├── frontend/
+│   ├── soc-server.js               # SOC frontend/proxy
+│   ├── customer-server.js          # separate customer demo frontend
+│   └── public/
+├── model/
+│   ├── Sentinel/XGBoost/           # local Sentinel model artifacts and loader
+│   ├── Sentinel/DistilBERT/        # experimental NLP detector
+│   └── Mirage/Llama/               # Mirage model notes / adapter
+├── deploy/nginx/
+│   ├── local.conf
+│   ├── oracle.conf
+│   └── dual-demo.conf
+├── scripts/
+│   ├── ci/                         # smoke gates
+│   ├── postgres/                   # PostgreSQL schema helpers
+│   └── update_seclists.py
+├── docs/
+│   ├── REQUIREMENTS.md
+│   ├── DEVELOPMENT_GUIDELINES.md
+│   ├── RUNBOOK.md
+│   ├── STATUS_REPORT.md
+│   └── SECLISTS_UPDATE_GUIDE.md
+└── vuln-bank-main/                 # Flask vulnerable banking demo upstream
 ```
 
----
+## 快速啟動
 
-## 執行與開啟方式 (Quick Start)
+### 1. Python 本機開發
 
-以下為根目錄 `README.md` 的執行與開啟方式摘要，方便在本文件直接查閱。
-
-### 本地開發
-
-```bash
-# 1. 環境準備
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# 或
-.\.venv\Scripts\activate   # Windows
-
-# 2. 安裝依賴
-pip install -r requirements.txt
-
-# 3. 啟動後端
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
-# 4. 在另一個終端啟動 SOC 前端（Port 3000）
-npm --prefix frontend run start:soc
-
-# 5. 在第三個終端啟動客戶前端（Port 3001）
-npm --prefix frontend run start:customer
-```
-
-開啟位置：
-
-- 後端 API 文件：http://127.0.0.1:8000/docs
-- SOC 前端儀表板：http://127.0.0.1:3000
-- 若部署到 OCI，需同時在安全清單 / 防火牆放行 3000/TCP，否則即使 compose 已 publish 3000 也無法從外網存取。
-- 客戶前端介面：http://127.0.0.1:3001
-
-OCI 線上環境：
-
-- 銀行入口：http://161.33.154.211/banking/（OCI 80 直接轉發到 `vuln-bank-main`）
-- 資安戰情室入口：http://161.33.154.211:3000/
-
-### Docker 部署（本地）
-
-```bash
-docker compose up --build
-```
-
-本地對外入口為 Nginx `http://127.0.0.1/`，所有請求會先經過 Sentinel 檢查後再轉入 FastAPI。
-
-若要啟用真實 PostgreSQL（可選）：
-
-```bash
-cp .env.db.example .env
-docker compose --profile db up --build
-```
-
-服務清單：
-- PostgreSQL（可選）：localhost:5432
-
-本機一行版（自動啟動、檢查、清理）：
 ```powershell
-# Windows PowerShell
-./scripts/ci/run-local-smoke.ps1
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-```bash
+常用入口：
+
+- FastAPI health check: <http://127.0.0.1:8000/healthz>
+- FastAPI docs: <http://127.0.0.1:8000/docs>
+- OpenAPI schema: <http://127.0.0.1:8000/openapi.json>
+- Banking proxy: <http://127.0.0.1:8000/banking/>
+
+若要讓正常流量真的打到銀行上游，需另行啟動 `vuln-bank-main`，或設定：
+
+```powershell
+$env:VULN_BANK_BASE_URL="http://127.0.0.1:5000"
+```
+
+### 2. SOC 前端
+
+若使用 `main.py` 內建的 Dashboard API，請在啟動 FastAPI 前設定：
+
+```powershell
+$env:ENABLE_DASHBOARD="true"
+$env:API_KEY="dev-local-dashboard-key"
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+再啟動前端：
+
+```powershell
+npm --prefix frontend install
+$env:BACKEND_API_BASE_URL="http://127.0.0.1:8000/api/v1/dashboard"
+$env:API_KEY="dev-local-dashboard-key"
+npm --prefix frontend run start:soc
+```
+
+SOC 前端預設在：
+
+- <http://127.0.0.1:3000>
+
+Dashboard API 需要：
+
+- `ENABLE_DASHBOARD=true`
+- 非 placeholder 的 `API_KEY`
+- 請求 header `X-API-Key: <API_KEY>`
+
+### 3. 本地 Compose Smoke
+
+```powershell
+$env:API_KEY="dev-local-dashboard-key"
+.\scripts\ci\run-local-smoke.ps1
+```
+
+Linux / macOS:
 
 ```bash
-# 1) 服務健康檢查
+export API_KEY="dev-local-dashboard-key"
+bash scripts/ci/run-local-smoke.sh
+```
+
+目前根目錄 `docker-compose.yml` 主要啟動 Gateway、sandbox 與可選 PostgreSQL profile。完整的 `vuln-bank-main` 上游不在這個本地 Compose 檔內；若要完整銀行 demo，請使用 dual-demo Compose 或先獨立啟動 `vuln-bank-main`。
+
+### 4. 完整 Demo Compose
+
+OCI / 完整 demo 目前以 `docker-compose.oracle.dual-demo.yml` 為主要參考：
+
+```bash
+docker compose --profile demo-ui -f docker-compose.oracle.dual-demo.yml up -d --build
+```
+
+主要服務：
+
+- `backend_public`: 公開 Gateway，預設 host port `127.0.0.1:8000`
+- `backend_soc`: SOC backend，預設 host port `127.0.0.1:8002`
+- `frontend_soc`: SOC frontend，預設 host port `3000`
+- `frontend_customer`: 客戶 demo frontend，profile `demo-ui`，預設 host port `127.0.0.1:3001`
+- `vuln_bank`: Flask banking upstream
+- `vuln_bank_db`: vuln-bank PostgreSQL
+- `postgres`: Mirage-Sentinel optional PostgreSQL
+- `redis`: short-term feature store
+- `sandbox`: isolated deception sandbox foundation
+- `ollama`: optional local Mirage model runtime
+
+## API 摘要
+
+### Public Gateway
+
+```bash
 curl -i http://127.0.0.1:8000/healthz
-curl -i http://127.0.0.1:8002/healthz
-
-# 2) OpenAPI 文件可用性
 curl -i http://127.0.0.1:8000/openapi.json
-
-# 3) Banking 端點基本驗證（示例）
-curl -i -H "X-User-Id: 000000001" http://127.0.0.1:8000/banking/accounts
+curl -i http://127.0.0.1:8000/banking/
 ```
 
-驗收判準：
+Gateway 分流事件會記錄以下關鍵欄位：
 
-1. `/healthz`（8000/8002）回應 200。
-2. `/openapi.json` 回應 200 且為有效 JSON。
-3. `/banking/accounts` 回應符合當前模式（真實路徑或欺敵路徑），且事件可被記錄。
+- `route_before`
+- `route_after`
+- `deception_reason`
+- `policy_hit`
+- `upstream_attempted`
+- `upstream_status_code`
+- `deception_engaged`
+- `deception_mode`
+- `real_backend_touched`
+- `response_origin`
+- `flow_stage`
+- `session_chain_id`
+- `principal_id`
 
-若任一步驟失敗，請直接參照 [`docs/RUNBOOK.md`](docs/RUNBOOK.md) 的「503 排障 SOP」與「DB 建置、補種與遷移」。
+### Dashboard / SOC
 
-CI 自動化：
+```powershell
+$env:API_KEY="your-dashboard-api-key"
 
-1. 合併前由 [`PR Compose Smoke Test`](.github/workflows/pr-smoke.yml) 執行本地 compose 驗收，包括：
-   - 健康檢查與 OpenAPI 可用性
-   - 權限回歸測試（`scripts/ci/authz-smoke.sh`）：role gate / object-level authorization
-   - 交易風險規則測試（`scripts/ci/transaction-risk-smoke.sh`）：重放檢測、高頻檢測、異常金額檢測
-   - 鑑識事件查詢測試（`scripts/ci/event-query-smoke.sh`）：路由篩選、風險分數篩選、攻擊鏈回放
-2. 部署成功後由 [`Post-Deploy Smoke Test`](.github/workflows/post-deploy-smoke.yml) 進行線上同等驗收，包括以上所有項目。
+curl -H "X-API-Key: $env:API_KEY" `
+  "http://127.0.0.1:8000/api/v1/dashboard/recent_traffic?limit=10"
 
-### Dashboard 事件查詢與回放 API
+curl -H "X-API-Key: $env:API_KEY" `
+  "http://127.0.0.1:8000/api/v1/dashboard/events/by_route/deception?limit=10"
 
-P0 鑑識事件欄位標準化提供三個新的查詢端點，支援按路由、風險分數篩選與完整攻擊鏈回放：
+curl -H "X-API-Key: $env:API_KEY" `
+  "http://127.0.0.1:8000/api/v1/dashboard/events/by_risk_score?min_score=60&max_score=100&limit=20"
 
-```bash
-# 設定 API Key（必填，不能使用占位字串）
-API_KEY="CHANGE_ME_REQUIRED"
+curl -H "X-API-Key: $env:API_KEY" `
+  "http://127.0.0.1:8000/api/v1/dashboard/replay/session/<session_chain_id>"
 
-# 1) 查詢欺敵路由事件（deception）
-curl -H "X-API-Key: $API_KEY" \
-  "http://127.0.0.1:8000/dashboard/events/by_route/deception?limit=10"
-
-curl -H "X-API-Key: $API_KEY" \
-  "http://127.0.0.1:8000/dashboard/events/by_route/real?limit=10"
-
-# 3) 查詢特定風險分數範圍的事件（0-100）
-curl -H "X-API-Key: $API_KEY" \
-  "http://127.0.0.1:8000/dashboard/events/by_risk_score?min_score=60&max_score=100&limit=20"
-
-# 4) 回放完整攻擊鏈（包含時間軸、每步決策理由、風險評分）
-curl -H "X-API-Key: $API_KEY" \
-  "http://127.0.0.1:8000/dashboard/replay/CIF000001001"
+curl -H "X-API-Key: $env:API_KEY" `
+  "http://127.0.0.1:8000/api/v1/dashboard/statistics/deception_effectiveness?hours=24"
 ```
 
-**回應欄位說明：**
-- `principal_id` - 互動主體識別，優先對應 `X-User-Id` / CIF；若缺失則回退為 `proxy:<client_ip>`
-- `route` - 分流路由（`real` 或 `deception`）
-- `risk_score` - 風險評分（0-100 整數）
-- `deception_reason` - 欺敵觸發原因（如 `invalid_user_id_format,suspicious_user_agent`）
-- `attack_vector` - 攻擊向量分類（如 `sqli`, `lfi`, `paths`）
-- `chain_length` - 攻擊鏈完整步驟數（回放端點時）
-- `deception_events` - 鏈中欺敵事件計數（回放端點時）
+## 驗證與 CI
 
-補充：
-- `principal_id` 為歷史命名，現階段在多數查詢與回放 API 中仍保留。
-- 它目前實際上大多承載的是 `principal_id` 語意，不是 query string id。
+本機單元測試：
 
-
----
-
-## 互動深度分析（Interaction Depth Analysis）
-
-Mirage-Sentinel 針對銀行誘餌 API 攻擊路徑，設計多維度「互動深度分析」指標，協助 SOC 與資安人員判斷攻擊者是否進行高價值、深度互動，並評估誘餌成效。
-
-### 設計理念
-- 追蹤攻擊者在誘餌銀行 API 的操作路徑、步數與持續度
-- 標記是否觸發高價值 API（如 /transfer、/admin、/download）
-- 分析攻擊特徵（SQLi、LFI、XSS、RCE 等）
-- 偵測 session/token 行為（重用、竄改、cookie injection）
-- 綜合評分攻擊者信任度與誘餌命中率
-
-### 主要指標範例
-
-| 欄位                | 說明                                  |
-|---------------------|---------------------------------------|
-| interaction_steps   | 互動步數（API 呼叫次數）              |
-| unique_apis         | 涉及的 API 路徑清單                   |
-| reached_high_value_api | 是否觸發高價值 API                |
-| attack_vectors      | 偵測到的攻擊手法（如 SQLi、XSS）      |
-| session_reuse       | 是否有 session 重用                   |
-| token_manipulation  | 是否有 token 竄改                     |
-| dwell_seconds       | 持續互動秒數                          |
-| deception_score     | 綜合誘餌成效分數（0-100）             |
-| trust_level         | 攻擊者信任度（low/medium/high）       |
-| memory_hit          | 是否命中記憶型誘餌                    |
-
-### 回傳格式範例
-
-```json
-{
-  "client_ip": "1.2.3.4",
-  "principal_id": "CIF000001001",
-  "interaction_steps": 5,
-  "unique_apis": ["login", "balance", "transfer"],
-  "reached_high_value_api": true,
-  "attack_vectors": ["SQLi", "XSS"],
-  "session_reuse": false,
-  "token_manipulation": true,
-  "dwell_seconds": 120,
-  "deception_score": 85,
-  "trust_level": "high",
-  "memory_hit": false
-}
+```powershell
+python -m unittest discover -p "test_*.py"
 ```
 
-### 實作建議
-1. 於 `core/deception_engine.py` 或 `dashboard_service.py` 擴充 `compute_interaction_metrics`，依據流量日誌與攻擊特徵自動計算上述指標。
-2. 所有分析僅針對誘餌資料，不可讀取或影響真實資料庫，並於沙盒環境執行。
-3. 可依專案需求擴充指標，強化誘餌成效評估與攻擊行為鑑識。
+本機 smoke：
 
-> 本架構設計符合現代資安分層防禦、可維護性與主動防禦最佳實踐。建議團隊先針對 NLP/DistilBERT 區塊進行概念驗證（POC），確保語料品質與誤報可控，再逐步整合 XGBoost 與 Gateway。
+```powershell
+.\scripts\ci\run-local-smoke.ps1
+```
 
----
+GitHub Actions：
+
+- `.github/workflows/pr-smoke.yml`
+  - PR / push main 執行 Compose health 與 OpenAPI smoke。
+- `.github/workflows/post-deploy-smoke.yml`
+  - Deploy 後在 OCI host 上檢查 `8000`、`8002`、SOC frontend 與 customer frontend。
+- `.github/workflows/deploy.yml`
+  - SSH 到 OCI host，更新 repo，啟動 `docker-compose.oracle.dual-demo.yml`，並執行 Mirage / health / frontend gate。
+- `.github/workflows/semgrep-scan.yml`
+  - OWASP、SQLi、JWT、Secrets、Flask、Python 規則掃描。
+
+## 目前完成度
+
+### 已落地
+
+- FastAPI Gateway 可作為 banking proxy。
+- 高風險流量的前置 Mirage 分流路徑已在 `main.py` 中落地，事件可標示是否觸及上游。
+- Mirage fake session 與狀態化假資料已保存於 `mirage_memory.db`。
+- SOC 查詢 API 支援近期流量、IP bundle、路由分類、風險分數查詢、principal replay、session replay 與 deception effectiveness。
+- 毫秒級事件時間欄位已在主要寫入路徑使用。
+- Sandbox 容器在 Compose 層已有最小權限設定。
+- CI smoke 與 Semgrep 掃描已存在。
+
+### 待補強
+
+- 主 backend 容器仍需非 root、read-only filesystem、cap drop 與最小 writable mount。
+- `traffic_logs.db` 的公開路徑讀取 helper 仍需全面移往 `feature_store.db` / Redis，確保 honeypot 決策不依賴鑑識庫讀取。
+- `sandbox_service.py` 已具備隔離式 AI Agent 端點，但主 Gateway 目前主要走 `core.mirage` / `mirage_memory.db`，嚴格 sandbox 接入仍需收斂。
+- 本地 `docker-compose.yml` 與完整 `dual-demo` Compose 的服務拓撲不同，文件與 smoke 已盡量標示差異，後續可再合併成更清楚的 dev/prod profile。
+- 部分舊欄位命名仍保留相容性，例如 `principal_id` 已作為互動主體識別，但歷史註解仍需逐步清理。
+
+## 文件入口
+
+- [需求規格](docs/REQUIREMENTS.md)
+- [開發規範](docs/DEVELOPMENT_GUIDELINES.md)
+- [目前狀態報告](docs/STATUS_REPORT.md)
+- [運維與回放 Runbook](docs/RUNBOOK.md)
+- [SecLists 維護指南](docs/SECLISTS_UPDATE_GUIDE.md)
+- [資料庫設定](DATABASE_SETUP.md)
+- [虛擬卡配置](VIRTUAL_CARD_CONFIG.md)
+- [AI Agent 說明](AI_AGENT_README.md)
 
 ## License
 
-本專案採用 [Apache License 2.0](LICENSE) 授權。你可自由使用、修改、散布本程式碼，但請保留原始授權條款與免責聲明。
+本專案採用 [Apache License 2.0](LICENSE) 授權。
