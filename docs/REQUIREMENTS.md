@@ -40,6 +40,7 @@ Mirage-Sentinel 是一個結合機器學習（XGBoost）與大型語言模型（
 對應路徑：`core/sandbox.py`, `docker-compose.oracle.yml`
 * **REQ-SB-01 [容器化生命週期管理]：** 系統必須能透過程式碼自動掛載、啟動或銷毀隔離的金融誘餌 Docker 容器。
 * **REQ-SB-02 [特權限制]：** 所有誘餌容器必須以 Non-root 使用者運行，嚴禁開啟 `--privileged` 模式，並移除非必要的 Linux Capabilities。
+* **REQ-SB-03 [Kernel Programming]：** 系統需提供可選 Linux Kernel Module (`ops/kernel/mirage_cgroup_audit.c`)，透過 procfs 暴露 sandbox cgroup v2 policy audit 資訊，作為宿主機端 kernel-space 稽核元件。
 
 ### 3.5 SOC 資安戰情室 (SOC Dashboard)
 對應路徑：`frontend/`, `services/dashboard_service.py`

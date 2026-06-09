@@ -49,20 +49,27 @@ services:
     restart: unless-stopped
     expose:
       - "8001"
+    cgroup: private
     user: "1000:1000"
     read_only: true
     privileged: false
+    cpus: 0.20
+    mem_limit: 256m
+    memswap_limit: 256m
+    pids_limit: 64
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=32m,mode=1777,noexec,nosuid,nodev
     command: ["python", "sandbox_service.py"]
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - PORT=8001
     volumes:
-      - ./data:/app/data
+      - sandbox_memory:/app/data
 
   vuln_bank_db:
     image: postgres:16-alpine
@@ -220,3 +227,4 @@ volumes:
   pgdata:
   vuln_bank_pgdata:
   ollama_data:
+  sandbox_memory:

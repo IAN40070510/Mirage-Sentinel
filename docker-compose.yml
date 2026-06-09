@@ -62,16 +62,23 @@ services:
     container_name: mirage_sentinel_sandbox
     expose:
       - "8001"
+    cgroup: private
     user: "1000:1000"
     read_only: true
     privileged: false
+    cpus: 0.20
+    mem_limit: 256m
+    memswap_limit: 256m
+    pids_limit: 64
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=32m,mode=1777,noexec,nosuid,nodev
     volumes:
-      - .:/app
-      - ./data:/app/data
+      - .:/app:ro
+      - sandbox_memory:/app/data
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
@@ -79,3 +86,4 @@ services:
 
 volumes:
   postgres_data:
+  sandbox_memory:
