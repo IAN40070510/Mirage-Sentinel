@@ -4,7 +4,7 @@ This optional Linux Kernel Module is the Kernel Programming component for the sa
 
 ## What It Does
 
-- Creates `/proc/mirage_cgroup_audit`.
+- Creates `/proc/sandbox_cgroup_audit`.
 - Reports millisecond precision kernel time using `ktime_get_real_ts64`.
 - Reports the process reading the procfs file.
 - Reports the expected sandbox cgroup v2 policy:
@@ -25,7 +25,7 @@ make
 ## Load
 
 ```bash
-sudo insmod mirage_cgroup_audit.ko \
+sudo insmod sandbox_cgroup_audit.ko \
   sandbox_cgroup=/sys/fs/cgroup/msdss_sandbox \
   memory_limit_mb=256 \
   pids_limit=64 \
@@ -35,7 +35,7 @@ sudo insmod mirage_cgroup_audit.ko \
 ## Inspect
 
 ```bash
-cat /proc/mirage_cgroup_audit
+cat /proc/sandbox_cgroup_audit
 ```
 
 Example output:
@@ -56,7 +56,7 @@ kernel_jiffies=1234567
 ## Unload
 
 ```bash
-sudo rmmod mirage_cgroup_audit
+sudo rmmod sandbox_cgroup_audit
 ```
 
 ## Scope

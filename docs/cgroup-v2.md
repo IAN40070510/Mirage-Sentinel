@@ -21,7 +21,7 @@
 - 宿主機腳本（推薦）：由 `ops/create_cgroups.sh` 在宿主機建立並管理 cgroup。適合生產/測試環境精準控制。
 - Container runtime：Compose 的 `sandbox` 服務已設定 `cgroup: private`、`cpus: 0.20`、`mem_limit: 256m`、`memswap_limit: 256m`、`pids_limit: 64`，由 Docker runtime 映射到 cgroup v2 控制器。
 - 資料隔離：Compose 的 `sandbox` 服務使用專用 `sandbox_memory` volume 掛載 `/app/data`，只保存可拋棄的 `mirage_memory.db`，避免直接掛載鑑識資料目錄。
-- Kernel Programming：`ops/kernel/mirage_cgroup_audit.c` 提供可選 Linux Kernel Module，透過 procfs 暴露 `/proc/mirage_cgroup_audit`，用於稽核 sandbox cgroup v2 policy 與 kernel timestamp。
+- Kernel Programming：`ops/kernel/sandbox_cgroup_audit.c` 提供可選 Linux Kernel Module，透過 procfs 暴露 `/proc/sandbox_cgroup_audit`，用於稽核 sandbox cgroup v2 policy 與 kernel timestamp。
 
 參考數值（初始建議，可依 CI 與壓力測試調整）
 - `sandbox`：memory.max=256M, pids.max=64, cpu 20%（quota 20000/period 100000）
@@ -49,7 +49,7 @@ Git 分工建議
 - `feature/cgroup-design`：撰寫文件（本檔）與設計討論。
 - `feature/cgroup-scripts`：實作 `ops/create_cgroups.sh`、`tests/cgroup_smoke.sh`。
 - `feature/container-integration`：已在 `docker-compose.yml`、`docker-compose.oracle.yml`、`docker-compose.oracle.dual-demo.yml` 的 `sandbox` 服務加入 cgroup v2 runtime 限制。
-- `feature/kernel-audit-module`：實作 `ops/kernel/mirage_cgroup_audit.c`，提供 Kernel Programming 證據與 host-side audit surface。
+`feature/kernel-audit-module`：實作 `ops/kernel/sandbox_cgroup_audit.c`，提供 Kernel Programming 證據與 host-side audit surface。
 
 --
 作者：MSDSS 團隊

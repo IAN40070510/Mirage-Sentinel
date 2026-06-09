@@ -13,5 +13,6 @@
             "approve": true,
             "matchCommandLine": true
         }
-    }
+    },
+    "C_Cpp.errorSquiggles": "disabled"
 }
