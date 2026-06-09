@@ -4,12 +4,15 @@ RUN apt-get update && apt-get install -y gcc
 # 避免 Python 緩衝輸出，可即時看到 log
 ENV PYTHONUNBUFFERED=1
 
+# 預設使用部署精簡依賴；若需完整訓練/研究依賴可在 build 時覆蓋。
+ARG REQUIREMENTS_FILE=requirements.runtime.txt
+
 WORKDIR /app
 
 # 先複製依賴後安裝，加速 build cache
-COPY requirements.txt ./
+COPY requirements.txt requirements.runtime.txt ./
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r ${REQUIREMENTS_FILE}
 
 # 複製專案程式碼
 COPY . .

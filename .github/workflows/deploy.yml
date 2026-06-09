@@ -47,6 +47,9 @@ jobs:
             umask 077
             printf 'API_KEY=%s\n' "$runtime_api_key" > "$runtime_env_file"
             export API_KEY="$runtime_api_key"
+            # Free stale build cache/images before rebuilding to avoid OCI disk exhaustion.
+            sudo docker builder prune -af || true
+            sudo docker image prune -af || true
             $COMPOSE_CMD --profile demo-ui --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml down
             $COMPOSE_CMD --profile demo-ui --env-file "$runtime_env_file" -f docker-compose.oracle.dual-demo.yml up -d --build --remove-orphans
 
