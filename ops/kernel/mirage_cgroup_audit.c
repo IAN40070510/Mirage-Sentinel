@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Mirage-Sentinel cgroup audit module.
+ * Mirage cgroup audit module.
  *
  * This module does not replace Linux cgroup v2 enforcement. It provides a
  * tiny kernel-space audit surface for the sandbox cgroup policy used by the
