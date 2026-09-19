@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 export async function middleware(request: NextRequest) {
   const visitor = request.cookies.get("visitor_id")?.value
-  const epoch = request.headers.get("x-routing-epoch")
+  const epoch = request.headers.get("x-routing-epoch") || ""
   if (!visitor) return new NextResponse("Service unavailable", { status: 503 })
   const response = await fetch(`${process.env.COMMERCE_GATEWAY_URL}/store/regions`, {
     headers: {
