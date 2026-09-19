@@ -240,7 +240,9 @@ def create_app(
         # A server-side SDK request is fenced to the page's routing epoch.
         # A concurrent transition never allows it to fall through to the real backend.
         stale_context = (
-            internal and request.headers.get("x-routing-epoch") != visitor["epoch"]
+            internal
+            and request.headers.get("x-routing-epoch")
+            and request.headers.get("x-routing-epoch") != visitor["epoch"]
         )
         jar = SimpleCookie()
         try:
