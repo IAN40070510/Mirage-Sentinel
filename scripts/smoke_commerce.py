@@ -102,7 +102,11 @@ def main() -> None:
     parser.add_argument("--url", default="http://localhost:8080")
     args = parser.parse_args()
     with httpx.Client(base_url=args.url, timeout=60, follow_redirects=True) as client:
-        home = client.get("/dk")
+        regions_response = client.get("/store/regions")
+        regions_response.raise_for_status()
+        region = regions_response.json()["regions"][0]
+        country = region["countries"][0]["iso_2"]
+        home = client.get(f"/{country}")
         assert home.status_code == 200
         assets = ScriptAssets()
         assets.feed(home.text)
