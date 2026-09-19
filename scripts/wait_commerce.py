@@ -23,7 +23,7 @@ def main() -> None:
                 urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
             )
             with opener.open(args.url + "/", timeout=10) as response:
-                if response.status == 200:
+                if 200 <= response.status < 400:
                     print("Commerce storefront ready")
                     return
         except (urllib.error.URLError, TimeoutError, OSError):
