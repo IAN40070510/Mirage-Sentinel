@@ -325,6 +325,13 @@ def create_app(
                     location = response.headers["location"]
                     if location.startswith(upstream):
                         location = location[len(upstream) :] or "/"
+                    if location.startswith(("http://", "https://")) and public_url:
+                        parsed_location = urlsplit(location)
+                        location = public_url.rstrip("/") + (
+                            parsed_location.path or "/"
+                        )
+                        if parsed_location.query:
+                            location += "?" + parsed_location.query
                     response_headers.append(("location", location))
                 origin = realm + ("_api" if is_api else "_web")
                 # Mirage enriches failed suspicious API probes, never changes successful orders.
