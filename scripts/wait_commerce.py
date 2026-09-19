@@ -16,15 +16,11 @@ def main() -> None:
     deadline = time.monotonic() + args.timeout
     while time.monotonic() < deadline:
         try:
-            # Keep the issued visitor cookie over the country redirect.
-            import http.cookiejar
-
-            opener = urllib.request.build_opener(
-                urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
-            )
-            with opener.open(args.url + "/", timeout=10) as response:
-                if 200 <= response.status < 400:
-                    print("Commerce storefront ready")
+            with urllib.request.urlopen(
+                args.url.rstrip("/") + "/healthz", timeout=10
+            ) as response:
+                if response.status == 200:
+                    print("Commerce gateway ready")
                     return
         except (urllib.error.URLError, TimeoutError, OSError):
             pass
