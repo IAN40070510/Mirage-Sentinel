@@ -11,7 +11,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from http.cookies import CookieError, SimpleCookie
 from typing import Any
-from urllib.parse import quote, unquote
+from urllib.parse import quote, unquote, urlsplit
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -267,7 +267,11 @@ def create_app(
         headers["x-client-ip"] = request.headers.get(
             "x-client-ip", request.client.host if request.client else "unknown"
         )
-        headers["x-forwarded-host"] = request.headers.get("host", "localhost")
+        public_url = os.getenv("PUBLIC_URL", "")
+        public_host = urlsplit(public_url).netloc if public_url else ""
+        headers["x-forwarded-host"] = public_host or request.headers.get(
+            "host", "localhost"
+        )
         headers["x-forwarded-proto"] = os.getenv("PUBLIC_SCHEME", "http")
         if is_api:
             headers.pop("cookie", None)

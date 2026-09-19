@@ -88,6 +88,7 @@ services:
       SANDBOX_STOREFRONT_TOKEN: ${SANDBOX_STOREFRONT_TOKEN:?Generate .env.commerce}
       REAL_PUBLISHABLE_KEY: ${REAL_PUBLISHABLE_KEY:-}
       SANDBOX_PUBLISHABLE_KEY: ${SANDBOX_PUBLISHABLE_KEY:-}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
       PUBLIC_SCHEME: ${PUBLIC_SCHEME:-http}
       SENTINEL_MODEL_DIR: /models
     volumes: [visitor_state:/state, "./model/commerce:/models:ro"]
