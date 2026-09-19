@@ -50,7 +50,10 @@ def main() -> None:
     previous = shared.with_name("commerce-current-release")
     previous_release = Path(previous.read_text().strip()) if previous.exists() else None
     fields.update(
-        BIND_ADDRESS="0.0.0.0", HTTP_PORT="80", COMMERCE_IMAGE_TAG=args.revision
+        BIND_ADDRESS="0.0.0.0",
+        HTTP_PORT="80",
+        SOC_PORT="3000",
+        COMMERCE_IMAGE_TAG=args.revision,
     )
     # Do not show secrets in workflow logs or command-line arguments.
     shared.write_text(

@@ -104,7 +104,7 @@ services:
       CONTROL_TOKEN: ${CONTROL_TOKEN:?Generate .env.commerce}
       SOC_USER: ${SOC_USER:-analyst}
       SOC_PASSWORD: ${SOC_PASSWORD:?Generate .env.commerce}
-    ports: ["127.0.0.1:${SOC_PORT:-3100}:8000"]
+    ports: ["0.0.0.0:${SOC_PORT:-3000}:8000"]
     volumes: [forensics:/forensics]
     networks: [audit, soc_host]
     mem_limit: 384m

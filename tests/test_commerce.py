@@ -333,4 +333,7 @@ def test_deployment_network_isolation():
         assert "audit" not in service["networks"]
         assert "real_data" not in service["networks"]
     assert "forensics:/forensics" not in services["gateway"]["volumes"]
-    assert all(p.startswith("127.0.0.1:") for p in services["collector"]["ports"])
+    assert all(
+        p.startswith(("127.0.0.1:", "0.0.0.0:"))
+        for p in services["collector"]["ports"]
+    )

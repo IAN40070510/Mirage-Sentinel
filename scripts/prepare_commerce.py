@@ -27,7 +27,7 @@ def main() -> None:
         "PUBLIC_SCHEME": url.scheme,
         "BIND_ADDRESS": "127.0.0.1",
         "HTTP_PORT": "8080",
-        "SOC_PORT": "3100",
+        "SOC_PORT": "3000",
         "ADMIN_PORT": "9100",
         "SOC_USER": "analyst",
         "ADMIN_EMAIL": "admin@example.invalid",
