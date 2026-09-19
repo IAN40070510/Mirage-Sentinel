@@ -102,7 +102,7 @@ def main() -> None:
     parser.add_argument("--url", default="http://localhost:8080")
     args = parser.parse_args()
     with httpx.Client(base_url=args.url, timeout=60, follow_redirects=True) as client:
-        home = client.get("/")
+        home = client.get("/dk")
         assert home.status_code == 200
         assets = ScriptAssets()
         assets.feed(home.text)
