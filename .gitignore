@@ -252,3 +252,14 @@ frontend/node_modules/
 
 # Local large archives (do not commit)
 archive.zip
+
+# Ecommerce build outputs, local credentials and upstream metadata
+commerce/**/node_modules/
+commerce/**/.next/
+commerce/**/.medusa/
+commerce/**/.turbo/
+commerce/.git/
+commerce/**/*.tsbuildinfo
+.env.commerce
+artifacts/local-secrets/
+artifacts/publish-repo/

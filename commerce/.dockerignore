@@ -1,0 +1,8 @@
+**/node_modules
+**/.next
+**/.medusa
+**/.turbo
+.git
+**/.env
+**/.env.local
+**/*.tsbuildinfo

@@ -1,0 +1,8 @@
+packages:
+  - "apps/**"
+  - "!apps/backend/.medusa/**"
+
+onlyBuiltDependencies:
+  - "@swc/core"
+  - "esbuild"
+  - "sharp"

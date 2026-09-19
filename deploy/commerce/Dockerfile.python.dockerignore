@@ -1,0 +1,12 @@
+.git
+.env*
+**/node_modules
+**/.git
+**/.next
+**/.medusa
+**/__pycache__
+**/*.db*
+**/*.pkl
+commerce
+data
+vuln-bank-main

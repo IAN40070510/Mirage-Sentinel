@@ -1,0 +1,39 @@
+name: Commerce validation
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    # Match OCI Ampere A1 instead of relying only on the developer's x86 machine.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install test dependencies
+        run: pip install -r deploy/commerce/requirements.txt -r deploy/commerce/requirements-test.txt
+      - name: Routing and isolation tests
+        run: python -m pytest tests/test_commerce.py -q --junitxml=artifacts/commerce-tests.xml
+      - name: Create ephemeral credentials
+        run: python scripts/prepare_commerce.py
+      - name: Build and initialize isolated stores
+        run: python scripts/deploy_commerce.py --build --initialize
+      - name: Shopping and quarantine acceptance
+        run: python scripts/wait_commerce.py && python scripts/smoke_commerce.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: commerce-tests
+          path: artifacts/commerce-tests.xml
+      - name: Stop this CI stack
+        if: always()
+        run: docker compose --env-file .env.commerce -f docker-compose.commerce.yml down -v

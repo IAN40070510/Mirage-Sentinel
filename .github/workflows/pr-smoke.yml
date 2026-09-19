@@ -1,12 +1,7 @@
 name: PR Compose Smoke Test
 
+# Retained for manual regression of the legacy banking stack.
 on:
-  pull_request:
-    branches:
-      - main
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:

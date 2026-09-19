@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "features": ["path_length", "query_length", "body_length", "header_count", "header_bytes", "body_entropy", "special_ratio", "request_count_60s", "interval_ms", "method_write", "json_body", "rule_hits"],
+  "objective": "binary:logistic"
+}

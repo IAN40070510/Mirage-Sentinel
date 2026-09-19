@@ -1,0 +1,270 @@
+name: mirage-commerce
+
+x-python: &python
+  image: mirage-commerce-python:${COMMERCE_IMAGE_TAG:-local}
+  build:
+    context: .
+    dockerfile: deploy/commerce/Dockerfile.python
+  restart: unless-stopped
+  user: "10001:10001"
+  read_only: true
+  privileged: false
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: ["/tmp:size=64m,noexec,nosuid,nodev"]
+  pids_limit: 128
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
+x-medusa: &medusa
+  image: mirage-commerce-medusa:${COMMERCE_IMAGE_TAG:-local}
+  build:
+    context: ./commerce
+    dockerfile: Dockerfile.backend
+  restart: unless-stopped
+  user: "1000:1000"
+  read_only: true
+  privileged: false
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs:
+    - /tmp:size=128m,nosuid,nodev
+    - /home/node/.config:size=8m,uid=1000,gid=1000,nosuid,nodev
+    - /app/apps/backend/.medusa/server/.medusa:size=64m,uid=1000,gid=1000
+  pids_limit: 256
+  mem_limit: 2g
+  cpus: 1.25
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
+x-storefront: &storefront
+  image: mirage-commerce-storefront:${COMMERCE_IMAGE_TAG:-local}
+  build:
+    context: ./commerce
+    dockerfile: Dockerfile.storefront
+    args:
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
+  restart: unless-stopped
+  user: "1000:1000"
+  read_only: true
+  privileged: false
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: ["/tmp:size=64m,nosuid,nodev"]
+  pids_limit: 128
+  mem_limit: 768m
+  cpus: 0.75
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
+services:
+  edge: &edge
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    ports: ["${BIND_ADDRESS:-127.0.0.1}:${HTTP_PORT:-8080}:8080"]
+    environment:
+      EDGE_TOKEN: ${EDGE_TOKEN:?Generate .env.commerce}
+    volumes: ["./deploy/commerce/nginx.conf:/etc/nginx/templates/default.conf.template:ro"]
+    networks: [ingress]
+    depends_on: [gateway]
+    read_only: true
+    privileged: false
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:size=32m,nosuid,nodev", "/etc/nginx/conf.d:size=1m,uid=101,gid=101"]
+    mem_limit: 128m
+    restart: unless-stopped
+
+  gateway:
+    <<: *python
+    environment:
+      EDGE_TOKEN: ${EDGE_TOKEN:?Generate .env.commerce}
+      VISITOR_SIGNING_KEY: ${VISITOR_SIGNING_KEY:?Generate .env.commerce}
+      AUDIT_WRITE_TOKEN: ${AUDIT_WRITE_TOKEN:?Generate .env.commerce}
+      CONTROL_TOKEN: ${CONTROL_TOKEN:?Generate .env.commerce}
+      REAL_STOREFRONT_TOKEN: ${REAL_STOREFRONT_TOKEN:?Generate .env.commerce}
+      SANDBOX_STOREFRONT_TOKEN: ${SANDBOX_STOREFRONT_TOKEN:?Generate .env.commerce}
+      REAL_PUBLISHABLE_KEY: ${REAL_PUBLISHABLE_KEY:-}
+      SANDBOX_PUBLISHABLE_KEY: ${SANDBOX_PUBLISHABLE_KEY:-}
+      PUBLIC_SCHEME: ${PUBLIC_SCHEME:-http}
+      SENTINEL_MODEL_DIR: /models
+    volumes: [visitor_state:/state, "./model/commerce:/models:ro"]
+    networks: [ingress, real_edge, sandbox_edge, audit, mirage_edge]
+    mem_limit: 768m
+    cpus: 1
+
+  collector:
+    <<: *python
+    command: [uvicorn, services.commerce.collector:app, --host, 0.0.0.0, --port, "8000", --no-proxy-headers]
+    environment:
+      AUDIT_WRITE_TOKEN: ${AUDIT_WRITE_TOKEN:?Generate .env.commerce}
+      CONTROL_TOKEN: ${CONTROL_TOKEN:?Generate .env.commerce}
+      SOC_USER: ${SOC_USER:-analyst}
+      SOC_PASSWORD: ${SOC_PASSWORD:?Generate .env.commerce}
+    ports: ["127.0.0.1:${SOC_PORT:-3100}:8000"]
+    volumes: [forensics:/forensics]
+    networks: [audit, soc_host]
+    mem_limit: 384m
+    cpus: 0.5
+
+  real-storefront:
+    <<: *storefront
+    environment:
+      COMMERCE_GATEWAY_URL: http://gateway:8000/_api
+      STOREFRONT_TOKEN: ${REAL_STOREFRONT_TOKEN:?Generate .env.commerce}
+      PUBLIC_SCHEME: ${PUBLIC_SCHEME:-http}
+    networks: [real_edge]
+
+  sandbox-storefront:
+    <<: *storefront
+    environment:
+      COMMERCE_GATEWAY_URL: http://gateway:8000/_api
+      STOREFRONT_TOKEN: ${SANDBOX_STOREFRONT_TOKEN:?Generate .env.commerce}
+      PUBLIC_SCHEME: ${PUBLIC_SCHEME:-http}
+    networks: [sandbox_edge]
+
+  real-medusa:
+    <<: *medusa
+    environment:
+      DATABASE_URL: postgres://commerce:${REAL_DB_PASSWORD:?Generate .env.commerce}@real-db:5432/commerce?sslmode=disable
+      JWT_SECRET: ${REAL_JWT_SECRET:?Generate .env.commerce}
+      COOKIE_SECRET: ${REAL_COOKIE_SECRET:?Generate .env.commerce}
+      STORE_CORS: ${PUBLIC_URL:-http://localhost:8080}
+      ADMIN_CORS: http://localhost:9100
+      AUTH_CORS: ${PUBLIC_URL:-http://localhost:8080},http://localhost:9100
+    ports: ["127.0.0.1:${ADMIN_PORT:-9100}:9000"]
+    networks: [real_edge, real_data, admin_host]
+    depends_on:
+      real-db: {condition: service_healthy}
+
+  sandbox-medusa:
+    <<: *medusa
+    environment:
+      DATABASE_URL: postgres://commerce:${SANDBOX_DB_PASSWORD:?Generate .env.commerce}@sandbox-db:5432/commerce?sslmode=disable
+      JWT_SECRET: ${SANDBOX_JWT_SECRET:?Generate .env.commerce}
+      COOKIE_SECRET: ${SANDBOX_COOKIE_SECRET:?Generate .env.commerce}
+      STORE_CORS: ${PUBLIC_URL:-http://localhost:8080}
+      ADMIN_CORS: http://localhost
+      AUTH_CORS: ${PUBLIC_URL:-http://localhost:8080}
+    networks: [sandbox_edge, sandbox_data]
+    depends_on:
+      sandbox-db: {condition: service_healthy}
+
+  real-db:
+    image: postgres:16-alpine
+    user: postgres
+    read_only: true
+    privileged: false
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:size=32m,nosuid,nodev", "/var/run/postgresql:size=8m,mode=1777"]
+    environment:
+      POSTGRES_DB: commerce
+      POSTGRES_USER: commerce
+      POSTGRES_PASSWORD: ${REAL_DB_PASSWORD:?Generate .env.commerce}
+    volumes: [real_data:/var/lib/postgresql/data]
+    networks: [real_data]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U commerce -d commerce"]
+      interval: 5s
+      retries: 30
+    mem_limit: 512m
+    restart: unless-stopped
+
+  sandbox-db:
+    image: postgres:16-alpine
+    user: postgres
+    read_only: true
+    privileged: false
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:size=32m,nosuid,nodev", "/var/run/postgresql:size=8m,mode=1777"]
+    environment:
+      POSTGRES_DB: commerce
+      POSTGRES_USER: commerce
+      POSTGRES_PASSWORD: ${SANDBOX_DB_PASSWORD:?Generate .env.commerce}
+    volumes: [sandbox_data:/var/lib/postgresql/data]
+    networks: [sandbox_data]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U commerce -d commerce"]
+      interval: 5s
+      retries: 30
+    mem_limit: 512m
+    restart: unless-stopped
+
+  mirage:
+    <<: *python
+    command: [uvicorn, services.commerce.mirage:app, --host, 0.0.0.0, --port, "8000", --no-proxy-headers]
+    environment:
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-hf.co/fdtn-ai/Foundation-Sec-1.1-8B-Instruct-Q4_K_M-GGUF:latest}
+    volumes: [mirage_memory:/memory]
+    networks: [mirage_edge, inference]
+    mem_limit: 256m
+    cpus: 0.5
+
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    profiles: [llm]
+    depends_on:
+      model-volume-init: {condition: service_completed_successfully}
+    environment:
+      HOME: /home/ollama
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_MODELS: /models
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+    user: "10001:10001"
+    volumes: [ollama_models:/models]
+    networks: [inference, model_download]
+    read_only: true
+    privileged: false
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:size=64m,nosuid,nodev", "/home/ollama:size=8m,uid=10001,gid=10001"]
+    mem_limit: 8g
+    cpus: 2
+    restart: unless-stopped
+
+  edge-preview:
+    <<: *edge
+    profiles: [preview]
+    ports: ["127.0.0.1:18080:8080"]
+
+  model-volume-init:
+    image: mirage-commerce-python:${COMMERCE_IMAGE_TAG:-local}
+    profiles: [llm]
+    user: "0:0"
+    network_mode: none
+    read_only: true
+    privileged: false
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    security_opt: [no-new-privileges:true]
+    command: [python, -c, "import os; os.chown('/models', 10001, 10001)"]
+    volumes: [ollama_models:/models]
+    restart: "no"
+
+networks:
+  ingress: {}
+  # Host publication needs a non-internal bridge; neither is shared with the sandbox.
+  soc_host: {}
+  admin_host: {}
+  real_edge: {internal: true}
+  sandbox_edge: {internal: true}
+  real_data: {internal: true}
+  sandbox_data: {internal: true}
+  audit: {internal: true}
+  mirage_edge: {internal: true}
+  inference: {internal: true}
+  model_download: {}
+
+volumes:
+  visitor_state: {}
+  forensics: {}
+  real_data: {}
+  sandbox_data: {}
+  mirage_memory: {}
+  ollama_models: {}
