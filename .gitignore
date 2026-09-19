@@ -263,3 +263,7 @@ commerce/**/*.tsbuildinfo
 .env.commerce
 artifacts/local-secrets/
 artifacts/publish-repo/
+
+# Storefront application source (not Python environment libraries)
+!commerce/apps/storefront/src/lib/
+!commerce/apps/storefront/src/lib/**
