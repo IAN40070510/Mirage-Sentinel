@@ -1,4 +1,4 @@
-"""Build and initialize a separate Compose project. Never stops the existing bank."""
+"""Build and initialize the isolated commerce Compose project."""
 
 from __future__ import annotations
 
@@ -151,7 +151,7 @@ def main() -> None:
     else:
         run(["up", "-d"])
     print(
-        "Commerce stack started. Existing Mirage-Sentinel containers were not changed."
+        "Commerce stack started. Existing database volumes were retained."
     )
     print(
         "Run scripts/smoke_commerce.py against the configured loopback endpoint before public cutover."

@@ -267,3 +267,15 @@ artifacts/publish-repo/
 # Storefront application source (not Python environment libraries)
 !commerce/apps/storefront/src/lib/
 !commerce/apps/storefront/src/lib/**
+
+# Private deployment environments and local recovery archives
+.env.*
+!.env.*.example
+!.env.*.template
+artifacts/local-secrets/
+artifacts/mirage-commerce-source.zip
+
+# Generated bulk datasets stay local; commit reports, schemas and the small review sample.
+datasets/**/*.jsonl
+!datasets/commerce/review-v1/requests.jsonl
+datasets/**/*.zip

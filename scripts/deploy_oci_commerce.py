@@ -1,4 +1,4 @@
-"""OCI cutover with a preview gate, revision-pinned images and retained legacy data."""
+"""Deploy commerce releases with a preview gate and revision-pinned images."""
 
 from __future__ import annotations
 
@@ -84,7 +84,6 @@ def main() -> None:
             capture_output=capture,
         )
 
-    stopped_legacy = False
     try:
         subprocess.run(
             [
@@ -113,21 +112,6 @@ def main() -> None:
                 "--url",
                 "http://edge-preview:8080",
             )
-        legacy = subprocess.run(
-            [
-                "docker",
-                "inspect",
-                "--format",
-                "{{.State.Running}}",
-                "mirage_sentinel_nginx",
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if legacy.returncode == 0 and legacy.stdout.strip() == "true":
-            subprocess.run(["docker", "stop", "mirage_sentinel_nginx"], check=True)
-            stopped_legacy = True
         command(ROOT, "up", "-d", "--no-deps", "edge")
         subprocess.run(
             [
@@ -138,41 +122,16 @@ def main() -> None:
             ],
             check=True,
         )
-        # Old SOC serves bank-only data. Retain it stopped rather than exposing a stale room.
-        old_soc = subprocess.run(
-            ["docker", "inspect", "mirage_sentinel_frontend_soc"],
-            capture_output=True,
-            check=False,
-        )
-        if old_soc.returncode == 0:
-            subprocess.run(
-                ["docker", "stop", "mirage_sentinel_frontend_soc"], check=True
-            )
         command(ROOT, "--profile", "preview", "stop", "edge-preview")
         previous.write_text(str(ROOT) + "\n")
         print(
-            "OCI commerce cutover passed. SOC: SSH tunnel to 127.0.0.1:3100; admin: 9100."
+            "OCI commerce deployment passed. SOC: port 3000 (authentication required); admin: SSH tunnel to 127.0.0.1:9100."
         )
     except BaseException:
         shared.write_text(original)
         if previous_release and previous_release.is_dir():
             # Restores application images; schema downgrades are deliberately not automated.
             command(previous_release, "up", "-d")
-        elif stopped_legacy:
-            subprocess.run(
-                compose
-                + [
-                    "--env-file",
-                    str(shared),
-                    "-f",
-                    str(ROOT / "docker-compose.commerce.yml"),
-                    "stop",
-                    "edge",
-                ],
-                cwd=ROOT,
-                check=False,
-            )
-            subprocess.run(["docker", "start", "mirage_sentinel_nginx"], check=True)
         raise
 
 

@@ -1,176 +1,18 @@
-# Mirage-Sentinel RUNBOOK
+# 電商操作指南
 
-本手冊用於日常運維、503 排障、資料庫遷移與攻擊事件回放。
-
-## 1) 部署前檢查 (Preflight)
-
-1. 確認環境變數已設定：
-- `DATABASE_URL` 指向容器網路內的 `postgres` 主機（不要使用 `localhost`）。
-- `HOST`、`PORT` 已符合部署平台需求。
-- `DB_INIT_RETRIES`、`DB_INIT_RETRY_INTERVAL` 已設定合理值（避免 DB 啟動競態）。
-
-2. 確認 compose 配置：
-- `postgres` 服務存在且包含 healthcheck。
-- 後端服務 `depends_on` 包含 `postgres`（含 health 條件）。
-- 誘餌容器維持最小權限（非 root、非 privileged、盡可能 read-only）。
-
-3. 確認 CI/CD 健康閘門：
-- 部署後需驗證 `8000` 與 `8002` 的 `/healthz`。
-- 失敗時必須自動輸出 compose logs。
-
-## 2) 快速啟動 (Local)
+在專案根目錄執行，Compose 使用 docker-compose.commerce.yml、環境檔使用私有 .env.commerce。主機僅安裝 docker-compose 時替換下列 docker compose。
 
 ```bash
-# backend
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-
-# frontend
-npm --prefix frontend start
+docker compose --env-file .env.commerce -f docker-compose.commerce.yml ps
+docker compose --env-file .env.commerce -f docker-compose.commerce.yml logs --tail 100 gateway collector mirage
 ```
 
-Docker:
+不要公開完整日誌中的請求、Cookie 或 token。Gateway、Collector、Mirage 為不同服務，不使用已移除的 main.py、sandbox_service.py 或銀行路由。
 
-```bash
-docker compose up --build
-```
+本機首次啟動順序：prepare_commerce.py → deploy_commerce.py --build --initialize → wait_commerce.py → smoke_commerce.py。smoke 會產生購物及攻擊測試，應用於隔離驗證環境。公開站台唯讀檢查由 post-deploy-smoke.yml 執行。
 
-啟用 PostgreSQL profile（若專案使用該設定）：
+OCI main 部署通過 ARM CI 後在 release 目錄執行。保留共享 .env.commerce、commerce-current-release 與資料卷。SOC 為 3000 埠，管理端僅綁定 127.0.0.1:9100。銀行容器不再由部署腳本啟停；有其他服務占用埠時須先辨识，不可直接刪除容器資料。
 
-```bash
-docker compose --profile db up --build
-```
+更新失敗且存在前一個電商 release 時，腳本恢復應用映像；不能保證新 schema 可被舊程式使用。資料庫遷移前應備份並確認相容性。preview 與正式更新共用電商資料卷，不是資料庫副本。
 
-## 3) 503 排障 SOP
-
-1. 先看健康端點
-
-```bash
-curl -i http://127.0.0.1:8000/healthz
-curl -i http://127.0.0.1:8002/healthz
-```
-
-2. 若健康失敗，查看容器日誌
-
-```bash
-docker compose ps
-docker compose logs --tail=200 backend
-```
-
-3. 若健康成功但 Banking API 回 503，優先檢查：
-- 是否啟用真實 DB 模式。
-- `DATABASE_URL` 是否連到 `postgres`。
-- DB schema/seed 是否完成。
-
-4. 驗證 OpenAPI 是否可用（避免文件端失效誤判）
-
-```bash
-curl -i http://127.0.0.1:8000/openapi.json
-```
-
-## 4) DB 建置、補種與遷移
-
-### 4.1 初始種子資料
-
-```bash
-python scripts/seed_banking_users.py --start-cif 000000001 --end-cif 000001000
-```
-
-### 4.2 以 archive 模板補種（若腳本支援）
-
-```bash
-python scripts/seed_banking_users.py --start-cif 000000001 --end-cif 000010000 --archive scripts/data/archive.zip
-```
-
-### 4.3 刷新舊資料名稱/帳戶預設值
-
-```bash
-python scripts/seed_banking_users.py --start-cif 000000001 --end-cif 000010000 --refresh-existing-names --refresh-existing-accounts
-```
-
-### 4.4 金額欄位遷移為整數
-
-```bash
-psql "$DATABASE_URL" -f scripts/postgres/migrate_money_to_integer.sql
-```
-
-遷移後檢查：
-- `accounts.balance`、`transactions.amount`、`transactions.fee` 型別已為整數型別。
-- 舊 `USD` 預設值已按規則正規化。
-
-## 5) 安全不變量檢查清單
-
-1. `traffic_logs` 為 append-only 寫入路徑，不允許 honeypot 讀改刪。
-2. 時間戳記需保留毫秒或微秒精度（ISO 8601 with fractional seconds 或 ms epoch）。
-3. 鑑識寫入不可阻塞 API 回應（採非同步 I/O 或訊息佇列）。
-4. 誘餌容器遵守最小權限與隔離策略。
-
-## 6) 事件回放 SOP (SOC)
-
-1. 依時間窗查詢事件：
-- 條件至少包含 `route`, `risk_score`, `deception_reason`, `timestamp`。
-
-2. 重建攻擊鏈：
-- 按 `timestamp` 排序。
-- 對齊 request-id / session-id。
-- 標記從 real path 轉入 deception path 的節點。
-
-3. 產出可行動結論：
-- 攻擊模式分類（身份、交易、資料層、協議、AI 代理、基礎設施）。
-- 對應防禦建議與回歸測試案例。
-
-## 7) 變更回歸最低標準
-
-1. `/healthz`（8000/8002）均為 200。
-2. `/openapi.json` 可回應且結構有效。
-3. Banking 真實路徑可查詢且資料正確。
-4. 可疑請求可導入 deception path 且事件有完整欄位。
-5. CI 失敗時可直接從 log 定位問題。
-
-## 8) P1 欺敵登入手動驗證
-
-1. 啟動欺敵登入流程（建議使用可疑 User-Agent）
-
-```bash
-curl -s -X POST "http://127.0.0.1:8000/api/v1/banking/auth/login" \
-	-H "Content-Type: application/json" \
-	-H "X-User-Id: CIF000000001" \
-	-A "sqlmap/1.8" \
-	-d '{"username":"audit-user","device_id":"manual-check"}' | jq
-```
-
-驗收重點：
-- `auth_flow_id` 存在。
-- `stage=credential_challenge`。
-- `deception_meta.strategy=counter_ai_tarpit`。
-
-2. 依序推進狀態機
-
-```bash
-# 1) credential -> otp
-curl -s -X POST "http://127.0.0.1:8000/api/v1/banking/auth/login/<FLOW_ID>/verify" \
-	-H "Content-Type: application/json" \
-	-H "X-User-Id: CIF000000001" \
-	-A "sqlmap/1.8" \
-	-d '{"password":"ignored"}' | jq
-
-# 2) otp -> security_question
-curl -s -X POST "http://127.0.0.1:8000/api/v1/banking/auth/login/<FLOW_ID>/verify" \
-	-H "Content-Type: application/json" \
-	-H "X-User-Id: CIF000000001" \
-	-A "sqlmap/1.8" \
-	-d '{"otp":"123456"}' | jq
-
-# 3) security_question -> manual_review
-curl -s -X POST "http://127.0.0.1:8000/api/v1/banking/auth/login/<FLOW_ID>/verify" \
-	-H "Content-Type: application/json" \
-	-H "X-User-Id: CIF000000001" \
-	-A "sqlmap/1.8" \
-	-d '{"security_answer":"mock-answer"}' | jq
-```
-
-驗收重點：
-- 階段轉換順序正確：`credential_challenge -> otp_challenge -> security_question -> manual_review`。
-- 最終狀態為 `status=queued_review`。
-
-補充：
-- 對 `accounts/balance/transactions/beneficiaries/transfers` 等業務端點，若請求為「未授權 + 可疑」，系統會自動導向同一套欺敵登入狀態機（回 `route=deception_auth`），不再回傳一般業務欺敵資料。
+不要以 down -v 或 volume prune 作一般更新。銀行原始碼清理與雲端資料退役分開處理，刪除資料前須驗證備份還原。

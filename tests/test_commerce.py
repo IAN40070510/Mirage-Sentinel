@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from services.commerce.audit import AuditQueue
 from services.commerce.collector import Forensics
 from services.commerce.collector import create_app as collector_app
-from services.commerce.detection import FEATURES, Detector
+from services.commerce.detection import FEATURE_VERSION, FEATURES, Detector
 from services.commerce.gateway import create_app
 from services.commerce.state import TTL, VisitorStore
 
@@ -264,12 +264,22 @@ async def test_native_xgboost_json_contract(tmp_path):
     )
     booster.save_model(tmp_path / "xgb.json")
     (tmp_path / "features.json").write_text(
-        json.dumps({"version": 1, "features": FEATURES, "objective": "binary:logistic"})
+        json.dumps(
+            {
+                "version": FEATURE_VERSION,
+                "features": FEATURES,
+                "objective": "binary:logistic",
+            }
+        )
     )
     detector = Detector(str(tmp_path), timeout=5)
     result = await detector.assess("a", "GET", "/store/products", "", {}, b"")
     assert result["decision_source"] == "xgboost"
     assert 0 <= result["model_probability"] <= 1
+    (tmp_path / "features.json").write_text(
+        json.dumps({"version": 1, "features": FEATURES, "objective": "binary:logistic"})
+    )
+    assert Detector(str(tmp_path)).model_status == "unavailable_or_incompatible"
     (tmp_path / "features.json").write_text("{}")
     assert Detector(str(tmp_path)).model is None
 
@@ -334,6 +344,37 @@ def test_deployment_network_isolation():
         assert "real_data" not in service["networks"]
     assert "forensics:/forensics" not in services["gateway"]["volumes"]
     assert all(
-        p.startswith(("127.0.0.1:", "0.0.0.0:"))
-        for p in services["collector"]["ports"]
+        p.startswith(("127.0.0.1:", "0.0.0.0:")) for p in services["collector"]["ports"]
     )
+
+
+def test_template_text_no_longer_quarantines_but_sqli_still_does(system):
+    client, _, audit, _ = system
+    response = client.post("/store/carts", json={"note": "{{7*7}} {{__name__}}"})
+    assert response.json()["host"] == "real-medusa"
+    assert audit.events[-1]["rules"] == []
+    assert audit.events[-1]["features"]["rule_hits"] == 0
+    assert audit.events[-1]["feature_version"] == FEATURE_VERSION
+    response = client.get("/store/products", params={"q": "{{7*7}} UNION SELECT 1"})
+    assert response.json()["host"] == "sandbox-medusa"
+    assert "sqli" in audit.events[-1]["rules"]
+    assert client.get("/dk").json()["host"] == "sandbox-storefront"
+
+
+@pytest.mark.parametrize(
+    ("content_type", "body", "expected_host"),
+    [
+        (
+            "application/x-www-form-urlencoded; charset=utf-8",
+            "q=UNION+SELECT+1",
+            "sandbox-medusa",
+        ),
+        ("application/json", '{"note":"UNION+SELECT+1"}', "real-medusa"),
+    ],
+)
+def test_plus_decoding_matches_body_encoding(system, content_type, body, expected_host):
+    client, _, _, _ = system
+    response = client.post(
+        "/store/carts", content=body, headers={"content-type": content_type}
+    )
+    assert response.json()["host"] == expected_host

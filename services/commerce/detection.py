@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
+FEATURE_VERSION = 2
+
 FEATURES = [
     "path_length",
     "query_length",
@@ -36,7 +38,6 @@ RULES = {
         r";\s*(?:cat|curl|wget|bash|sh|id|whoami)\b|\$\(|\b(?:exec|system)\s*\(",
         re.IGNORECASE,
     ),
-    "ssti": re.compile(r"\{\{.*?(?:__|\d+\s*\*\s*\d+).*?\}\}", re.DOTALL),
 }
 
 
@@ -55,7 +56,7 @@ class Detector:
 
                 metadata = json.loads((Path(model_dir) / "features.json").read_text())
                 if metadata != {
-                    "version": 1,
+                    "version": FEATURE_VERSION,
                     "features": FEATURES,
                     "objective": "binary:logistic",
                 }:
@@ -95,12 +96,20 @@ class Detector:
         while history and history[0] < stamp - 60:
             history.popleft()
         body_text = body.decode("utf-8", "replace")
+        # HTML form encoding uses plus for spaces; JSON and headers do not.
+        query_text = query.replace("+", " ")
+        content_type = headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        detection_body = (
+            body_text.replace("+", " ")
+            if content_type == "application/x-www-form-urlencoded"
+            else body_text
+        )
         text = (
             path
             + "?"
-            + query
+            + query_text
             + "\n"
-            + body_text
+            + detection_body
             + "\n"
             + "\n".join(
                 f"{k}:{v}"
@@ -166,6 +175,7 @@ class Detector:
             "decision_source": source,
             "fallback": fallback,
             "rules": hits,
+            "feature_version": FEATURE_VERSION,
             "features": dict(zip(FEATURES, values)),
         }
 

@@ -1,0 +1,153 @@
+{
+  "path": "requests.jsonl",
+  "sha256": "6c891e8880b80db6df28f8d91296247670200ee5ab7bcb35f31f1e3db623a5b1",
+  "records": 10000,
+  "labels": {
+    "cmdi": 2000,
+    "normal": 2000,
+    "path_traversal": 2000,
+    "sqli": 2000,
+    "xss": 2000
+  },
+  "duplicate_sample_ids": 0,
+  "duplicate_canonical_requests": 0,
+  "seed": 20260923,
+  "created_at": "2026-09-23T05:21:53.512+00:00",
+  "prior_datasets": [
+    {
+      "path": "datasets/commerce/review-v1/requests.jsonl",
+      "records": 15,
+      "sha256": "4059ce9c4b0bfe95f22dbd82b5dd2732de3ed9a510374eaa257dc15c367ddf5b"
+    },
+    {
+      "path": "datasets/commerce/synthetic-10k-v1/requests.jsonl",
+      "records": 10000,
+      "sha256": "f2530dc34fe5e0c13272596d52dabe239d52d0a664470ac34fb54d9c8a58bea0"
+    }
+  ],
+  "generator_sha256": "e087d8474af4825607fd6913f4e6c676da1d602d586fc1dbce0627a24112d984",
+  "cross_batch_exact_duplicates": 0,
+  "cross_batch_normalized_numeric_variant_duplicates": 0,
+  "within_batch_normalized_numeric_variant_duplicates": 0,
+  "rejected_duplicate_candidates": 2,
+  "normalization": "Ignore client identity headers; parse query/JSON; recursively decode percent escapes up to three times; case-fold; replace numeric values/runs. Input-carrying Referer/x-search retained. Not full semantic equivalence.",
+  "template_families": {
+    "cmdi-shell-newline": 130,
+    "cmdi-shell-pipe": 130,
+    "cmdi-shell-process-substitution": 120,
+    "cmdi-shell-quote-break": 260,
+    "cmdi-shell-separator": 620,
+    "cmdi-shell-substitution": 380,
+    "cmdi-windows-separator": 360,
+    "normal-path-text": 120,
+    "normal-punctuation-text": 130,
+    "normal-quoted-text": 130,
+    "normal-shopping-text": 740,
+    "normal-technical-text": 240,
+    "normal-unicode-text": 520,
+    "normal-url-text": 120,
+    "path_traversal-mixed-parent": 250,
+    "path_traversal-parser-dependent-parent": 240,
+    "path_traversal-posix-parent": 1130,
+    "path_traversal-windows-parent": 380,
+    "sqli-boolean": 760,
+    "sqli-conditional": 380,
+    "sqli-stacked-select": 120,
+    "sqli-subquery": 250,
+    "sqli-union": 490,
+    "xss-attribute-break": 120,
+    "xss-click-event": 120,
+    "xss-focus-event": 120,
+    "xss-iframe-srcdoc": 120,
+    "xss-image-event": 130,
+    "xss-javascript-url": 120,
+    "xss-media-event": 260,
+    "xss-mouse-event": 120,
+    "xss-script-element": 380,
+    "xss-script-string-break": 260,
+    "xss-svg-event": 250
+  },
+  "new_family_names": [
+    "cmdi-shell-process-substitution",
+    "path_traversal-parser-dependent-parent",
+    "xss-attribute-break",
+    "xss-click-event",
+    "xss-media-event",
+    "xss-script-string-break"
+  ],
+  "request_surfaces_per_class": {
+    "normal": {
+      "product-search-with-filters": 200,
+      "cart-shipping-address": 200,
+      "cart-billing-address": 200,
+      "customer-address": 200,
+      "cart-promotions-array": 200,
+      "line-item-metadata": 200,
+      "customer-metadata": 200,
+      "cart-nested-metadata": 200,
+      "referer-query": 200,
+      "product-order-query": 200
+    },
+    "sqli": {
+      "product-search-with-filters": 200,
+      "cart-shipping-address": 200,
+      "cart-billing-address": 200,
+      "customer-address": 200,
+      "cart-promotions-array": 200,
+      "line-item-metadata": 200,
+      "customer-metadata": 200,
+      "cart-nested-metadata": 200,
+      "referer-query": 200,
+      "product-order-query": 200
+    },
+    "xss": {
+      "product-search-with-filters": 200,
+      "cart-shipping-address": 200,
+      "cart-billing-address": 200,
+      "customer-address": 200,
+      "cart-promotions-array": 200,
+      "line-item-metadata": 200,
+      "customer-metadata": 200,
+      "cart-nested-metadata": 200,
+      "referer-query": 200,
+      "product-order-query": 200
+    },
+    "cmdi": {
+      "product-search-with-filters": 200,
+      "cart-shipping-address": 200,
+      "cart-billing-address": 200,
+      "customer-address": 200,
+      "cart-promotions-array": 200,
+      "line-item-metadata": 200,
+      "customer-metadata": 200,
+      "cart-nested-metadata": 200,
+      "referer-query": 200,
+      "product-order-query": 200
+    },
+    "path_traversal": {
+      "product-search-with-filters": 200,
+      "cart-shipping-address": 200,
+      "cart-billing-address": 200,
+      "customer-address": 200,
+      "cart-promotions-array": 200,
+      "line-item-metadata": 200,
+      "customer-metadata": 200,
+      "cart-nested-metadata": 200,
+      "referer-query": 200,
+      "product-order-query": 200
+    }
+  },
+  "executed_requests": 0,
+  "label_validation": "Template-assigned; no independent ground-truth review or Medusa execution",
+  "independent_checks": {
+    "prior_hashes_unchanged": true,
+    "cross_batch_checks_recomputed": true,
+    "metadata_contract": true,
+    "json_bodies": true,
+    "header_syntax_and_credential_absence": true,
+    "joint_method_path_user_agent_language_distribution_equal": true,
+    "normalizer_numeric_encoding_header_regression": true
+  },
+  "family_count": 34,
+  "normal_variant_limitations": "No real session timelines, actual checkout success or model scores; placeholders and optional metadata are synthetic."
+}

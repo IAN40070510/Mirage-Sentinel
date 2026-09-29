@@ -1,26 +1,2 @@
-fastapi
-uvicorn
-redis
-openai
-faker
-python-dotenv
-python-multipart
-httpx
-pandas
-numpy
-scipy
-scikit-learn
-xgboost
-joblib
-pyahocorasick
-rbloom
-tensorflow==2.15.0
-sentence-transformers
-SQLAlchemy>=2.0.0
-psycopg2-binary>=2.9.0
-opencc-python-reimplemented
-torch>=2.0.0
-transformers>=4.30.0
-huggingface_hub>=0.24.0
-accelerate>=0.30.0
-safetensors>=0.4.0
+# Commerce runtime; archived research dependencies: model/legacy-requirements.txt
+-r deploy/commerce/requirements.txt

@@ -1,0 +1,342 @@
+{
+  "dataset_sha256": "3683dcd096c9a319cfa7acffb096da244b550f88f49e396809bd89cf5e5b1ff9",
+  "records": 300000,
+  "classes": {
+    "xss": {
+      "records": 60000,
+      "POST": 55336,
+      "contains_placeholder": 40780,
+      "contains_probe_marker": 6194,
+      "body_nonempty": 55336,
+      "content_type_json": 55336,
+      "non_ascii_body": 0,
+      "current_rule_positive": 29702,
+      "simulated_train": 41975,
+      "simulated_validation": 8941,
+      "simulated_test": 9084,
+      "GET": 4664
+    },
+    "sqli": {
+      "records": 60000,
+      "POST": 55282,
+      "contains_placeholder": 40463,
+      "contains_probe_marker": 7019,
+      "body_nonempty": 55282,
+      "content_type_json": 55282,
+      "non_ascii_body": 0,
+      "current_rule_positive": 15280,
+      "simulated_test": 9017,
+      "simulated_train": 42065,
+      "simulated_validation": 8918,
+      "GET": 4718
+    },
+    "path_traversal": {
+      "records": 60000,
+      "POST": 54985,
+      "contains_placeholder": 40420,
+      "contains_probe_marker": 0,
+      "body_nonempty": 54985,
+      "content_type_json": 54985,
+      "non_ascii_body": 0,
+      "current_rule_positive": 46593,
+      "simulated_train": 41916,
+      "simulated_validation": 8968,
+      "GET": 5015,
+      "simulated_test": 9116
+    },
+    "normal": {
+      "records": 60000,
+      "POST": 55383,
+      "contains_placeholder": 40814,
+      "contains_probe_marker": 0,
+      "body_nonempty": 55383,
+      "content_type_json": 55383,
+      "non_ascii_body": 11035,
+      "current_rule_positive": 0,
+      "simulated_train": 42086,
+      "simulated_validation": 9007,
+      "GET": 4617,
+      "simulated_test": 8907,
+      "top_level_name_over_40_chars": 4943
+    },
+    "cmdi": {
+      "records": 60000,
+      "GET": 4465,
+      "contains_placeholder": 40652,
+      "contains_probe_marker": 5443,
+      "body_nonempty": 55535,
+      "content_type_json": 55535,
+      "non_ascii_body": 0,
+      "current_rule_positive": 8658,
+      "simulated_train": 41937,
+      "POST": 55535,
+      "simulated_test": 9003,
+      "simulated_validation": 9060
+    }
+  },
+  "family_count": 46,
+  "families": {
+    "xss-media-event": 4651,
+    "sqli-boolean": 25867,
+    "sqli-subquery": 7332,
+    "path_traversal-parser-dependent-parent": 4584,
+    "normal-shopping-text": 34003,
+    "path_traversal-mixed-parent": 9001,
+    "sqli-stacked-select": 3346,
+    "path_traversal-windows-parent": 14356,
+    "sqli-union": 14300,
+    "normal-path-text": 3298,
+    "normal-punctuation-text": 4281,
+    "cmdi-shell-separator": 20057,
+    "xss-attribute-break": 1927,
+    "sqli-conditional": 9153,
+    "xss-script-element": 17136,
+    "path_traversal-posix-parent": 32057,
+    "cmdi-shell-quote-break": 7919,
+    "cmdi-shell-substitution": 9774,
+    "cmdi-windows-separator": 9596,
+    "xss-mouse-event": 4213,
+    "xss-click-event": 3163,
+    "normal-technical-text": 6630,
+    "cmdi-shell-newline": 4249,
+    "xss-image-event": 4483,
+    "xss-svg-event": 8713,
+    "xss-focus-event": 4358,
+    "normal-quoted-text": 2389,
+    "normal-unicode-text": 7028,
+    "xss-script-string-break": 3141,
+    "cmdi-shell-pipe": 5329,
+    "xss-javascript-url": 3430,
+    "xss-toggle-event": 1159,
+    "xss-iframe-srcdoc": 3624,
+    "normal-url-text": 2364,
+    "cmdi-shell-process-substitution": 3074,
+    "xss-product-search-marker": 2,
+    "sqli-boolean-product-search": 2,
+    "normal-product-search-browser": 1,
+    "cmdi-filename-marker": 2,
+    "normal-region-browser": 1,
+    "normal-product-search-api": 1,
+    "normal-cart-create-api": 1,
+    "path-traversal-fixture-marker": 2,
+    "normal-product-list-api": 1,
+    "normal-customer-register-browser": 1,
+    "normal-cart-line-item-browser": 1
+  },
+  "method_paths": {
+    "POST /store/customers/me/addresses": 38678,
+    "POST /store/carts/cart_PLACEHOLDER": 93847,
+    "POST /store/carts/cart_PLACEHOLDER/line-items/item_PLACEHOLDER": 16511,
+    "POST /store/carts": 27438,
+    "GET /store/collections": 5927,
+    "POST /store/customers/me": 39196,
+    "POST /store/carts/cart_PLACEHOLDER/line-items": 16511,
+    "GET /store/products": 11652,
+    "POST /store/customers/me/addresses/addr_PLACEHOLDER": 16268,
+    "POST /store/customers": 11168,
+    "POST /store/carts/cart_PLACEHOLDER/shipping-methods": 16902,
+    "GET /store/product-categories": 5898,
+    "POST /auth/customer/emailpass": 1,
+    "GET /store/regions": 1,
+    "GET /store/files/%2e%2e%2f%2e%2e%2ffixtures%2fsentinel.txt": 1,
+    "POST /auth/customer/emailpass/register": 1
+  },
+  "normal_method_paths": {
+    "POST /store/carts": 5522,
+    "POST /store/carts/cart_PLACEHOLDER": 18808,
+    "POST /store/customers/me/addresses/addr_PLACEHOLDER": 3288,
+    "GET /store/collections": 1155,
+    "POST /store/customers/me/addresses": 7624,
+    "POST /store/carts/cart_PLACEHOLDER/line-items": 3295,
+    "POST /store/customers/me": 7785,
+    "POST /store/carts/cart_PLACEHOLDER/line-items/item_PLACEHOLDER": 3350,
+    "GET /store/products": 2315,
+    "POST /store/customers": 2243,
+    "POST /store/carts/cart_PLACEHOLDER/shipping-methods": 3467,
+    "GET /store/product-categories": 1146,
+    "GET /store/regions": 1,
+    "POST /auth/customer/emailpass/register": 1
+  },
+  "current_rule_hits_by_label": {
+    "xss": {
+      "xss": 29702
+    },
+    "sqli": {
+      "sqli": 15280
+    },
+    "path_traversal": {
+      "traversal": 46593
+    },
+    "normal": {},
+    "cmdi": {
+      "command": 8658
+    }
+  },
+  "rule_evaluation_note": "Executed existing Detector in rules-only mode on corpus requests. This is signature coverage against generated labels, not XGBoost accuracy or real-world performance.",
+  "static_feature_collision": {
+    "fields": 10,
+    "temporal_features_excluded": [
+      "request_count_60s",
+      "interval_ms"
+    ],
+    "unique_vectors": 282205,
+    "cross_label_vectors": 3385,
+    "records_in_cross_label_vectors": 20044,
+    "unavoidable_errors_for_deterministic_classifier_on_these_vectors": 9612,
+    "note": "Exact float-value collisions only; no trained model and no accuracy estimate. Non-collision does not establish useful features."
+  },
+  "simulated_row_split": {
+    "policy": "SHA256(sample_id with fixed prefix), 70/15/15 thresholds; diagnostic only; no split files or model produced",
+    "core_groups": 33483,
+    "test_rows": 45127,
+    "test_rows_with_core_group_in_training": 41509,
+    "test_overlap_percent": 91.9826268087841,
+    "core_note": "Eight optional metadata keys removed and prior structural normalizer applied. Heuristic near-duplicate risk, not formal semantic equivalence."
+  },
+  "illustrative_examples": {
+    "sqli_rule_miss": [
+      {
+        "sample_id": "commerce-300k-new-065166",
+        "family": "sqli-boolean",
+        "request": {
+          "method": "POST",
+          "path": "/store/carts/cart_PLACEHOLDER",
+          "query": "",
+          "headers": {
+            "accept": "application/json",
+            "content-type": "application/json",
+            "user-agent": "python-httpx/0.27.0"
+          },
+          "body": "{\"metadata\":{\"gift_wrap\":true,\"gift_message\":\"Thank you for your help\",\"packaging\":{\"material\":\"paper\",\"include_receipt\":false},\"personalization\":{\"font\":\"serif\",\"alignment\":\"center\"},\"gift_recipients\":[{\"name\":\"Example A\"},{\"name\":\"Example B\"}]},\"billing_address\":{\"first_name\":\"Alex\",\"last_name\":\"Example\",\"address_1\":\"Example Street\",\"city\":\"Copenhagen\",\"country_code\":\"dk\",\"postal_code\":\"1000\",\"address_2\":\"overcoat jewelry lavender' OR LOWER('OVERCOAT_JEWELRY_LAVENDER')='overcoat_jewelry_lavender'-- \"}}"
+        }
+      },
+      {
+        "sample_id": "commerce-100k-new-020841",
+        "family": "sqli-subquery",
+        "request": {
+          "method": "POST",
+          "path": "/store/carts/cart_PLACEHOLDER/line-items/item_PLACEHOLDER",
+          "query": "",
+          "headers": {
+            "accept": "application/json",
+            "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+            "content-type": "application/json"
+          },
+          "body": "{\"metadata\":{\"gift_message\":\"Thank you for your help\",\"contact_preferences\":{\"email\":true,\"sms\":false},\"personalization\":{\"font\":\"serif\",\"alignment\":\"center\"},\"gift_recipients\":[{\"name\":\"Example A\"},{\"name\":\"Example B\"}],\"preferences\":{\"substitutions\":false,\"colors\":[\"navy\",\"cream\"]},\"engraving\":\"mittens wallet backpack' AND (SELECT 'mittens_wallet_backpack')='mittens_wallet_backpack'-- \"},\"quantity\":1}"
+        }
+      }
+    ],
+    "path_traversal_rule_miss": [
+      {
+        "sample_id": "commerce-100k-new-094162",
+        "family": "path_traversal-parser-dependent-parent",
+        "request": {
+          "method": "POST",
+          "path": "/store/customers/me/addresses",
+          "query": "",
+          "headers": {
+            "accept": "application/json",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+            "content-type": "application/json"
+          },
+          "body": "{\"metadata\":{\"gift_wrap\":true,\"gift_message\":\"Thank you for your help\",\"packaging\":{\"material\":\"paper\",\"include_receipt\":false},\"contact_preferences\":{\"email\":true,\"sms\":false}},\"first_name\":\"Alex\",\"last_name\":\"Example\",\"address_1\":\"Example Street\",\"city\":\"Copenhagen\",\"country_code\":\"dk\",\"postal_code\":\"1000\",\"company\":\"..;/..;/fixtures/jewelry/yoga/pajamas.pdf\"}"
+        }
+      },
+      {
+        "sample_id": "commerce-300k-new-160576",
+        "family": "path_traversal-windows-parent",
+        "request": {
+          "method": "POST",
+          "path": "/store/carts/cart_PLACEHOLDER",
+          "query": "",
+          "headers": {
+            "accept": "application/json",
+            "content-type": "application/json",
+            "user-agent": "curl/8.7.1"
+          },
+          "body": "{\"metadata\":{\"delivery_note\":\"Leave with reception during opening hours\",\"gift_recipients\":[{\"name\":\"Example A\"},{\"name\":\"Example B\"}]},\"billing_address\":{\"first_name\":\"Alex\",\"last_name\":\"assets\\\\cache\\\\..\\\\..\\\\..\\\\fixtures\\\\report.txt\",\"address_1\":\"Example Street\",\"city\":\"Copenhagen\",\"country_code\":\"dk\",\"postal_code\":\"1000\"}}"
+        }
+      }
+    ],
+    "cmdi_rule_miss": [
+      {
+        "sample_id": "commerce-100k-new-071931",
+        "family": "cmdi-shell-separator",
+        "request": {
+          "method": "GET",
+          "path": "/store/products",
+          "query": "q=kimono_amber_teal.pdf%3B%20%27printf%27%20%27%25s%27%20%27kimono_amber_teal%27&fields=id%2Ctitle&order=title&region_id=reg_PLACEHOLDER&currency_code=eur&tags%5B%5D=ptag_PLACEHOLDER",
+          "headers": {
+            "accept": "application/json",
+            "user-agent": "curl/8.7.1"
+          },
+          "body": null
+        }
+      },
+      {
+        "sample_id": "commerce-300k-new-124306",
+        "family": "cmdi-shell-separator",
+        "request": {
+          "method": "POST",
+          "path": "/store/customers/me",
+          "query": "",
+          "headers": {
+            "accept": "application/json",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+            "content-type": "application/json"
+          },
+          "body": "{\"metadata\":{\"gift_message\":\"Thank you for your help\",\"packaging\":{\"material\":\"paper\",\"include_receipt\":false},\"contact_preferences\":{\"email\":true,\"sms\":false},\"personalization\":{\"font\":\"serif\",\"alignment\":\"center\"},\"preferences\":{\"substitutions\":false,\"colors\":[\"navy\",\"cream\"]},\"shopping_note\":\"earring_wallet_emerald.pdf; (printf '%s\\\\n' 'earring_wallet_emerald')\"}}"
+        }
+      }
+    ],
+    "xss_rule_miss": [
+      {
+        "sample_id": "commerce-100k-new-045487",
+        "family": "xss-attribute-break",
+        "request": {
+          "method": "POST",
+          "path": "/store/customers/me",
+          "query": "",
+          "headers": {
+            "accept": "application/json",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+            "content-type": "application/json"
+          },
+          "body": "{\"metadata\":{\"delivery_note\":\"Leave with reception during opening hours\",\"gift_recipients\":[{\"name\":\"Example A\"},{\"name\":\"Example B\"}],\"preferences\":{\"substitutions\":false,\"colors\":[\"navy\",\"cream\"]},\"shopping_note\":\"\\\" autofocus onfocus=\\\"document.title='jewelry_pajamas_cardigan'\\\" data-note=\\\"\"}}"
+        }
+      },
+      {
+        "sample_id": "commerce-100k-new-044112",
+        "family": "xss-mouse-event",
+        "request": {
+          "method": "POST",
+          "path": "/store/carts/cart_PLACEHOLDER/shipping-methods",
+          "query": "",
+          "headers": {
+            "accept": "application/json",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+            "content-type": "application/json"
+          },
+          "body": "{\"option_id\":\"so_PLACEHOLDER\",\"data\":{\"personalization\":{\"font\":\"serif\",\"alignment\":\"center\"},\"gift_recipients\":[{\"name\":\"Example A\"},{\"name\":\"Example B\"}],\"preferences\":{\"substitutions\":false,\"colors\":[\"navy\",\"cream\"]},\"delivery_instructions\":\"<div onpointerenter=\\\"document.title='towel_gingham_cardigan'\\\">towel gingham cardigan</div>\"}}"
+        }
+      }
+    ],
+    "long_normal_name": [
+      {
+        "sample_id": "commerce-100k-new-016083",
+        "path": "/store/customers/me",
+        "name": "Please exchange trousers olive navy; order reference 4432"
+      },
+      {
+        "sample_id": "commerce-100k-new-002254",
+        "path": "/store/customers/me",
+        "name": "Please keep the gift message blank; the recipient will write it."
+      },
+      {
+        "sample_id": "commerce-300k-new-036783",
+        "path": "/store/customers",
+        "name": "green shirt black C++ collection | limited edition"
+      }
+    ]
+  }
+}

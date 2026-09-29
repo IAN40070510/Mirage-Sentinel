@@ -105,7 +105,7 @@ Next.js SDK 改為 server-only；所有 SSR／server action 呼叫皆送 Gateway
 
 `path_length`、`query_length`、`body_length`、`header_count`、`header_bytes`、`body_entropy`、`special_ratio`、`request_count_60s`、`interval_ms`、`method_write`、`json_body`、`rule_hits`。
 
-文字規則涵蓋 query、body 與一般 headers，包含多層 URL 解碼；包含 SQL 注入、XSS、目錄遍歷、命令字串、SSTI 的基本簽章。管理 API／管理員登入不向購物入口開放，路徑編碼與 dot-segment 另做拒絕。
+文字規則涵蓋 query、body 與一般 headers，包含多層 URL 解碼；包含 SQL 注入、XSS、目錄遍歷、命令字串的基本簽章（2026-09-21 已移除 SSTI 規則）。管理 API／管理員登入不向購物入口開放，路徑編碼與 dot-segment 另做拒絕。
 
 目前沒有新訓練的正式模型檔，所以預設規則運作。模型缺失、不相容、錯誤、忙碌或逾時都可退回規則。模型分數與規則分數分開記錄，規則分数不是校準過的攻擊機率。原生模型介面測試使用臨時微型模型，只驗證讀取與推論流程，不是準確率測試。
 

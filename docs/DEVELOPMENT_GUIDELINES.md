@@ -4,10 +4,10 @@
 
 ## 1. 核心架構與邊界原則 (嚴格遵守)
 
-* **資料庫解耦與單向寫入：** 處理鑑識日誌時，絕對只能對 `traffic_logs.db` 進行「單向寫入 (Append-only)」。狀態互動邏輯只能讀寫 `mirage_memory.db`，嚴禁跨庫操作。
+* **資料庫解耦與單向寫入：** 處理鑑識日誌時，絕對只能對 `/forensics/events.db` 進行「單向寫入 (Append-only)」。狀態互動邏輯只能讀寫 `/memory/mirage.db`，嚴禁跨庫操作。
 * **消除時間側信道：** 所有涉及鑑識日誌寫入的 API 邏輯，必須使用非同步 (Asynchronous) 或 Message Queue 處理，不可阻塞 API 的回應時間。
 * **時間精度要求：** 程式碼中所有時間戳記 (Timestamps) 必須精確到毫秒 (ms)。強迫使用帶有小數秒的 ISO 8601 格式 (如 `YYYY-MM-DDTHH:mm:ss.SSSZ`)。
-* **誘餌擬真錯誤處理：** 在誘餌 API (`src/honeypots/`) 中，不可暴露真實的 Python 錯誤訊息。必須刻意捕捉例外，並根據場景回傳擬真的 Java/PHP/Node.js 堆疊追蹤 (Stack Trace)。
+* **誘餌擬真錯誤處理：** 在誘餌 API (`services/commerce/mirage.py`) 中，不可暴露真實的 Python 錯誤訊息。必須刻意捕捉例外，並根據場景回傳符合 Medusa 電商 API 契約的 JSON 錯誤訊息。
 
 ## 2. 自動化靜態分析與提交流程 (SAST & Git Workflow)
 

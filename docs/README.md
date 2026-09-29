@@ -1,19 +1,14 @@
-# Mirage-Sentinel Docs Index
+# 電商專案文件
 
-此目錄為 Mirage-Sentinel 的文件入口。
+- [操作指南](RUNBOOK.md)
+- [開發規範](DEVELOPMENT_GUIDELINES.md)
+- [資料庫](../DATABASE_SETUP.md)
+- [模型契約](../model/commerce/README.md)
+- [資料生成提示詞](DATASET_GENERATION_PROMPT.md)
+- [攻擊面評估](MEDUSA_ATTACK_SURFACE_REVIEW.md)
+- [資料品質評估](../datasets/commerce/curated-300k-v1/TRAINING_SUITABILITY_REVIEW.md)
+- [程式清理結果](COMMERCE_CLEANUP_REPORT.md)
 
-## 文件導覽
+COMMERCE_MIGRATION_REPORT.md、COPILOT_HANDOFF_REVIEW.md、LEGACY_CLEANUP_REVIEW.md 是歷史檢查紀錄；檔名、行號與待辦可能已被後續修改取代，啟動方式以根 README 為準。
 
-- 需求規格與非功能需求：`REQUIREMENTS.md`
-- 開發規範與程式協作：`DEVELOPMENT_GUIDELINES.md`
-- SecLists 維護流程：`SECLISTS_UPDATE_GUIDE.md`
-- 運維、503 排障、DB 遷移、事件回放：`RUNBOOK.md`
-- 目前進度、優先級與核對清單：`STATUS_REPORT.md`
-
-## 建議閱讀順序
-
-1. `REQUIREMENTS.md`
-2. `DEVELOPMENT_GUIDELINES.md`
-3. `STATUS_REPORT.md`
-4. `RUNBOOK.md`
-5. `SECLISTS_UPDATE_GUIDE.md`
+SECLISTS_UPDATE_GUIDE.md、cgroup-v2.md 與 ops/kernel 保留作離線簽名/核心隔離研究，不是現行電商 Docker 部署的必要步驟。

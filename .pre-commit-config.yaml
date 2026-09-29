@@ -2,9 +2,9 @@
 # Mirage-Sentinel 自動化靜態分析與程式碼排版護欄
 
 default_language_version:
-  python: python3.13
+  python: python3.11
 
-exclude: ^vuln-bank-main/
+exclude: ^(artifacts/|datasets/|model/(Sentinel|Mirage)/)
 
 repos:
 

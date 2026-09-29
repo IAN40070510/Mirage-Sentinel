@@ -22,7 +22,7 @@ jobs:
       - name: Install test dependencies
         run: pip install -r deploy/commerce/requirements.txt -r deploy/commerce/requirements-test.txt
       - name: Routing and isolation tests
-        run: python -m pytest tests/test_commerce.py -q --junitxml=artifacts/commerce-tests.xml
+        run: python -m pytest tests -q --junitxml=artifacts/commerce-tests.xml
       - name: Create ephemeral credentials
         run: python scripts/prepare_commerce.py
       - name: Build and initialize isolated stores
