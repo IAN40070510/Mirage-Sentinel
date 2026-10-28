@@ -84,7 +84,10 @@ def create_app(
         app.state.store = state or VisitorStore(
             os.getenv("STATE_DB", "/state/visitors.db"), secret("VISITOR_SIGNING_KEY")
         )
-        app.state.detector = detector or Detector(os.getenv("SENTINEL_MODEL_DIR", ""))
+        app.state.detector = detector or Detector(
+            os.getenv("SENTINEL_MODEL_DIR", ""),
+            model_mode=os.getenv("SENTINEL_MODEL_MODE", "shadow"),
+        )
         app.state.audit = audit or AuditQueue(
             os.getenv("AUDIT_URL", "http://collector:8000"), secret("AUDIT_WRITE_TOKEN")
         )
@@ -112,6 +115,7 @@ def create_app(
         check_control(request)
         return {
             "model": app.state.detector.model_status,
+            "model_mode": app.state.detector.model_mode,
             "audit_queued": app.state.audit.queue.qsize(),
             "audit_dropped": app.state.audit.dropped,
             "audit_delivered": app.state.audit.delivered,

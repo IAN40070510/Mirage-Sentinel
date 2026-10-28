@@ -44,7 +44,11 @@ RULES = {
 class Detector:
     """JSON-only XGBoost contract; incompatible legacy pickle artifacts are not loaded."""
 
-    def __init__(self, model_dir: str = "", timeout: float = 0.15) -> None:
+    def __init__(self, model_dir: str = "", timeout: float = 0.15,
+                 model_mode: str = "shadow") -> None:
+        if model_mode not in {"shadow", "enforce"}:
+            raise ValueError("model_mode must be shadow or enforce")
+        self.model_mode = model_mode
         self.model: Any = None
         self.predictor: Any = None
         self.threshold = 0.7
@@ -185,9 +189,17 @@ class Detector:
             fallback = "model_busy"
         # High-confidence signatures remain a safety net even when the model is available.
         rule_score = 0.95 if hits else 0.05
-        attack = bool(hits) or (probability is not None and probability >= self.threshold)
+        model_attack = probability is not None and probability >= self.threshold
+        # The new model has known false positives on normal shopping requests.
+        # Keep its predictions observable without changing routing by default.
+        enforced = self.predictor is None or self.model_mode == "enforce"
+        attack = bool(hits) or (enforced and model_attack)
+        if prediction is not None and not enforced:
+            source = "rule_with_shadow_model"
         return {
             "attack": attack,
+            "model_attack": model_attack if probability is not None else None,
+            "model_mode": self.model_mode if self.predictor is not None else "legacy",
             "predicted_label": prediction["predicted_label"] if prediction else None,
             "class_probabilities": prediction["probabilities"] if prediction else None,
             "model_contract": prediction["contract_version"] if prediction else None,

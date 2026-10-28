@@ -378,3 +378,19 @@ def test_plus_decoding_matches_body_encoding(system, content_type, body, expecte
         "/store/carts", content=body, headers={"content-type": content_type}
     )
     assert response.json()["host"] == expected_host
+
+
+def test_trained_shadow_model_preserves_real_to_sandbox_transition(system):
+    from pathlib import Path
+
+    client, _store, audit, calls = system
+    bundle = Path(__file__).resolve().parents[1] / 'model/commerce-five/run-20261028T081548514385Z'
+    client.app.state.detector = Detector(str(bundle), timeout=5)
+    assert client.app.state.detector.model_status == 'ready_five_class'
+    # Previously this normal page already quarantined the visitor before shopping.
+    assert client.get('/dk').json()['host'] == 'real-storefront'
+    assert client.get('/store/orders/order_fixture').json()['host'] == 'real-medusa'
+    assert client.get('/store/products?q=UNION%20SELECT%201').json()['host'] == 'sandbox-medusa'
+    assert client.get('/store/orders/order_fixture').json()['host'] == 'sandbox-medusa'
+    assert client.get('/dk').json()['host'] == 'sandbox-storefront'
+    assert [event['route'] for event in audit.events] == ['real', 'real', 'sandbox', 'sandbox', 'sandbox']

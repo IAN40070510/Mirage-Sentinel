@@ -12,7 +12,7 @@ BUNDLE = Path(__file__).resolve().parents[1] / 'model/commerce-five/run-20261028
 
 @pytest.mark.asyncio
 async def test_five_class_service_matches_training_runtime():
-    detector = Detector(str(BUNDLE), timeout=5)
+    detector = Detector(str(BUNDLE), timeout=5, model_mode='enforce')
     assert detector.model_status == 'ready_five_class'
     reference = Predictor(BUNDLE)
     for query in ('q=cotton', 'q=%3Cscript%3Evoid(0)%3C/script%3E', 'q=%27+OR+1%3D1--'):
@@ -34,3 +34,23 @@ def test_corrupt_five_class_model_falls_back(tmp_path):
     detector = Detector(str(tmp_path / 'bundle'))
     assert detector.model is None
     assert detector.model_status == 'unavailable_or_incompatible'
+
+
+@pytest.mark.asyncio
+async def test_shadow_keeps_normal_browsing_real_but_rules_still_quarantine():
+    detector = Detector(str(BUNDLE), timeout=5)
+    # Real downloaded model reproduces the production smoke-test false positive.
+    normal = await detector.assess('visitor', 'GET', '/dk', '', {}, b'')
+    assert normal['model_attack'] is True
+    assert normal['model_mode'] == 'shadow'
+    assert normal['attack'] is False
+    assert normal['decision_source'] == 'rule_with_shadow_model'
+    attack = await detector.assess('visitor', 'GET', '/store/products', 'q=UNION%20SELECT%201', {}, b'')
+    assert attack['attack'] is True
+    assert 'sqli' in attack['rules']
+    assert attack['class_probabilities'] is not None
+
+
+def test_unknown_model_mode_is_rejected():
+    with pytest.raises(ValueError):
+        Detector(model_mode='silent')

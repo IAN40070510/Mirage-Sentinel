@@ -20,3 +20,11 @@ docker compose --env-file .env.commerce -f docker-compose.commerce.yml logs --ta
 回復：從 artifacts/model-migration-backup-20261028T085620649653Z 還原 detection.py、requirements.txt、docker-compose.commerce.yml 並重建 gateway。原二分類目錄沒有已訓練模型，因此回復後為原規則判斷流程。
 
 本機 Docker 引擎未啟動；本次沒有重建或重啟執行中的容器。
+
+
+## CI 發現的誤報與目前分流策略
+
+2026-10-28，CI 真實購物流程失敗，本機重現 /dk 及正常購物請求被模型誤報。
+目前 Compose 固定 SENTINEL_MODEL_MODE=shadow。模型仍載入並輸出五類機率、model_attack 與門檻，但模型分數不觸發分流；既有安全規則仍能觸發黏著式隔離。
+前述門檻分流行為僅適用於明確設定 enforce 模式。此模型尚不能作為正常購物流程的自動分流依據，不應直接開啟 enforce。
+需以實際正常購物請求建立獨立驗證、改善模型並驗證誤報率後，再另行評估啟用。沒有修改模型權重、門檻或原始隔離驗收條件。
