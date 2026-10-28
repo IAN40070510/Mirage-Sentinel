@@ -46,12 +46,21 @@ class Detector:
 
     def __init__(self, model_dir: str = "", timeout: float = 0.15) -> None:
         self.model: Any = None
+        self.predictor: Any = None
+        self.threshold = 0.7
         self.timeout = timeout
         self.history: OrderedDict[str, deque[float]] = OrderedDict()
         self.busy = False
         self.model_status = "rules_only"
         if model_dir and (Path(model_dir) / "xgb.json").is_file():
             try:
+                if (Path(model_dir) / "bundle.json").is_file():
+                    from .five_runtime import Predictor
+                    self.predictor = Predictor(Path(model_dir))
+                    self.model = self.predictor.model
+                    self.threshold = self.predictor.threshold
+                    self.model_status = "ready_five_class"
+                    return
                 import xgboost as xgb
 
                 metadata = json.loads((Path(model_dir) / "features.json").read_text())
@@ -141,12 +150,17 @@ class Detector:
             int("json" in headers.get("content-type", "")),
             len(hits),
         ]
+        prediction: dict[str, Any] | None = None
         probability = None
         source = "rule"
         fallback = self.model_status
         if self.model is not None and not self.busy:
             self.busy = True
-            task = asyncio.create_task(asyncio.to_thread(self._predict, values))
+            request = {"method": method, "path": path, "query": query,
+                       "headers": headers, "body": body_text}
+            task = asyncio.create_task(asyncio.to_thread(
+                self._predict_five if self.predictor is not None else self._predict,
+                request if self.predictor is not None else values))
 
             def done(future: asyncio.Task) -> None:
                 self.busy = False
@@ -155,7 +169,12 @@ class Detector:
 
             task.add_done_callback(done)
             try:
-                probability = await asyncio.wait_for(asyncio.shield(task), self.timeout)
+                result = await asyncio.wait_for(asyncio.shield(task), self.timeout)
+                if self.predictor is not None:
+                    prediction = result
+                    probability = prediction["attack_score"]
+                else:
+                    probability = result
                 source, fallback = "xgboost", None
             except (Exception, asyncio.TimeoutError):
                 logging.getLogger(__name__).exception(
@@ -166,9 +185,13 @@ class Detector:
             fallback = "model_busy"
         # High-confidence signatures remain a safety net even when the model is available.
         rule_score = 0.95 if hits else 0.05
-        attack = bool(hits) or (probability is not None and probability >= 0.7)
+        attack = bool(hits) or (probability is not None and probability >= self.threshold)
         return {
             "attack": attack,
+            "predicted_label": prediction["predicted_label"] if prediction else None,
+            "class_probabilities": prediction["probabilities"] if prediction else None,
+            "model_contract": prediction["contract_version"] if prediction else None,
+            "model_threshold": self.threshold if probability is not None else None,
             "score": probability if probability is not None else rule_score,
             "model_probability": probability,
             "rule_score": rule_score,
@@ -178,6 +201,9 @@ class Detector:
             "feature_version": FEATURE_VERSION,
             "features": dict(zip(FEATURES, values)),
         }
+
+    def _predict_five(self, request: dict[str, Any]) -> dict[str, Any]:
+        return self.predictor.predict([request])[0]
 
     def _predict(self, values: list[float]) -> float:
         import numpy as np

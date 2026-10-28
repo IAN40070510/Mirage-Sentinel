@@ -1,1 +1,5 @@
 model.safetensors filter=lfs diff=lfs merge=lfs -text
+
+# Frozen model checksums require byte-identical files on Windows and Linux.
+model/commerce-five/run-20261028T081548514385Z/* -text
+services/commerce/five_runtime.py -text

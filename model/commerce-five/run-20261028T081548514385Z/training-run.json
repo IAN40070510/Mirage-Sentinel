@@ -1,0 +1,149 @@
+{
+  "created_at": "2026-10-28T08:38:43.635+00:00",
+  "python": "3.13.18",
+  "platform": "Linux-6.6.159+-x86_64-with-glibc2.39",
+  "versions": {
+    "numpy": "2.2.6",
+    "scipy": "1.17.1",
+    "scikit-learn": "1.8.0",
+    "xgboost": "3.2.0"
+  },
+  "parameters": {
+    "objective": "multi:softprob",
+    "num_class": 5,
+    "eval_metric": [
+      "mlogloss",
+      "merror"
+    ],
+    "tree_method": "hist",
+    "device": "cpu",
+    "max_depth": 6,
+    "eta": 0.05,
+    "min_child_weight": 3,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "seed": 42,
+    "nthread": 2
+  },
+  "seed": 42,
+  "rounds_requested": 600,
+  "rounds_saved": 75,
+  "early_stopping_metric": "validation-merror",
+  "fit_only": false,
+  "allow_unreviewed": true,
+  "allow_shared_families": true,
+  "evaluation_scope": "synthetic_within_family",
+  "elapsed_training_seconds": 1034.784978752,
+  "weight_policy": "train-only-class-balanced-sqrt-family-floor100",
+  "source_sha256": {
+    "runtime.py": "f3eb44b1b1613c4d8f3b97c807d0057177f55bc099c8cba86fd4b1f32992f73f",
+    "__init__.py": "433a6718d995668c28c370f8f283b5933f324e0ca8b3dff8d6de55c87a3096bb",
+    "holdout.py": "fc4c947a2b6491c4e856a335a2744be11b476289803e3bc9bc417c6b97f045c2",
+    "expand_templates.py": "a9dd66c452642806f64d01318d461600041992ae280e3947908983d48caf4c60",
+    "data.py": "4212527b0d26a62732162c4452da515f8f94553b213a8c263c6622241f363a0e",
+    "split.py": "692ab8128996ad1d943bc7e591abbbd9e78139b582519d4ecd5ef869f89fea24",
+    "train.py": "1754afd202e23a1a0a0684b808c2202b4283d359bf5713cec521c4197910568d",
+    "evaluate_context.py": "73a604946ec2be61432f7c13bf8511393367f0fafde5410fb2720a2f71e9f1d1",
+    "evaluate_external.py": "aa6addaaf63802cb1957cc5980ec7c92950479eb3bf4e6df7573dcbc6aed02e9",
+    "review_coverage.py": "2cc348e3e62ca68e405da35aafb445a1bfb90499fd2a284d10027f81a42d6a06"
+  },
+  "inputs": {
+    "train": [
+      {
+        "file": "commerce.jsonl",
+        "sha256": "7142a7b6ae6df793c7c22f6b5b9810bb3d185467a2022252cbe02354da4151f7",
+        "rows": 361000
+      },
+      {
+        "file": "httpparams.jsonl",
+        "sha256": "ee053e90269a9d2eb6eee12359f95568c71d2e3b5ba2330013a153bd458884fa",
+        "rows": 14000
+      },
+      {
+        "file": "mendeley_xss.jsonl",
+        "sha256": "4edd70fc15590351b8628b02609913998ebca0567a5e7a7494cc80ceed865f51",
+        "rows": 2700
+      },
+      {
+        "file": "mereani.jsonl",
+        "sha256": "ef91aef29b45ab0e7928a2d69ae99662850575442414ec71c362f9409b45e9e8",
+        "rows": 420
+      },
+      {
+        "file": "seclists.jsonl",
+        "sha256": "3305d4903efbcce57413af92175838fe5b98ef20ec09215ff4cf6c745cfe366d",
+        "rows": 170
+      },
+      {
+        "file": "synthetic_context.jsonl",
+        "sha256": "38555553adbf65f78e2c617fe5c1124d0fae01f2ddbc79a72a469b8a611763f8",
+        "rows": 21710
+      }
+    ],
+    "validation": [
+      {
+        "file": "commerce.jsonl",
+        "sha256": "f086dd7034a79469d11a916c3887cfa1f134f1358175f813e62723665fb27db3",
+        "rows": 72000
+      },
+      {
+        "file": "httpparams.jsonl",
+        "sha256": "2517e58504609d62536d6a95d3a9d589e0b59534bb8d5214beb5e4d62a03b233",
+        "rows": 3000
+      },
+      {
+        "file": "mendeley_xss.jsonl",
+        "sha256": "f8b878e5a83eeba7c499a803ab4259ebb81590e461789beef87377ce4f8dae9b",
+        "rows": 500
+      },
+      {
+        "file": "mereani.jsonl",
+        "sha256": "72fa3e62fa9ff843b871807b8c18983bfa602caad7806c433748617fd6944b2f",
+        "rows": 90
+      },
+      {
+        "file": "seclists.jsonl",
+        "sha256": "f31ade0893779fa0f9412d2178af4eebdb65c44a2372700f9322b095f14aa3fe",
+        "rows": 30
+      },
+      {
+        "file": "synthetic_context.jsonl",
+        "sha256": "b23656068542d84dae16aeb567a078f6afc75c42004fec8a8021d0f39145c55e",
+        "rows": 4380
+      }
+    ],
+    "test": [
+      {
+        "file": "commerce.jsonl",
+        "sha256": "235ab68707f8768205e22bf21f872b65d774896b71daa77d41a781376ee60f7c",
+        "rows": 72000
+      },
+      {
+        "file": "httpparams.jsonl",
+        "sha256": "5e422e1f62a0e105ad51d08db2fd312304d220c4e336d1d7e661c8e2720ba672",
+        "rows": 3000
+      },
+      {
+        "file": "mendeley_xss.jsonl",
+        "sha256": "1e8a550cd5739415085db160191187ebfbb411969b303027276f28d263be5db9",
+        "rows": 700
+      },
+      {
+        "file": "mereani.jsonl",
+        "sha256": "a545ee450fd513114ed7a4c3cbe71413f8bfa403a6266cc47449426061a86a2f",
+        "rows": 100
+      },
+      {
+        "file": "seclists.jsonl",
+        "sha256": "ccfa8f4fa21c821c9dbef62cd4a6694f7e217b58472fad5038aa2a8ea610b085",
+        "rows": 50
+      },
+      {
+        "file": "synthetic_context.jsonl",
+        "sha256": "ca36f0f7cb39e173ee13530cb16c05870252d7219046d85214775d767198a6c8",
+        "rows": 4150
+      }
+    ]
+  },
+  "test_policy": "No test fit, threshold selection, early stopping or parameter tuning"
+}

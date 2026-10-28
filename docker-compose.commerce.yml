@@ -91,7 +91,7 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
       PUBLIC_SCHEME: ${PUBLIC_SCHEME:-http}
       SENTINEL_MODEL_DIR: /models
-    volumes: [visitor_state:/state, "./model/commerce:/models:ro"]
+    volumes: [visitor_state:/state, "./model/commerce-five/run-20261028T081548514385Z:/models:ro"]
     networks: [ingress, real_edge, sandbox_edge, audit, mirage_edge]
     mem_limit: 768m
     cpus: 1

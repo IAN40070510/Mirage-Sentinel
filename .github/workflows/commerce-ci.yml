@@ -21,12 +21,20 @@ jobs:
           python-version: '3.11'
       - name: Install test dependencies
         run: pip install -r deploy/commerce/requirements.txt -r deploy/commerce/requirements-test.txt
+      - name: Verify frozen five-class model
+        run: |
+          pip check
+          python model/commerce-five/run-20261028T081548514385Z/runtime.py --self-test
       - name: Routing and isolation tests
         run: python -m pytest tests -q --junitxml=artifacts/commerce-tests.xml
       - name: Create ephemeral credentials
         run: python scripts/prepare_commerce.py
       - name: Build and initialize isolated stores
         run: python scripts/deploy_commerce.py --build --initialize
+      - name: Confirm deployed gateway loaded the five-class model
+        run: |
+          python scripts/wait_commerce.py
+          docker compose --env-file .env.commerce -f docker-compose.commerce.yml exec -T gateway python -c 'import os,json,urllib.request; req=urllib.request.Request("http://localhost:8000/_control/status",headers={"x-control-token":os.environ["CONTROL_TOKEN"]}); state=json.load(urllib.request.urlopen(req,timeout=10)); assert state["model"]=="ready_five_class", state["model"]; print("Five-class gateway model loaded")'
       - name: Shopping and quarantine acceptance
         run: python scripts/wait_commerce.py && python scripts/smoke_commerce.py
       - uses: actions/upload-artifact@v4
