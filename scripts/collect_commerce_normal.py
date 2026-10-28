@@ -19,6 +19,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit
 import httpx
 
 from smoke_commerce import ScriptAssets, exercise
+from normal_scenarios import profile
 
 
 def sanitized_request(request: httpx.Request) -> dict[str, Any]:
@@ -52,6 +53,7 @@ def main() -> None:
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--sessions', type=int, default=30)
     parser.add_argument('--revision', required=True)
+    parser.add_argument('--suite', choices=('pilot', 'development', 'acceptance'), default='pilot')
     args = parser.parse_args()
     if urlsplit(args.url).hostname not in {'localhost', '127.0.0.1', '::1'}:
         parser.error('Only isolated loopback endpoints are allowed')
@@ -60,7 +62,7 @@ def main() -> None:
     args.output.mkdir(parents=True, exist_ok=False)
     report: dict[str, Any] = {'created_at': datetime.now(timezone.utc).isoformat(timespec='milliseconds'),
         'source': 'isolated scripted application requests, not production traffic',
-        'revision': args.revision, 'sessions': [], 'complete': False,
+        'revision': args.revision, 'suite': args.suite, 'sessions': [], 'complete': False,
         'limits': ['Scripted success is not independent human label review',
                    'Credentials replaced before persistence; responses and auth headers excluded',
                    'Repeated normal route templates are expected; never split a journey across sets']}
@@ -70,10 +72,16 @@ def main() -> None:
         for index in range(args.sessions):
             session = secrets.token_hex(16)
             split = 'train' if index < args.sessions * .7 else ('validation' if index < args.sessions * .85 else 'test')
+            if args.suite == 'development':
+                split = 'train' if index < args.sessions * .8 else 'validation'
+            elif args.suite == 'acceptance':
+                split = 'acceptance'
+            scenario = profile(split if split != 'test' else 'validation', index)
             captured: list[dict[str, Any]] = []
+            admitted_errors: set[int] = set()
 
             def receive(response: httpx.Response) -> None:
-                if 200 <= response.status_code < 300:
+                if 200 <= response.status_code < 300 or response.status_code in admitted_errors:
                     captured.append({'request': sanitized_request(response.request), 'status': response.status_code})
 
             with httpx.Client(base_url=args.url, timeout=60, follow_redirects=True,
@@ -89,9 +97,22 @@ def main() -> None:
                     raise ValueError('Missing storefront assets')
                 for source in assets.urls:
                     client.get(source).raise_for_status()
-                client.get('/store/products', params={'q': searches[index % len(searches)], 'limit': 5 + index}).raise_for_status()
+                if args.suite == 'pilot':
+                    client.get('/store/products', params={'q': searches[index % len(searches)], 'limit': 5 + index}).raise_for_status()
+                else:
+                    client.get('/store/products', params={k: scenario[k] for k in ('limit', 'offset')} | {'q': scenario['query']}).raise_for_status()
+                    # Explicit benign guest/validation errors, not arbitrary response errors.
+                    admitted_errors = {401, 403}
+                    guest = client.get('/store/customers/me')
+                    if guest.status_code not in admitted_errors:
+                        raise ValueError('Unexpected guest-access response')
+                    admitted_errors = {400, 422}
+                    invalid = client.post('/auth/customer/emailpass/register', json={})
+                    if invalid.status_code not in admitted_errors:
+                        raise ValueError('Unexpected empty-registration response')
+                    admitted_errors = set()
                 # This function completes registration, cart, shipping, payment and an order.
-                exercise(client)
+                exercise(client, scenario if args.suite != 'pilot' else None)
             path = args.output / (split + '-' + session + '.jsonl')
             with path.open('x', encoding='utf-8') as stream:
                 for rownum, item in enumerate(captured, 1):
@@ -103,10 +124,13 @@ def main() -> None:
                            'provenance': {'dataset': 'Mirage-Sentinel/isolated-shopping-capture',
                                           'revision': args.revision, 'file': path.name, 'row': rownum,
                                           'assigned_split': split, 'response_status': item['status'],
+                                          'suite': args.suite, 'scenario_index': index,
+                                          'profile': scenario if args.suite != 'pilot' else None,
                                           'credential_policy': 'random surrogates; no authentication headers'}}
                     stream.write(json.dumps(row, ensure_ascii=False) + '\n')
             report['sessions'].append({'session_id': session, 'split': split, 'file': path.name,
                 'rows': len(captured), 'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
+                'profile': scenario if args.suite != 'pilot' else None,
                 'routes': dict(Counter(item['request']['method'] + ' ' + item['request']['path'] for item in captured))})
             print(f'Completed isolated normal session {index + 1}/{args.sessions}: {len(captured)} requests', flush=True)
         report['complete'] = True

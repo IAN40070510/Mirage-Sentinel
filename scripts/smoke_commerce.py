@@ -21,7 +21,8 @@ class ScriptAssets(HTMLParser):
                 self.urls.append(source)
 
 
-def exercise(client: httpx.Client) -> str:
+def exercise(client: httpx.Client, profile: dict | None = None) -> str:
+    profile = profile or {}
     def call(method: str, path: str, data: dict | None = None) -> dict:
         result = client.request(method, path, json=data)
         result.raise_for_status()
@@ -44,7 +45,7 @@ def exercise(client: httpx.Client) -> str:
     call(
         "POST",
         "/store/customers",
-        {"email": email, "first_name": "Test", "last_name": "Visitor"},
+        {"email": email, "first_name": profile.get("first_name", "Test"), "last_name": profile.get("last_name", "Visitor")},
     )
     token = call(
         "POST", "/auth/customer/emailpass", {"email": email, "password": password}
@@ -58,20 +59,25 @@ def exercise(client: httpx.Client) -> str:
     call(
         "POST",
         f"/store/carts/{cart_id}/line-items",
-        {"variant_id": products[0]["variants"][0]["id"], "quantity": 1},
+        {"variant_id": products[profile.get("product_index", 0) % len(products)]["variants"][
+            profile.get("variant_index", 0) % len(products[profile.get("product_index", 0) % len(products)]["variants"])]["id"],
+         "quantity": profile.get("quantity", 1)},
     )
     address = {
-        "first_name": "Test",
-        "last_name": "Visitor",
-        "address_1": "1 Test Street",
-        "city": "Copenhagen",
-        "postal_code": "1000",
+        "first_name": profile.get("first_name", "Test"),
+        "last_name": profile.get("last_name", "Visitor"),
+        "address_1": profile.get("address_1", "1 Test Street"),
+        "city": profile.get("city", "Copenhagen"),
+        "postal_code": profile.get("postal_code", "1000"),
         "country_code": region["countries"][0]["iso_2"],
     }
+    if "address_2" in profile:
+        address["address_2"] = profile["address_2"]
+    billing = {**address, **profile.get("billing", {})}
     call(
         "POST",
         f"/store/carts/{cart_id}",
-        {"shipping_address": address, "billing_address": address},
+        {"shipping_address": address, "billing_address": billing},
     )
     shipping = call("GET", f"/store/shipping-options?cart_id={cart_id}")[
         "shipping_options"

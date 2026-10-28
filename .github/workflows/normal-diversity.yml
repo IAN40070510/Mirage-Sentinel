@@ -1,0 +1,47 @@
+name: Collect diverse normal journeys
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - scripts/normal_scenarios.py
+      - .github/workflows/normal-diversity.yml
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r deploy/commerce/requirements.txt -r deploy/commerce/requirements-test.txt
+      - run: python scripts/prepare_commerce.py
+      - run: python scripts/deploy_commerce.py --build --initialize
+      - run: python scripts/wait_commerce.py
+      - name: Collect development journeys
+        run: python scripts/collect_commerce_normal.py --suite development --sessions 200 --output artifacts/normal-diversity-development --revision "${{ github.sha }}"
+      - name: Collect separately reserved acceptance journeys
+        run: python scripts/collect_commerce_normal.py --suite acceptance --sessions 60 --output artifacts/normal-diversity-acceptance --revision "${{ github.sha }}"
+      - name: Development material
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: normal-diversity-development
+          path: artifacts/normal-diversity-development/
+          retention-days: 30
+      - name: Reserved acceptance material
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: normal-diversity-acceptance-reserved
+          path: artifacts/normal-diversity-acceptance/
+          retention-days: 30
+      - name: Stop isolated collection stack
+        if: always()
+        run: docker compose --env-file .env.commerce -f docker-compose.commerce.yml down -v
