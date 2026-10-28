@@ -23,3 +23,12 @@ python scripts/audit_normal_coverage.py --data datasets/commerce/application-nor
 ```
 
 GitHub 收集產物名稱 normal-shopping-capture；下載後檢查 manifest.json 的 complete 必須為 true。
+
+
+## 已完成的第一批資料（2026-10-29）
+
+來源：GitHub Actions run 40742937818，commit 4a7bca6。
+完整 30 流程成功，1,020 筆請求（GET 720 / POST 300），17 項路徑全部覆蓋。
+完全去重後 410 筆：train 293 / validation 65 / test 52。跨集合 session 與完全重複為零，正常近似模板重疊明確記錄。
+已建立 normal-coverage-pilot-v1 合併試訓版，總數 560,410；訓練 400,293、驗證 80,065、測試 80,052。訓練器全量載入稽核通過；尚未重訓。
+新增正常訓練僅 293 筆，並非最終足量版本。舊模型於 52 筆測試候選中，原門檻誤報 8 筆，故仍維持觀察模式。
