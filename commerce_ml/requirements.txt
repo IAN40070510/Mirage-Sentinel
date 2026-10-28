@@ -1,0 +1,7 @@
+# Local baseline: Python 3.11. Python 3.13 uses NumPy 2.x wheels.
+# ARM64 wheel availability must be checked on the target; never copy a Windows venv.
+numpy==1.26.4; python_version < "3.13"
+numpy==2.2.6; python_version >= "3.13" and python_version < "3.14"
+scipy==1.17.1
+scikit-learn==1.8.0
+xgboost==3.2.0

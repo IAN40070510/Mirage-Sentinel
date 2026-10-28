@@ -39,12 +39,19 @@ jobs:
         run: python scripts/wait_commerce.py && python scripts/smoke_commerce.py
       - name: Collect isolated normal shopping journeys
         run: python scripts/collect_commerce_normal.py --output artifacts/normal-shopping-capture --sessions 30 --revision "${{ github.sha }}"
+      - name: Check coverage and prepare normal candidates
+        run: |
+          python scripts/audit_normal_coverage.py --data artifacts/normal-shopping-capture --output artifacts/normal-shopping-capture/coverage.json --require-complete
+          python scripts/prepare_normal_capture.py --capture artifacts/normal-shopping-capture --output artifacts/normal-shopping-candidates
+          python scripts/audit_normal_coverage.py --data artifacts/normal-shopping-candidates/train --output artifacts/normal-shopping-candidates/training-coverage.json --require-complete
       - name: Save normal request capture for dataset repair
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: normal-shopping-capture
-          path: artifacts/normal-shopping-capture/
+          path: |
+            artifacts/normal-shopping-capture/
+            artifacts/normal-shopping-candidates/
           if-no-files-found: warn
           retention-days: 14
       - uses: actions/upload-artifact@v4
