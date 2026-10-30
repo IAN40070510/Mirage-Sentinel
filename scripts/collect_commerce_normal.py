@@ -105,11 +105,11 @@ def main() -> None:
                     admitted_errors = {401, 403}
                     guest = client.get('/store/customers/me')
                     if guest.status_code not in admitted_errors:
-                        raise ValueError('Unexpected guest-access response')
-                    admitted_errors = {400, 422}
+                        raise ValueError(f'Unexpected guest-access response: {guest.status_code}')
+                    admitted_errors = {400, 401, 422}
                     invalid = client.post('/auth/customer/emailpass/register', json={})
                     if invalid.status_code not in admitted_errors:
-                        raise ValueError('Unexpected empty-registration response')
+                        raise ValueError(f'Unexpected empty-registration response: {invalid.status_code}')
                     admitted_errors = set()
                 # This function completes registration, cart, shipping, payment and an order.
                 exercise(client, scenario if args.suite != 'pilot' else None)

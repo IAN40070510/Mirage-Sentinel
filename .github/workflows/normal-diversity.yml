@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - scripts/normal_scenarios.py
+      - scripts/collect_commerce_normal.py
+      - scripts/smoke_commerce.py
       - .github/workflows/normal-diversity.yml
 
 permissions:
