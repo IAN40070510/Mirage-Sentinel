@@ -22,6 +22,7 @@ from sklearn.metrics import (accuracy_score, average_precision_score,
 import xgboost as xgb
 
 from . import runtime
+from .normal_balance import normal_route_group
 from .data import Record, audit_splits, load, summary
 from .runtime import Features, LABELS, RULES, VERSION, Predictor, sha, rule_hits, write_json
 
@@ -171,12 +172,17 @@ def evaluate(rows: list[Record], probs: np.ndarray, threshold: float, output: Pa
             }, ensure_ascii=False, allow_nan=False) + "\n")
 
 
-def weights(rows: list[Record]) -> np.ndarray:
+def weights(rows: list[Record], balance_normal_routes: bool = False) -> np.ndarray:
     """Training-only class-balanced sqrt family counts, floor=100."""
     counts = Counter((r.label, r.family) for r in rows)
     raw = np.asarray([1 / math.sqrt(max(100, counts[r.label, r.family]))
                       if r.family else 1.0 for r in rows])
     y = np.asarray([r.label for r in rows])
+    if balance_normal_routes:
+        routes = Counter(normal_route_group(r.text) for r in rows if r.label == 0)
+        for index, row in enumerate(rows):
+            if row.label == 0:
+                raw[index] = 1.0 / routes[normal_route_group(row.text)]
     for label in range(5):
         mask = y == label
         raw[mask] *= len(rows) / 5 / raw[mask].sum()
@@ -188,20 +194,28 @@ def matrix(features: Features, rows: list[Record], batch: int) -> sparse.csr_mat
                           for i in range(0, len(rows), batch)], format="csr")
 
 
-def choose_threshold(y: np.ndarray, probs: np.ndarray, max_fpr: float) -> tuple[float, dict]:
+def choose_threshold(y: np.ndarray, probs: np.ndarray, max_fpr: float,
+                     normal_groups: list[str] | None = None) -> tuple[float, dict]:
     # Fixed candidate grid; validation only. Conservative tie-breaking.
     truth = (y != 0).astype(int)
     candidates = []
     for threshold in np.linspace(0, 1, 201):
         item = binary_metrics(truth, (1 - probs[:, 0] >= threshold).astype(int))
         fpr, fnr = item["normal_false_positive_rate"], item["attack_false_negative_rate"]
-        if fpr is not None and fnr is not None and fpr <= max_fpr:
+        route_ok = True
+        if normal_groups is not None:
+            for group in set(normal_groups):
+                mask = (y == 0) & (np.asarray(normal_groups) == group)
+                if mask.any() and float(np.mean(1 - probs[mask, 0] >= threshold)) > max_fpr:
+                    route_ok = False
+        if fpr is not None and fnr is not None and fpr <= max_fpr and route_ok:
             candidates.append((1 - fnr, -fpr, float(threshold)))
     if not candidates:
         raise ValueError("No threshold meets validation FPR target; do not deploy")
     recall, negative_fpr, threshold = max(candidates)
     return threshold, {"method": "validation-grid-201-max-recall-under-fpr",
                        "max_fpr": max_fpr, "validation_fpr": -negative_fpr,
+                       "normal_route_fpr_constraint": normal_groups is not None,
                        "validation_recall": recall,
                        "warning": "Probabilities are not calibrated; threshold is validation-selected"}
 
@@ -220,8 +234,11 @@ def main() -> None:
                         help="Within-family synthetic benchmark only; still rejects exact/near/session leakage")
     parser.add_argument("--allow-shared-normal-templates", action="store_true",
                         help="Report normal-only near-template overlap; exact/session and attack overlap still rejected")
+    parser.add_argument("--balance-normal-routes", action="store_true",
+                        help="Give each normal route group equal total training weight")
     parser.add_argument("--rounds", type=int, default=600)
     parser.add_argument("--early-stopping", type=int, default=30)
+    parser.add_argument("--early-stopping-metric", choices=("merror", "mlogloss"), default="merror")
     parser.add_argument("--max-features", type=int, default=8000)
     parser.add_argument("--batch-size", type=int, default=2048)
     parser.add_argument("--threads", type=int, default=2)
@@ -275,17 +292,18 @@ def main() -> None:
     features.fit([r.text for r in rows])
     x_train = matrix(features, rows, args.batch_size)
     y_train = np.asarray([r.label for r in rows])
-    dtrain = xgb.DMatrix(x_train, label=y_train, weight=weights(rows))
+    dtrain = xgb.DMatrix(x_train, label=y_train, weight=weights(rows, args.balance_normal_routes))
     del x_train
     evals = [(dtrain, "train")]
     dval = None
     if "validation" in splits:
         validation = splits["validation"]
         dval = xgb.DMatrix(matrix(features, validation, args.batch_size),
-                          label=[r.label for r in validation])
+                          label=[r.label for r in validation],
+                          weight=weights(validation, True) if args.balance_normal_routes else None)
         evals.append((dval, "validation"))
     params = {"objective": "multi:softprob", "num_class": 5,
-              "eval_metric": ["mlogloss", "merror"], "tree_method": "hist",
+              "eval_metric": [m for m in ("mlogloss", "merror") if m != args.early_stopping_metric] + [args.early_stopping_metric], "tree_method": "hist",
               "device": "cpu", "max_depth": 6, "eta": 0.05,
               "min_child_weight": 3, "subsample": 0.8, "colsample_bytree": 0.8,
               "seed": args.seed, "nthread": args.threads}
@@ -298,7 +316,8 @@ def main() -> None:
         # Slice actual trees so later Booster.predict matches validation's best round.
         model = model[:model.best_iteration + 1]
         threshold, selection = choose_threshold(
-            np.asarray([r.label for r in splits["validation"]]), model.predict(dval), args.max_fpr)
+            np.asarray([r.label for r in splits["validation"]]), model.predict(dval), args.max_fpr,
+            [normal_route_group(r.text) for r in splits["validation"]] if args.balance_normal_routes else None)
     else:
         threshold, selection = 0.5, {"method": "unvalidated-placeholder",
                                      "warning": "Fit-only; not a validated routing threshold"}
@@ -337,13 +356,15 @@ def main() -> None:
         "python": platform.python_version(), "platform": platform.platform(),
         "versions": versions, "parameters": params, "seed": args.seed,
         "rounds_requested": args.rounds, "rounds_saved": model.num_boosted_rounds(),
-        "early_stopping_metric": "validation-merror" if dval is not None else None,
+        "early_stopping_metric": "validation-" + args.early_stopping_metric if dval is not None else None,
+        "validation_weight_policy": "class-and-normal-route-balanced" if args.balance_normal_routes else "unweighted",
         "fit_only": args.fit_only, "allow_unreviewed": args.allow_unreviewed,
         "allow_shared_families": args.allow_shared_families,
         "allow_shared_normal_templates": args.allow_shared_normal_templates,
         "evaluation_scope": "synthetic_within_family" if args.allow_shared_families else "family_disjoint",
         "elapsed_training_seconds": time.perf_counter() - started,
-        "weight_policy": "train-only-class-balanced-sqrt-family-floor100",
+        "weight_policy": "train-only-class-balanced-normal-route-equal" if args.balance_normal_routes else "train-only-class-balanced-sqrt-family-floor100",
+        "normal_route_counts": dict(Counter(normal_route_group(r.text) for r in rows if r.label == 0)),
         "source_sha256": {p.name: sha(p) for p in Path(__file__).parent.glob("*.py")},
         "inputs": inputs,
         "test_policy": "No test fit, threshold selection, early stopping or parameter tuning",
