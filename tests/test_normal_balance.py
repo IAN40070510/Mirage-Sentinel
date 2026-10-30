@@ -27,3 +27,8 @@ def test_route_fpr_constraint_prevents_hiding_a_rare_normal_failure():
     threshold, selection = choose_threshold(y, probs, .01, ['common'] * 100 + ['checkout', 'attack'])
     assert threshold > .7
     assert selection['normal_route_fpr_constraint']
+
+
+def test_real_medusa_payment_ids_and_fixture_ids_are_one_group():
+    assert normal_route_group('POST\n/store/payment-collections/pay_col_ABC/payment-sessions\n') == normal_route_group('POST\n/store/payment-collections/pay_col_XYZ/payment-sessions\n')
+    assert normal_route_group('POST\n/store/carts/<ID>/line-items\n') == normal_route_group('POST\n/store/carts/cart_ABC/line-items\n')

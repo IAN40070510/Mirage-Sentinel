@@ -199,15 +199,19 @@ def choose_threshold(y: np.ndarray, probs: np.ndarray, max_fpr: float,
     # Fixed candidate grid; validation only. Conservative tie-breaking.
     truth = (y != 0).astype(int)
     candidates = []
+    route_masks = []
+    if normal_groups is not None:
+        groups = np.asarray(normal_groups)
+        if len(groups) != len(y):
+            raise ValueError("Route labels must match validation rows")
+        route_masks = [(y == 0) & (groups == group) for group in set(groups[y == 0])]
     for threshold in np.linspace(0, 1, 201):
         item = binary_metrics(truth, (1 - probs[:, 0] >= threshold).astype(int))
         fpr, fnr = item["normal_false_positive_rate"], item["attack_false_negative_rate"]
         route_ok = True
-        if normal_groups is not None:
-            for group in set(normal_groups):
-                mask = (y == 0) & (np.asarray(normal_groups) == group)
-                if mask.any() and float(np.mean(1 - probs[mask, 0] >= threshold)) > max_fpr:
-                    route_ok = False
+        for mask in route_masks:
+            if float(np.mean(1 - probs[mask, 0] >= threshold)) > max_fpr:
+                route_ok = False
         if fpr is not None and fnr is not None and fpr <= max_fpr and route_ok:
             candidates.append((1 - fnr, -fpr, float(threshold)))
     if not candidates:
