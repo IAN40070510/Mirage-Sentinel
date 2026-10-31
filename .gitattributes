@@ -7,3 +7,10 @@ services/commerce/five_runtime.py -text
 model/commerce-five/diversity-v2/* -text
 docs/normal-acceptance-protocol-v1.json -text
 docs/experiments/normal-diversity-v2/*.json -text
+
+model/commerce-five/search-repair-v3/* -text
+# Preserve source bytes referenced by the frozen search-repair audit.
+services/commerce/detection.py -text
+scripts/build_search_repair.py -text
+scripts/evaluate_search_repair.py -text
+docs/experiments/search-repair-v3/*.json -text

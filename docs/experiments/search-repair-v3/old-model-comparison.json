@@ -1,0 +1,38 @@
+{
+  "scope": "Fixed old model on the same now-revealed reserved pool, with the repaired service rules for both models; no fit or tuning",
+  "rows": 2156,
+  "flagged": 753,
+  "groups": {
+    "q_only": {
+      "rows": 370,
+      "flagged": 366,
+      "fallback": 0
+    },
+    "pagination_first": {
+      "rows": 370,
+      "flagged": 21,
+      "fallback": 0
+    },
+    "pagination_last": {
+      "rows": 370,
+      "flagged": 30,
+      "fallback": 0
+    },
+    "sort_first": {
+      "rows": 370,
+      "flagged": 34,
+      "fallback": 0
+    },
+    "percent_spaces": {
+      "rows": 306,
+      "flagged": 302,
+      "fallback": 0
+    },
+    "json_note": {
+      "rows": 370,
+      "flagged": 0,
+      "fallback": 0
+    }
+  },
+  "threshold": 0.415
+}

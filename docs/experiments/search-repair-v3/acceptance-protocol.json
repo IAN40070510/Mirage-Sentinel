@@ -1,0 +1,9 @@
+{
+  "created_at": "2026-10-31T15:04:46.886+00:00",
+  "max_reserved_normal_fpr": 0.01,
+  "max_each_request_shape_fpr": 0.01,
+  "max_legacy_attack_fnr": 0.001,
+  "max_old_normal_regression_fp": 0,
+  "known_normal_probe_fp": 0,
+  "policy": "Freeze candidate before reading reserved results; no tuning on this reserved pool; existing 65 probes are development regressions, not independent evaluation."
+}

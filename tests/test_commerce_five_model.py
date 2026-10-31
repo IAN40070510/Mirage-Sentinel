@@ -1,6 +1,7 @@
 """Exercise the downloaded model through the actual asynchronous service adapter."""
 from pathlib import Path
 import shutil
+from urllib.parse import urlencode
 
 import pytest
 
@@ -10,7 +11,7 @@ from services.commerce.five_runtime import Predictor, LABELS
 BUNDLE = Path(__file__).resolve().parents[1] / 'model/commerce-five/run-20261028T081548514385Z'
 
 
-@pytest.mark.parametrize('bundle', [BUNDLE, BUNDLE.parent / 'diversity-v2'])
+@pytest.mark.parametrize('bundle', [BUNDLE, BUNDLE.parent / 'diversity-v2', BUNDLE.parent / 'search-repair-v3'])
 @pytest.mark.asyncio
 async def test_five_class_service_matches_training_runtime(bundle: Path):
     detector = Detector(str(bundle), timeout=5, model_mode='enforce')
@@ -59,7 +60,7 @@ def test_unknown_model_mode_is_rejected():
 
 @pytest.mark.asyncio
 async def test_default_enforcement_uses_model_without_rule_hit() -> None:
-    detector = Detector(str(BUNDLE.parent / 'diversity-v2'), timeout=5)
+    detector = Detector(str(BUNDLE.parent / 'search-repair-v3'), timeout=5)
     decision = await detector.assess('model-only', 'GET', '/store/products',
                                     'q=%3Csvg%2Fonload%3Dalert%281%29%3E', {}, b'')
     assert detector.model_mode == 'enforce'
@@ -67,3 +68,15 @@ async def test_default_enforcement_uses_model_without_rule_hit() -> None:
     assert decision['rules'] == []
     assert decision['model_attack'] is True
     assert decision['attack'] is True
+
+
+@pytest.mark.asyncio
+async def test_repaired_normal_search_is_not_dependent_on_pagination() -> None:
+    detector = Detector(str(BUNDLE.parent / 'search-repair-v3'), timeout=5)
+    for value in ('紅色上衣','100% cotton','C++','AT&T','日本製','size < 10',
+                  'javascript: the definitive guide','UNION SELECT SQL textbook','../../ print pattern'):
+        for fields in [[('q',value)],[('limit','20'),('offset','0'),('q',value)],
+                       [('q',value),('limit','20'),('offset','0')]]:
+            decision = await detector.assess('regression', 'GET', '/store/products', urlencode(fields), {}, b'')
+            assert decision['fallback'] is None
+            assert decision['attack'] is False, (value, fields, decision['model_probability'])

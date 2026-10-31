@@ -105,7 +105,7 @@ async def inspect(bundle: Path, capture: Path | None) -> dict:
 
 def main() -> None:
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--bundle',type=Path,default=ROOT/'model/commerce-five/diversity-v2')
+    parser.add_argument('--bundle',type=Path,default=ROOT/'model/commerce-five/search-repair-v3')
     parser.add_argument('--capture',type=Path)
     parser.add_argument('--output',type=Path,required=True)
     args=parser.parse_args()

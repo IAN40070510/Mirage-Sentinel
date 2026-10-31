@@ -122,6 +122,16 @@ def main() -> None:
             assert asset.status_code == 200, f"Missing browser asset: {source}"
             assert "javascript" in asset.headers.get("content-type", "")
         normal_order = exercise(client)
+        # A 200 product response alone cannot distinguish real from sandbox routing.
+        # Retain access to this identity's real order after benign complex searches.
+        for query in ('紅色上衣', '100% cotton', 'C++', 'AT&T', '日本製', 'size < 10',
+                      'javascript: the definitive guide', 'UNION SELECT SQL textbook',
+                      '../../ print pattern'):
+            response = client.get('/store/products', params={'q': query})
+            response.raise_for_status()
+            order_response = client.get('/store/orders/' + normal_order)
+            assert order_response.status_code == 200, f'Benign search changed realm: {query}'
+            assert order_response.json()['order']['id'] == normal_order
         client.get("/store/products?q=UNION%20SELECT%201")
         client.headers.pop("authorization", None)
         sandbox_order = exercise(client)

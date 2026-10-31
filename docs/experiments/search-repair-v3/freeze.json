@@ -1,0 +1,9 @@
+{
+  "created_at": "2026-10-31T15:18:17.736+00:00",
+  "bundle_sha256": "170c1322a36c706a811097af9efcbc7dca42365fc0a7f6d46985636b4f9182ad",
+  "reserved_sha256": "e64606c6a125f3cd2b8451b2fdb3f0e158bb7f850a8693f821abdf6e2967120f",
+  "protocol_sha256": "e569441ce0d95aa0aba8ec55805b28fcf4e65dc4d18266847d7d0c1a24026581",
+  "detector_sha256": "09d2ecd5cb5a401d25807f677e91c71e97fcd2980a3a93fc4d3c277fe6e85410",
+  "dataset_manifest_sha256": "3ffe47f696910eb3401f1043ecab043921f11ff4e83d66b893b18cfb042ebf90",
+  "evaluation_source_sha256": "fc167099ee6fa4b054fedbe9bed49ab71a8cd76766b04e2f3e7ea1feb13edbc3"
+}

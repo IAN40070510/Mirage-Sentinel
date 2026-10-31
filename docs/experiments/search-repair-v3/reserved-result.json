@@ -1,0 +1,192 @@
+{
+  "created_at": "2026-10-31T15:18:48.278+00:00",
+  "freeze": {
+    "created_at": "2026-10-31T15:18:17.736+00:00",
+    "bundle_sha256": "170c1322a36c706a811097af9efcbc7dca42365fc0a7f6d46985636b4f9182ad",
+    "reserved_sha256": "e64606c6a125f3cd2b8451b2fdb3f0e158bb7f850a8693f821abdf6e2967120f",
+    "protocol_sha256": "e569441ce0d95aa0aba8ec55805b28fcf4e65dc4d18266847d7d0c1a24026581",
+    "detector_sha256": "09d2ecd5cb5a401d25807f677e91c71e97fcd2980a3a93fc4d3c277fe6e85410",
+    "dataset_manifest_sha256": "3ffe47f696910eb3401f1043ecab043921f11ff4e83d66b893b18cfb042ebf90",
+    "evaluation_source_sha256": "fc167099ee6fa4b054fedbe9bed49ab71a8cd76766b04e2f3e7ea1feb13edbc3"
+  },
+  "raw_rows": 2220,
+  "rows": 2156,
+  "exact_duplicates_excluded": 64,
+  "flagged": 3,
+  "fpr": 0.0013914656771799629,
+  "groups": {
+    "q_only": {
+      "rows": 370,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "pagination_first": {
+      "rows": 370,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "pagination_last": {
+      "rows": 370,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "sort_first": {
+      "rows": 370,
+      "flagged": 1,
+      "fallback": 0
+    },
+    "percent_spaces": {
+      "rows": 306,
+      "flagged": 1,
+      "fallback": 0
+    },
+    "json_note": {
+      "rows": 370,
+      "flagged": 1,
+      "fallback": 0
+    }
+  },
+  "development_exact_overlaps": 0,
+  "fallbacks": {
+    "none": 2156
+  },
+  "passed": true,
+  "fit_or_tuning": false,
+  "scope": "Reserved synthetic lexical pool; same application and generator, not real-user or unseen-attack generalization.",
+  "problems": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "order=-created_at&q=..%2F..%2F+textile+illustration&limit=12",
+        "headers": {},
+        "body": ""
+      },
+      "shape": "sort_first",
+      "attack": true,
+      "model_attack": true,
+      "model_mode": "enforce",
+      "predicted_label": "path_traversal",
+      "class_probabilities": {
+        "normal": 0.17974665760993958,
+        "sqli": 0.000703822064679116,
+        "xss": 0.000821796536911279,
+        "cmdi": 0.0003750468313228339,
+        "path_traversal": 0.8183526992797852
+      },
+      "model_contract": "commerce-text-five-v1",
+      "model_threshold": 0.78,
+      "score": 0.8202533721923828,
+      "model_probability": 0.8202533721923828,
+      "rule_score": 0.05,
+      "decision_source": "xgboost",
+      "fallback": null,
+      "rules": [],
+      "feature_version": 2,
+      "features": {
+        "path_length": 15,
+        "query_length": 60,
+        "body_length": 0,
+        "header_count": 0,
+        "header_bytes": 0,
+        "body_entropy": 0,
+        "special_ratio": 0.0,
+        "request_count_60s": 1,
+        "interval_ms": 60000.0,
+        "method_write": 0,
+        "json_body": 0,
+        "rule_hits": 0
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/store/carts/cart_SEARCHFIX",
+        "query": "",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"metadata\": {\"note\": \"../../ textile illustration\"}}"
+      },
+      "shape": "json_note",
+      "attack": true,
+      "model_attack": true,
+      "model_mode": "enforce",
+      "predicted_label": "path_traversal",
+      "class_probabilities": {
+        "normal": 0.025583015754818916,
+        "sqli": 0.01229353342205286,
+        "xss": 0.005734155885875225,
+        "cmdi": 0.0014731952687725425,
+        "path_traversal": 0.9549160599708557
+      },
+      "model_contract": "commerce-text-five-v1",
+      "model_threshold": 0.78,
+      "score": 0.974416971206665,
+      "model_probability": 0.974416971206665,
+      "rule_score": 0.05,
+      "decision_source": "xgboost",
+      "fallback": null,
+      "rules": [],
+      "feature_version": 2,
+      "features": {
+        "path_length": 27,
+        "query_length": 0,
+        "body_length": 53,
+        "header_count": 1,
+        "header_bytes": 28,
+        "body_entropy": 4.054882068467782,
+        "special_ratio": 0.33962264150943394,
+        "request_count_60s": 1,
+        "interval_ms": 60000.0,
+        "method_write": 1,
+        "json_body": 1,
+        "rule_hits": 0
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=javascript%3A%20browser%20reference",
+        "headers": {},
+        "body": ""
+      },
+      "shape": "percent_spaces",
+      "attack": true,
+      "model_attack": true,
+      "model_mode": "enforce",
+      "predicted_label": "xss",
+      "class_probabilities": {
+        "normal": 0.19984853267669678,
+        "sqli": 0.0008157222182489932,
+        "xss": 0.7948523759841919,
+        "cmdi": 0.0010357317514717579,
+        "path_traversal": 0.003447622060775757
+      },
+      "model_contract": "commerce-text-five-v1",
+      "model_threshold": 0.78,
+      "score": 0.8001514673233032,
+      "model_probability": 0.8001514673233032,
+      "rule_score": 0.05,
+      "decision_source": "xgboost",
+      "fallback": null,
+      "rules": [],
+      "feature_version": 2,
+      "features": {
+        "path_length": 15,
+        "query_length": 37,
+        "body_length": 0,
+        "header_count": 0,
+        "header_bytes": 0,
+        "body_entropy": 0,
+        "special_ratio": 0.0,
+        "request_count_60s": 1,
+        "interval_ms": 60000.0,
+        "method_write": 0,
+        "json_body": 0,
+        "rule_hits": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "counts": {
+    "attack_rows": 25000,
+    "attack_old_hits": 13473,
+    "attack_new_hits": 13473,
+    "normal_rows": 102,
+    "normal_old_hits": 0,
+    "normal_new_hits": 0
+  },
+  "lost_signature_hits": []
+}
