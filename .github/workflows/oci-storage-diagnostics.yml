@@ -1,0 +1,30 @@
+name: OCI storage diagnostics
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Inspect deployment storage without modifying application data
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          port: ${{ secrets.OCI_PORT || '22' }}
+          command_timeout: 8m
+          script: |
+            set -eu
+            df -h / /var/lib/docker "$HOME"
+            df -i / /var/lib/docker
+            sudo docker system df
+            sudo docker ps -a --format '{{.Names}} {{.Image}} {{.Status}}'
+            sudo du -sh /var/lib/docker/buildkit /var/lib/docker/overlay2 /var/lib/docker/image 2>/dev/null || true
+            du -sh "$HOME/Mirage-Sentinel" "$HOME/Mirage-Sentinel-releases" 2>/dev/null || true
+            git -C "$HOME/Mirage-Sentinel" worktree list
+            if [ -f "$HOME/Mirage-Sentinel/commerce-current-release" ]; then
+              cat "$HOME/Mirage-Sentinel/commerce-current-release"
+            fi
