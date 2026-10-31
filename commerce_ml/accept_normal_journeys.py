@@ -16,6 +16,7 @@ from .runtime import Predictor, request_text, sha
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--bundle', type=Path, required=True)
+    parser.add_argument('--baseline-bundle', type=Path)
     parser.add_argument('--capture', type=Path, required=True)
     parser.add_argument('--archive', type=Path, required=True)
     parser.add_argument('--development', type=Path, required=True)
@@ -104,6 +105,24 @@ def main() -> None:
                              'Common request templates may overlap; both all-request and novel-unique results reported',
                              'This normal-only acceptance does not establish attack detection performance',
                              'Do not tune on this acceptance result and report it again as blind evaluation']}
+    if args.baseline_bundle:
+        if sha(args.baseline_bundle / 'bundle.json') != frozen['baseline_bundle_sha256']:
+            raise ValueError('Baseline differs from the frozen comparison')
+        baseline = Predictor(args.baseline_bundle)
+        baseline_fp = 0
+        baseline_flagged = set()
+        for start in range(0, len(records), 256):
+            batch = records[start:start + 256]
+            for row, item in zip(batch, baseline.predict([r['request'] for r in batch])):
+                baseline_fp += int(item['model_attack'])
+                if item['combined_attack']:
+                    baseline_flagged.add(row['session_id'])
+        report['baseline_comparison'] = {
+            'bundle_sha256': sha(args.baseline_bundle / 'bundle.json'),
+            'threshold': baseline.threshold, 'false_positives': baseline_fp,
+            'normal_fpr': baseline_fp / count,
+            'flagged_sessions': len(baseline_flagged), 'fit_or_tuning_performed': False,
+        }
     (args.output / 'acceptance.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
     with (args.output / 'predictions.jsonl').open('x', encoding='utf-8') as stream:
         for result in predictions:

@@ -1,0 +1,7 @@
+{
+  "training_zip_sha256": "5960054f5a926f8bf67b8ea6293621ad106a2cd55b47484186c0b28bc96fdf74",
+  "model_zip_sha256": "1091ba49b8b3f36e6a5861bd52ce995d7c9895198a80b62fcb58e37feb4b5621",
+  "archive_crc_and_file_hashes": "passed",
+  "notebook_code_cells": "compiled",
+  "acceptance_used_for_fit": false
+}

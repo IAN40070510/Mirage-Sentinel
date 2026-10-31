@@ -1,0 +1,10 @@
+{
+  "created_at": "2026-10-31T12:37:32.309+00:00",
+  "bundle_sha256": "d979dca2bc51c5b2a1b7c5e044b343b88b1bd5ab00417bc9e75dcb4bb6211455",
+  "protocol_sha256": "4abb3712aca86b3d30f7632f6fcf2b0457d779b5a666170562e7dd4c1c27fe48",
+  "acceptance_zip_sha256": "43f61f97a378c55bc93b59f648a59224766dc981ea567516024f681a4683f997",
+  "baseline_bundle_sha256": "4f9ff717ea56c0d198d75b9d48e1c594f6528b184c9d463a442bba0ed400289a",
+  "training_run_sha256": "9016d727a4c1a8bdeed36cd38bbe210a81436bb60fa69655419fe72b78fd987c",
+  "dataset_manifest_sha256": "b0f4ba1f8a50f751bab298164e7a9b349272fd5dfdd4164d9f5aa556e4ddf7f5",
+  "evaluation_source_sha256": "3cb4cf46d3a5c3ad283c3e72e10cd7c9f30b01473cbc7dfb2c4bd4cfa70f8089"
+}

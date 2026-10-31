@@ -92,7 +92,7 @@ services:
       PUBLIC_SCHEME: ${PUBLIC_SCHEME:-http}
       SENTINEL_MODEL_DIR: /models
       SENTINEL_MODEL_MODE: shadow
-    volumes: [visitor_state:/state, "./model/commerce-five/run-20261028T081548514385Z:/models:ro"]
+    volumes: [visitor_state:/state, "./model/commerce-five/diversity-v2:/models:ro"]
     networks: [ingress, real_edge, sandbox_edge, audit, mirage_edge]
     mem_limit: 768m
     cpus: 1

@@ -1,0 +1,356 @@
+{
+  "created_at": "2026-10-30T06:29:37.192+00:00",
+  "status": "development_rebalanced_not_deployment_validated",
+  "capture_manifest_sha256": "d1d88abd0b84f239adaf016aede1d15b42b7f9f63fe09a48c5d9e4a09d5643e3",
+  "capture_revision": "b726918ee86317eca7795287ded5e04e1c106ce7",
+  "splits": {
+    "train": {
+      "sources": {
+        "commerce": {
+          "rows": 94652,
+          "labels": {
+            "cmdi": 29940,
+            "sqli": 29920,
+            "path_traversal": 29820,
+            "xss": 4720,
+            "normal": 252
+          },
+          "sha256": "1f314b521aa5ed7494b322247a1eaddcf367030bf2b3b708f57dd4979058350c"
+        },
+        "httpparams": {
+          "rows": 5850,
+          "labels": {
+            "xss": 280,
+            "sqli": 5080,
+            "path_traversal": 180,
+            "cmdi": 60,
+            "normal": 250
+          },
+          "sha256": "a649897faf7be563c1fc8b8fe9de3e541dedd2504ee7656879352b9e11299804"
+        },
+        "mendeley_xss": {
+          "rows": 2700,
+          "labels": {
+            "xss": 2700
+          },
+          "sha256": "d018d3363b491b5e70038d9b9b46dd37519b737042325dac3e02ee8a3605fa03"
+        },
+        "mereani": {
+          "rows": 420,
+          "labels": {
+            "xss": 420
+          },
+          "sha256": "a9cae3e5980fbedea25c90e1db6d944b2861a26b103e757b6b62df248fc96fce"
+        },
+        "seclists": {
+          "rows": 170,
+          "labels": {
+            "xss": 170
+          },
+          "sha256": "5e7af23b628cfc765b6e4b686e4f3e4d34ce57da6b4cc5aab97a608170f380b9"
+        },
+        "synthetic_context": {
+          "rows": 21710,
+          "labels": {
+            "xss": 21710
+          },
+          "sha256": "6bdd26d6fe76e6ed0c1987740ab329791d20724ed072b6bdbdacba588c273e1b"
+        },
+        "application_normal": {
+          "rows": 1953,
+          "labels": {
+            "normal": 1953
+          },
+          "sha256": "0e0ff8e1ed0c6ecbefda89b5f4e569372d804f9dc5d89790c2c31c8d0bfb1e69"
+        }
+      },
+      "labels": {
+        "cmdi": 30000,
+        "sqli": 35000,
+        "path_traversal": 30000,
+        "xss": 30000,
+        "normal": 2455
+      },
+      "normal_routes": {
+        "POST /store/carts": 161,
+        "POST /store/carts/<id>/line-items": 161,
+        "GET /store/products": 513,
+        "GET /store/regions": 1,
+        "GET /<locale>": 1,
+        "GET /_next/static/*": 16,
+        "GET /store/customers/me": 1,
+        "POST /auth/customer/emailpass/register": 161,
+        "POST /store/customers": 160,
+        "POST /auth/customer/emailpass": 160,
+        "POST /store/carts/<id>": 160,
+        "GET /store/shipping-options": 160,
+        "POST /store/carts/<id>/shipping-methods": 160,
+        "POST /store/payment-collections": 160,
+        "POST /store/payment-collections/<id>/payment-sessions": 160,
+        "POST /store/carts/<id>/complete": 160,
+        "GET /store/orders/<id>": 160
+      },
+      "removed_capture_exact_duplicates": 3807,
+      "rows": 127455
+    },
+    "validation": {
+      "sources": {
+        "commerce": {
+          "rows": 18850,
+          "labels": {
+            "path_traversal": 6460,
+            "sqli": 5410,
+            "cmdi": 5990,
+            "xss": 940,
+            "normal": 50
+          },
+          "sha256": "415fdaa38eac7051d3fd4e352d7c59752690fa5b8b93cedd3fa7269c3bc5a107"
+        },
+        "httpparams": {
+          "rows": 1250,
+          "labels": {
+            "path_traversal": 40,
+            "sqli": 1090,
+            "cmdi": 10,
+            "xss": 60,
+            "normal": 50
+          },
+          "sha256": "95cd916c7b445f4abc38be09f2335333e9bf571ee8584cc9ef11920d2ef1221a"
+        },
+        "mendeley_xss": {
+          "rows": 500,
+          "labels": {
+            "xss": 500
+          },
+          "sha256": "411d139437f0361b34bbf750786b2105a88759dee1ca9b0a15be2bc757ae82c7"
+        },
+        "mereani": {
+          "rows": 90,
+          "labels": {
+            "xss": 90
+          },
+          "sha256": "f1e237f8b199d9d62db119d5a5cff208e09332fa71e8f2e87165572e23f1e28a"
+        },
+        "seclists": {
+          "rows": 30,
+          "labels": {
+            "xss": 30
+          },
+          "sha256": "0522966f79d345710ee3a959db531a70b84e70095aec6a6315a0a3376b144ffc"
+        },
+        "synthetic_context": {
+          "rows": 4380,
+          "labels": {
+            "xss": 4380
+          },
+          "sha256": "46787f1ec3289410e21cd1d3bf9b73a84f9a0ae37057a015b74dd8fcbd992e95"
+        },
+        "application_normal": {
+          "rows": 492,
+          "labels": {
+            "normal": 492
+          },
+          "sha256": "c0a2001ff4b889b8eb44b221965cbcba2858202ad08f618e91f7f5bae84d52d7"
+        }
+      },
+      "labels": {
+        "path_traversal": 6500,
+        "sqli": 6500,
+        "cmdi": 6000,
+        "xss": 6000,
+        "normal": 592
+      },
+      "normal_routes": {
+        "GET /store/products": 112,
+        "POST /auth/customer/emailpass/register": 40,
+        "POST /store/customers": 40,
+        "POST /auth/customer/emailpass": 40,
+        "POST /store/carts": 40,
+        "POST /store/carts/<id>/line-items": 40,
+        "POST /store/carts/<id>": 40,
+        "GET /store/shipping-options": 40,
+        "POST /store/carts/<id>/shipping-methods": 40,
+        "POST /store/payment-collections": 40,
+        "POST /store/payment-collections/<id>/payment-sessions": 40,
+        "POST /store/carts/<id>/complete": 40,
+        "GET /store/orders/<id>": 40
+      },
+      "removed_capture_exact_duplicates": 948,
+      "rows": 25592
+    },
+    "test": {
+      "sources": {
+        "commerce": {
+          "rows": 18852,
+          "labels": {
+            "path_traversal": 6460,
+            "cmdi": 5990,
+            "sqli": 5410,
+            "xss": 940,
+            "normal": 52
+          },
+          "sha256": "4bf317b6a1b34ce4856d324c162d545f3737fe0fa61b73a265c9972d86300e4f"
+        },
+        "httpparams": {
+          "rows": 1250,
+          "labels": {
+            "path_traversal": 40,
+            "sqli": 1090,
+            "cmdi": 10,
+            "xss": 60,
+            "normal": 50
+          },
+          "sha256": "4aef7e104b45f55223692def7c8ab00587ae80b01f9859184d64f51382bc405f"
+        },
+        "mendeley_xss": {
+          "rows": 700,
+          "labels": {
+            "xss": 700
+          },
+          "sha256": "88dd25461b96da63f8725920783cc0046d5366b5d9f7a4a68e770da279640f15"
+        },
+        "mereani": {
+          "rows": 100,
+          "labels": {
+            "xss": 100
+          },
+          "sha256": "7a28b9d4e4b0ae702458e7a19f1d58a706671c835d9c0fc8158ffabde6035a78"
+        },
+        "seclists": {
+          "rows": 50,
+          "labels": {
+            "xss": 50
+          },
+          "sha256": "98d5ac2d5ef2770c779d62dd07c59ec874edfcf0f59e49af1e20479251b0fccc"
+        },
+        "synthetic_context": {
+          "rows": 4150,
+          "labels": {
+            "xss": 4150
+          },
+          "sha256": "ae4a07ca8c89b84ecb8eef0d51c9710d2ffcb80f6cf95e224941bbdff3bf6a79"
+        }
+      },
+      "labels": {
+        "path_traversal": 6500,
+        "cmdi": 6000,
+        "sqli": 6500,
+        "xss": 6000,
+        "normal": 102
+      },
+      "normal_routes": {
+        "POST /store/carts/<id>": 1,
+        "POST /store/carts/<id>/shipping-methods": 1,
+        "GET /store/products": 100
+      },
+      "removed_capture_exact_duplicates": 0,
+      "rows": 25102
+    }
+  },
+  "acceptance_used": false,
+  "normal_weight_policy": "equal total weight per method/canonical route within the normal class",
+  "normal_selection_policy": "legacy product queries capped at 250/source train, 50/source holdouts; unsupported /store/custom removed; genuine development journeys exact-deduplicated only",
+  "audit": {
+    "normalization": "decoded-case-number-quoted-literal-v1",
+    "near_detection_limit": "Heuristic only; independent scenario review is still required",
+    "cross_split_conflicts": {},
+    "allow_shared_families": true,
+    "shared_family_rows": {
+      "train/validation:traversal-parent-boundary": 6460,
+      "train/validation:sql-predicate": 3837,
+      "train/validation:sql-union-constants": 1573,
+      "train/validation:cmd-substitution": 3911,
+      "train/validation:cmd-shell-chain": 2079,
+      "train/validation:xss-script-element": 611,
+      "train/validation:xss-context-breakout": 329,
+      "train/validation:normal-search-natural": 8,
+      "train/validation:normal-search-literal": 8,
+      "train/validation:normal-search-size": 6,
+      "train/validation:normal-search-description": 5,
+      "train/validation:normal-search-budget": 12,
+      "train/validation:normal-product-browse": 2,
+      "train/validation:normal-search-help": 9,
+      "train/test:traversal-parent-boundary": 6460,
+      "train/test:cmd-shell-chain": 2070,
+      "train/test:sql-predicate": 3801,
+      "train/test:cmd-substitution": 3920,
+      "train/test:xss-script-element": 643,
+      "train/test:sql-union-constants": 1609,
+      "train/test:xss-context-breakout": 297,
+      "train/test:normal-search-help": 9,
+      "train/test:normal-search-natural": 9,
+      "train/test:normal-search-literal": 8,
+      "train/test:normal-search-size": 9,
+      "train/test:normal-search-description": 4,
+      "train/test:normal-search-budget": 11
+    },
+    "allow_shared_normal_templates": true,
+    "shared_normal_template_rows": {
+      "train/validation": 200
+    },
+    "splits": {
+      "train": {
+        "rows": 127455,
+        "labels": {
+          "normal": 2455,
+          "cmdi": 30000,
+          "sqli": 35000,
+          "path_traversal": 30000,
+          "xss": 30000
+        },
+        "sources": {
+          "external": 11093,
+          "ai": 116362
+        },
+        "reviewed": 0,
+        "exact_duplicates": 0,
+        "near_groups": 126659
+      },
+      "validation": {
+        "rows": 25592,
+        "labels": {
+          "normal": 592,
+          "path_traversal": 6500,
+          "sqli": 6500,
+          "cmdi": 6000,
+          "xss": 6000
+        },
+        "sources": {
+          "external": 2362,
+          "ai": 23230
+        },
+        "reviewed": 0,
+        "exact_duplicates": 0,
+        "near_groups": 25391
+      },
+      "test": {
+        "rows": 25102,
+        "labels": {
+          "path_traversal": 6500,
+          "cmdi": 6000,
+          "sqli": 6500,
+          "xss": 6000,
+          "normal": 102
+        },
+        "sources": {
+          "ai": 23002,
+          "external": 2100
+        },
+        "reviewed": 0,
+        "exact_duplicates": 0,
+        "near_groups": 25102
+      }
+    },
+    "ratios": {
+      "train": 0.7154404459188657,
+      "validation": 0.14365503033977176,
+      "test": 0.14090452374136256
+    }
+  },
+  "limitations": [
+    "Legacy attack test is diagnostic, not a new independent attack benchmark",
+    "Normal scenarios are scripted and source-labelled, not production traffic or human-reviewed ground truth",
+    "Common normal templates may overlap; exact rows and journey IDs remain isolated",
+    "The independent acceptance collection is intentionally absent from all three model input splits"
+  ]
+}

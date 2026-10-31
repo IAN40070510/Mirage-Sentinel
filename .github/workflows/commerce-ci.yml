@@ -24,7 +24,7 @@ jobs:
       - name: Verify frozen five-class model
         run: |
           pip check
-          python model/commerce-five/run-20261028T081548514385Z/runtime.py --self-test
+          python model/commerce-five/diversity-v2/runtime.py --self-test
       - name: Routing and isolation tests
         run: python -m pytest tests -q --junitxml=artifacts/commerce-tests.xml
       - name: Create ephemeral credentials

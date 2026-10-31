@@ -1,0 +1,182 @@
+{
+  "created_at": "2026-10-30T06:40:11.082+00:00",
+  "python": "3.11.3",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "versions": {
+    "numpy": "2.2.6",
+    "scipy": "1.17.1",
+    "scikit-learn": "1.8.0",
+    "xgboost": "3.2.0"
+  },
+  "parameters": {
+    "objective": "multi:softprob",
+    "num_class": 5,
+    "eval_metric": [
+      "merror",
+      "mlogloss"
+    ],
+    "tree_method": "hist",
+    "device": "cpu",
+    "max_depth": 6,
+    "eta": 0.05,
+    "min_child_weight": 3,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "seed": 42,
+    "nthread": 2
+  },
+  "seed": 42,
+  "rounds_requested": 600,
+  "rounds_saved": 498,
+  "early_stopping_metric": "validation-mlogloss",
+  "validation_weight_policy": "class-and-normal-route-balanced",
+  "fit_only": false,
+  "allow_unreviewed": true,
+  "allow_shared_families": true,
+  "allow_shared_normal_templates": true,
+  "evaluation_scope": "synthetic_within_family",
+  "elapsed_training_seconds": 533.7015442999545,
+  "weight_policy": "train-only-class-balanced-normal-route-equal",
+  "normal_route_counts": {
+    "GET /store/regions": 1,
+    "GET /<locale>": 1,
+    "GET /_next/static/*": 16,
+    "GET /store/products": 513,
+    "GET /store/customers/me": 1,
+    "POST /auth/customer/emailpass/register": 161,
+    "POST /store/customers": 160,
+    "POST /auth/customer/emailpass": 160,
+    "POST /store/carts": 161,
+    "POST /store/carts/<id>/line-items": 161,
+    "POST /store/carts/<id>": 160,
+    "GET /store/shipping-options": 160,
+    "POST /store/carts/<id>/shipping-methods": 160,
+    "POST /store/payment-collections": 160,
+    "POST /store/payment-collections/<id>/payment-sessions": 160,
+    "POST /store/carts/<id>/complete": 160,
+    "GET /store/orders/<id>": 160
+  },
+  "source_sha256": {
+    "accept_normal_journeys.py": "3cb4cf46d3a5c3ad283c3e72e10cd7c9f30b01473cbc7dfb2c4bd4cfa70f8089",
+    "data.py": "b4d37fb9a4eae0a8c50f2b13311e9012ab3e23e014af2de27d68b8eafa44fa49",
+    "evaluate_context.py": "73a604946ec2be61432f7c13bf8511393367f0fafde5410fb2720a2f71e9f1d1",
+    "evaluate_external.py": "aa6addaaf63802cb1957cc5980ec7c92950479eb3bf4e6df7573dcbc6aed02e9",
+    "expand_templates.py": "a9dd66c452642806f64d01318d461600041992ae280e3947908983d48caf4c60",
+    "holdout.py": "fc4c947a2b6491c4e856a335a2744be11b476289803e3bc9bc417c6b97f045c2",
+    "normal_balance.py": "4b1b1c3d074a19e782c82f934e73b6fe20fbd2c8ca6a85c1ad07f6617c955af0",
+    "review_coverage.py": "2cc348e3e62ca68e405da35aafb445a1bfb90499fd2a284d10027f81a42d6a06",
+    "runtime.py": "f3eb44b1b1613c4d8f3b97c807d0057177f55bc099c8cba86fd4b1f32992f73f",
+    "split.py": "692ab8128996ad1d943bc7e591abbbd9e78139b582519d4ecd5ef869f89fea24",
+    "train.py": "3cf8c0191685216d45b55df28329b205695c4c72933a53c9bec45fc3f9d2ed6d",
+    "__init__.py": "433a6718d995668c28c370f8f283b5933f324e0ca8b3dff8d6de55c87a3096bb"
+  },
+  "inputs": {
+    "train": [
+      {
+        "file": "application_normal.jsonl",
+        "sha256": "0e0ff8e1ed0c6ecbefda89b5f4e569372d804f9dc5d89790c2c31c8d0bfb1e69",
+        "rows": 1953
+      },
+      {
+        "file": "commerce.jsonl",
+        "sha256": "1f314b521aa5ed7494b322247a1eaddcf367030bf2b3b708f57dd4979058350c",
+        "rows": 94652
+      },
+      {
+        "file": "httpparams.jsonl",
+        "sha256": "a649897faf7be563c1fc8b8fe9de3e541dedd2504ee7656879352b9e11299804",
+        "rows": 5850
+      },
+      {
+        "file": "mendeley_xss.jsonl",
+        "sha256": "d018d3363b491b5e70038d9b9b46dd37519b737042325dac3e02ee8a3605fa03",
+        "rows": 2700
+      },
+      {
+        "file": "mereani.jsonl",
+        "sha256": "a9cae3e5980fbedea25c90e1db6d944b2861a26b103e757b6b62df248fc96fce",
+        "rows": 420
+      },
+      {
+        "file": "seclists.jsonl",
+        "sha256": "5e7af23b628cfc765b6e4b686e4f3e4d34ce57da6b4cc5aab97a608170f380b9",
+        "rows": 170
+      },
+      {
+        "file": "synthetic_context.jsonl",
+        "sha256": "6bdd26d6fe76e6ed0c1987740ab329791d20724ed072b6bdbdacba588c273e1b",
+        "rows": 21710
+      }
+    ],
+    "validation": [
+      {
+        "file": "application_normal.jsonl",
+        "sha256": "c0a2001ff4b889b8eb44b221965cbcba2858202ad08f618e91f7f5bae84d52d7",
+        "rows": 492
+      },
+      {
+        "file": "commerce.jsonl",
+        "sha256": "415fdaa38eac7051d3fd4e352d7c59752690fa5b8b93cedd3fa7269c3bc5a107",
+        "rows": 18850
+      },
+      {
+        "file": "httpparams.jsonl",
+        "sha256": "95cd916c7b445f4abc38be09f2335333e9bf571ee8584cc9ef11920d2ef1221a",
+        "rows": 1250
+      },
+      {
+        "file": "mendeley_xss.jsonl",
+        "sha256": "411d139437f0361b34bbf750786b2105a88759dee1ca9b0a15be2bc757ae82c7",
+        "rows": 500
+      },
+      {
+        "file": "mereani.jsonl",
+        "sha256": "f1e237f8b199d9d62db119d5a5cff208e09332fa71e8f2e87165572e23f1e28a",
+        "rows": 90
+      },
+      {
+        "file": "seclists.jsonl",
+        "sha256": "0522966f79d345710ee3a959db531a70b84e70095aec6a6315a0a3376b144ffc",
+        "rows": 30
+      },
+      {
+        "file": "synthetic_context.jsonl",
+        "sha256": "46787f1ec3289410e21cd1d3bf9b73a84f9a0ae37057a015b74dd8fcbd992e95",
+        "rows": 4380
+      }
+    ],
+    "test": [
+      {
+        "file": "commerce.jsonl",
+        "sha256": "4bf317b6a1b34ce4856d324c162d545f3737fe0fa61b73a265c9972d86300e4f",
+        "rows": 18852
+      },
+      {
+        "file": "httpparams.jsonl",
+        "sha256": "4aef7e104b45f55223692def7c8ab00587ae80b01f9859184d64f51382bc405f",
+        "rows": 1250
+      },
+      {
+        "file": "mendeley_xss.jsonl",
+        "sha256": "88dd25461b96da63f8725920783cc0046d5366b5d9f7a4a68e770da279640f15",
+        "rows": 700
+      },
+      {
+        "file": "mereani.jsonl",
+        "sha256": "7a28b9d4e4b0ae702458e7a19f1d58a706671c835d9c0fc8158ffabde6035a78",
+        "rows": 100
+      },
+      {
+        "file": "seclists.jsonl",
+        "sha256": "98d5ac2d5ef2770c779d62dd07c59ec874edfcf0f59e49af1e20479251b0fccc",
+        "rows": 50
+      },
+      {
+        "file": "synthetic_context.jsonl",
+        "sha256": "ae4a07ca8c89b84ecb8eef0d51c9710d2ffcb80f6cf95e224941bbdff3bf6a79",
+        "rows": 4150
+      }
+    ]
+  },
+  "test_policy": "No test fit, threshold selection, early stopping or parameter tuning"
+}

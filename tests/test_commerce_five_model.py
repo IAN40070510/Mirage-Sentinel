@@ -10,11 +10,12 @@ from services.commerce.five_runtime import Predictor, LABELS
 BUNDLE = Path(__file__).resolve().parents[1] / 'model/commerce-five/run-20261028T081548514385Z'
 
 
+@pytest.mark.parametrize('bundle', [BUNDLE, BUNDLE.parent / 'diversity-v2'])
 @pytest.mark.asyncio
-async def test_five_class_service_matches_training_runtime():
-    detector = Detector(str(BUNDLE), timeout=5, model_mode='enforce')
+async def test_five_class_service_matches_training_runtime(bundle: Path):
+    detector = Detector(str(bundle), timeout=5, model_mode='enforce')
     assert detector.model_status == 'ready_five_class'
-    reference = Predictor(BUNDLE)
+    reference = Predictor(bundle)
     for query in ('q=cotton', 'q=%3Cscript%3Evoid(0)%3C/script%3E', 'q=%27+OR+1%3D1--'):
         request = dict(method='GET', path='/store/products', query=query, headers={}, body='')
         expected = reference.predict([request])[0]
@@ -24,7 +25,7 @@ async def test_five_class_service_matches_training_runtime():
         assert actual['class_probabilities'] == pytest.approx(expected['probabilities'])
         assert set(actual['class_probabilities']) == set(LABELS)
         assert actual['model_probability'] == pytest.approx(expected['attack_score'])
-        assert actual['model_threshold'] == 0.585
+        assert actual['model_threshold'] == reference.threshold
         assert actual['attack'] == (bool(actual['rules']) or expected['model_attack'])
 
 

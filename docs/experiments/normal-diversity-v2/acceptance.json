@@ -1,0 +1,127 @@
+{
+  "created_at": "2026-10-31T12:37:39.171+00:00",
+  "model_bundle_sha256": "d979dca2bc51c5b2a1b7c5e044b343b88b1bd5ab00417bc9e75dcb4bb6211455",
+  "threshold": 0.41500000000000004,
+  "capture_manifest_sha256": "acd757f6c962a22953f99baee88815f94ec8fef6848637bc850e28dcbf550ce0",
+  "sessions": 60,
+  "rows": 2160,
+  "threshold_false_positives": 0,
+  "threshold_fpr": 0.0,
+  "novel_unique_rows": 732,
+  "novel_unique_fpr": 0.0,
+  "flagged_sessions_rules_or_model": 0,
+  "flagged_session_rate": 0.0,
+  "routes": {
+    "GET /store/regions": {
+      "rows": 120,
+      "false_positives": 0,
+      "fpr": 0.0
+    },
+    "GET /<locale>": {
+      "rows": 60,
+      "false_positives": 0,
+      "fpr": 0.0
+    },
+    "GET /_next/static/*": {
+      "rows": 960,
+      "false_positives": 0,
+      "fpr": 0.0
+    },
+    "GET /store/products": {
+      "rows": 120,
+      "false_positives": 0,
+      "fpr": 0.0
+    },
+    "GET /store/customers/me": {
+      "rows": 120,
+      "false_positives": 0,
+      "fpr": 0.0
+    },
+    "POST /auth/customer/emailpass/register": {
+      "rows": 120,
+      "false_positives": 0,
+      "fpr": 0.0
+    },
+    "POST /store/customers": {
+      "rows": 60,
+      "false_positives": 0,
+      "fpr": 0.0
+    },
+    "POST /auth/customer/emailpass": {
+      "rows": 60,
+      "false_positives": 0,
+      "fpr": 0.0
+    },
+    "POST /store/carts": {
+      "rows": 60,
+      "false_positives": 0,
+      "fpr": 0.0
+    },
+    "POST /store/carts/<id>/line-items": {
+      "rows": 60,
+      "false_positives": 0,
+      "fpr": 0.0
+    },
+    "POST /store/carts/<id>": {
+      "rows": 60,
+      "false_positives": 0,
+      "fpr": 0.0
+    },
+    "GET /store/shipping-options": {
+      "rows": 60,
+      "false_positives": 0,
+      "fpr": 0.0
+    },
+    "POST /store/carts/<id>/shipping-methods": {
+      "rows": 60,
+      "false_positives": 0,
+      "fpr": 0.0
+    },
+    "POST /store/payment-collections": {
+      "rows": 60,
+      "false_positives": 0,
+      "fpr": 0.0
+    },
+    "POST /store/payment-collections/<id>/payment-sessions": {
+      "rows": 60,
+      "false_positives": 0,
+      "fpr": 0.0
+    },
+    "POST /store/carts/<id>/complete": {
+      "rows": 60,
+      "false_positives": 0,
+      "fpr": 0.0
+    },
+    "GET /store/orders/<id>": {
+      "rows": 60,
+      "false_positives": 0,
+      "fpr": 0.0
+    }
+  },
+  "protocol": {
+    "version": "normal-journeys-acceptance-v1",
+    "minimum_sessions": 60,
+    "maximum_request_fpr": 0.01,
+    "maximum_route_fpr": 0.05,
+    "maximum_flagged_session_rate": 0.05,
+    "policy": "Freeze bundle and validation-selected threshold before opening the acceptance artifact; no fitting or tuning on acceptance; failure keeps the service in shadow mode. These are provisional engineering gates, not a production reliability guarantee."
+  },
+  "normal_acceptance_passed": true,
+  "fit_performed": false,
+  "threshold_tuning_performed": false,
+  "deploy_authorized": false,
+  "limitations": [
+    "Offline replay of successful scripted application journeys; not production traffic",
+    "Common request templates may overlap; both all-request and novel-unique results reported",
+    "This normal-only acceptance does not establish attack detection performance",
+    "Do not tune on this acceptance result and report it again as blind evaluation"
+  ],
+  "baseline_comparison": {
+    "bundle_sha256": "4f9ff717ea56c0d198d75b9d48e1c594f6528b184c9d463a442bba0ed400289a",
+    "threshold": 0.585,
+    "false_positives": 1277,
+    "normal_fpr": 0.5912037037037037,
+    "flagged_sessions": 60,
+    "fit_or_tuning_performed": false
+  }
+}

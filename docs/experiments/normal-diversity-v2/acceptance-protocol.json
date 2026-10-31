@@ -1,0 +1,8 @@
+{
+  "version": "normal-journeys-acceptance-v1",
+  "minimum_sessions": 60,
+  "maximum_request_fpr": 0.01,
+  "maximum_route_fpr": 0.05,
+  "maximum_flagged_session_rate": 0.05,
+  "policy": "Freeze bundle and validation-selected threshold before opening the acceptance artifact; no fitting or tuning on acceptance; failure keeps the service in shadow mode. These are provisional engineering gates, not a production reliability guarantee."
+}
