@@ -1,13 +1,13 @@
-.git
-.env*
-**/node_modules
-**/.git
-**/.next
-**/.medusa
+# Allow only Python service build inputs; exclude model data, credentials and history.
+**
+!deploy/
+!deploy/commerce/
+!deploy/commerce/Dockerfile.python
+!deploy/commerce/requirements.txt
+!services/
+!services/__init__.py
+!services/commerce/
+!services/commerce/**
 **/__pycache__
-**/*.db*
-**/*.pkl
-commerce
-data
-artifacts
-datasets
+**/*.pyc
+**/.env*

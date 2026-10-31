@@ -20,6 +20,9 @@ def main() -> None:
         help="Migrate two NEW commerce databases and export their public keys",
     )
     parser.add_argument("--build", action="store_true")
+    parser.add_argument("--build-service", action="append",
+                        choices=["gateway", "real-medusa", "real-storefront"],
+                        help="Build only selected services; other revision images must already exist")
     parser.add_argument(
         "--preview",
         action="store_true",
@@ -56,7 +59,7 @@ def main() -> None:
     run(["config", "--quiet"])
     if args.build:
         # Sequential builds are intentional for the four-core A1 host.
-        for service in ["gateway", "real-medusa", "real-storefront"]:
+        for service in args.build_service or ["gateway", "real-medusa", "real-storefront"]:
             run(["build", service])
     if args.initialize:
         run(["up", "-d", "real-db", "sandbox-db"])

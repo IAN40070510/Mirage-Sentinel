@@ -6,10 +6,62 @@ import importlib.util
 import subprocess
 import sys
 from pathlib import Path
-from types import SimpleNamespace
+from types import SimpleNamespace, ModuleType
 from typing import Any
 
 import pytest
+
+
+@pytest.fixture
+def deployment_module() -> ModuleType:
+    script = Path(__file__).resolve().parents[1] / "scripts/deploy_oci_commerce.py"
+    spec = importlib.util.spec_from_file_location("storage_deploy_test", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize("recovered", [True, False])
+def test_low_space_only_reclaims_old_unused_cache(deployment_module: ModuleType, monkeypatch: pytest.MonkeyPatch, recovered: bool) -> None:
+    free = iter([2 * 1024**3, (7 if recovered else 3) * 1024**3])
+    monkeypatch.setattr(deployment_module.shutil, "disk_usage", lambda _: SimpleNamespace(free=next(free)))
+    calls = []
+    monkeypatch.setattr(deployment_module.subprocess, "run", lambda command, **kw: calls.append(command))
+    if recovered:
+        deployment_module.ensure_capacity(Path("."))
+    else:
+        with pytest.raises(SystemExit, match="images and data retained"):
+            deployment_module.ensure_capacity(Path("."))
+    assert calls == [["docker", "builder", "prune", "--all", "--force", "--filter", "until=168h"]]
+
+
+@pytest.mark.parametrize("changed,dirty,missing", [(False,False,False), (True,False,False),
+                                                  (False,True,False), (False,False,True)])
+def test_reuse_requires_identical_clean_sources_and_existing_images(
+    deployment_module: ModuleType, monkeypatch: pytest.MonkeyPatch, changed: bool, dirty: bool, missing: bool
+) -> None:
+    calls = []
+    def run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        output = ""
+        code = 0
+        if "rev-parse" in command:
+            output = ("2" if changed and command[-1].startswith("b") else "1") * 40
+        if "status" in command:
+            output = " M commerce/package.json" if dirty else ""
+        if command[:3] == ["docker", "image", "inspect"]:
+            code = int(missing)
+        return subprocess.CompletedProcess(command, code, stdout=output)
+    monkeypatch.setattr(deployment_module.subprocess, "run", run)
+    result = deployment_module.reuse_commerce_images("a" * 40, "b" * 40)
+    if changed or dirty or missing:
+        assert result == ["gateway", "real-medusa", "real-storefront"]
+        assert not any(c[:2] == ["docker", "tag"] for c in calls)
+    else:
+        assert result == ["gateway"]
+        assert sum(c[:2] == ["docker", "tag"] for c in calls) == 2
+    assert not any("rm" in c or "prune" in c for c in calls)
 
 
 @pytest.mark.parametrize("fail_preview", [False, True])
