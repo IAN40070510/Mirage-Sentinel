@@ -86,7 +86,7 @@ def create_app(
         )
         app.state.detector = detector or Detector(
             os.getenv("SENTINEL_MODEL_DIR", ""),
-            model_mode=os.getenv("SENTINEL_MODEL_MODE", "shadow"),
+            model_mode=os.getenv("SENTINEL_MODEL_MODE", "enforce"),
         )
         app.state.audit = audit or AuditQueue(
             os.getenv("AUDIT_URL", "http://collector:8000"), secret("AUDIT_WRITE_TOKEN")

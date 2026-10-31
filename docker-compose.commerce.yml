@@ -91,7 +91,7 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
       PUBLIC_SCHEME: ${PUBLIC_SCHEME:-http}
       SENTINEL_MODEL_DIR: /models
-      SENTINEL_MODEL_MODE: shadow
+      SENTINEL_MODEL_MODE: enforce
     volumes: [visitor_state:/state, "./model/commerce-five/diversity-v2:/models:ro"]
     networks: [ingress, real_edge, sandbox_edge, audit, mirage_edge]
     mem_limit: 768m

@@ -152,8 +152,8 @@ def main() -> None:
                 'headers={"x-control-token":os.environ["CONTROL_TOKEN"]}); '
                 'state=json.load(urllib.request.urlopen(req,timeout=10)); '
                 'assert state["model"]=="ready_five_class", state["model"]; '
-                'assert state["model_mode"]=="shadow", state["model_mode"]; '
-                'print("Five-class model ready in shadow mode")')
+                'assert state["model_mode"]=="enforce", state["model_mode"]; '
+                'print("Five-class model ready in enforce mode")')
         for script in ["smoke_commerce.py"]:
             command(
                 ROOT,

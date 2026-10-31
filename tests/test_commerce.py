@@ -385,7 +385,7 @@ def test_trained_shadow_model_preserves_real_to_sandbox_transition(system):
 
     client, _store, audit, calls = system
     bundle = Path(__file__).resolve().parents[1] / 'model/commerce-five/run-20261028T081548514385Z'
-    client.app.state.detector = Detector(str(bundle), timeout=5)
+    client.app.state.detector = Detector(str(bundle), timeout=5, model_mode="shadow")
     assert client.app.state.detector.model_status == 'ready_five_class'
     # Previously this normal page already quarantined the visitor before shopping.
     assert client.get('/dk').json()['host'] == 'real-storefront'

@@ -39,7 +39,7 @@ def test_corrupt_five_class_model_falls_back(tmp_path):
 
 @pytest.mark.asyncio
 async def test_shadow_keeps_normal_browsing_real_but_rules_still_quarantine():
-    detector = Detector(str(BUNDLE), timeout=5)
+    detector = Detector(str(BUNDLE), timeout=5, model_mode="shadow")
     # Real downloaded model reproduces the production smoke-test false positive.
     normal = await detector.assess('visitor', 'GET', '/dk', '', {}, b'')
     assert normal['model_attack'] is True
@@ -55,3 +55,15 @@ async def test_shadow_keeps_normal_browsing_real_but_rules_still_quarantine():
 def test_unknown_model_mode_is_rejected():
     with pytest.raises(ValueError):
         Detector(model_mode='silent')
+
+
+@pytest.mark.asyncio
+async def test_default_enforcement_uses_model_without_rule_hit() -> None:
+    detector = Detector(str(BUNDLE.parent / 'diversity-v2'), timeout=5)
+    decision = await detector.assess('model-only', 'GET', '/store/products',
+                                    'q=%3Csvg%2Fonload%3Dalert%281%29%3E', {}, b'')
+    assert detector.model_mode == 'enforce'
+    assert decision['fallback'] is None
+    assert decision['rules'] == []
+    assert decision['model_attack'] is True
+    assert decision['attack'] is True

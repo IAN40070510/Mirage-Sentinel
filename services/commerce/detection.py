@@ -45,7 +45,7 @@ class Detector:
     """JSON-only XGBoost contract; incompatible legacy pickle artifacts are not loaded."""
 
     def __init__(self, model_dir: str = "", timeout: float = 0.15,
-                 model_mode: str = "shadow") -> None:
+                 model_mode: str = "enforce") -> None:
         if model_mode not in {"shadow", "enforce"}:
             raise ValueError("model_mode must be shadow or enforce")
         self.model_mode = model_mode
@@ -190,8 +190,7 @@ class Detector:
         # High-confidence signatures remain a safety net even when the model is available.
         rule_score = 0.95 if hits else 0.05
         model_attack = probability is not None and probability >= self.threshold
-        # The new model has known false positives on normal shopping requests.
-        # Keep its predictions observable without changing routing by default.
+        # Enforce model decisions by default; shadow remains an explicit diagnostic option.
         enforced = self.predictor is None or self.model_mode == "enforce"
         attack = bool(hits) or (enforced and model_attack)
         if prediction is not None and not enforced:
