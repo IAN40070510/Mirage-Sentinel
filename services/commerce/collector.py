@@ -112,7 +112,7 @@ def create_app(database: Forensics | None = None) -> FastAPI:
         await asyncio.to_thread(app.state.db.append, event)
         return {"accepted": True}
 
-    @app.get("/", dependencies=[Depends(operator)])
+    @app.get("/")
     async def index() -> FileResponse:
         return FileResponse(
             Path(__file__).with_name("soc.html"),
@@ -123,11 +123,11 @@ def create_app(database: Forensics | None = None) -> FastAPI:
             },
         )
 
-    @app.get("/api/events", dependencies=[Depends(operator)])
+    @app.get("/api/events")
     async def events(after: int = 0, visitor: str = "", limit: int = 200) -> list[dict]:
         return await asyncio.to_thread(app.state.db.read, max(after, 0), visitor, limit)
 
-    @app.get("/api/status", dependencies=[Depends(operator)])
+    @app.get("/api/status")
     async def status() -> dict:
         async with httpx.AsyncClient(timeout=5) as client:
             response = await client.get(

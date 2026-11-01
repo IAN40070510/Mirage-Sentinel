@@ -172,6 +172,7 @@ def main() -> None:
                 "--state-db",
                 "/state/visitors.db",
             )
+        subprocess.run([sys.executable, str(ROOT / "scripts/smoke_soc.py")], check=True)
         command(ROOT, "up", "-d", "--no-deps", "edge")
         subprocess.run(
             [
@@ -185,7 +186,7 @@ def main() -> None:
         command(ROOT, "--profile", "preview", "stop", "edge-preview")
         previous.write_text(str(ROOT) + "\n")
         print(
-            "OCI commerce deployment passed. SOC: port 3000 (authentication required); admin: SSH tunnel to 127.0.0.1:9100."
+            "OCI commerce deployment passed. SOC: port 3000 (view without login; release requires authentication); admin: SSH tunnel to 127.0.0.1:9100."
         )
     except BaseException:
         shared.write_text(original)

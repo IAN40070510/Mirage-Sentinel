@@ -3,7 +3,7 @@
 <title>Mirage Sentinel · 電商戰情室</title>
 <style>body{margin:0;background:#0d1520;color:#e2eaf4;font:15px system-ui}main{max-width:1400px;margin:32px auto;padding:24px}h1{font-size:26px}p{color:#9dadc1}button,input,select{padding:10px;border:1px solid #42556b;border-radius:6px;background:#192b40;color:inherit;margin:4px}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:12px;text-align:left;border-bottom:1px solid #293c52}tr:hover{background:#192b40;cursor:pointer}pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:20px;background:#152437;border-radius:8px}.bad{color:#ffb49b}#status{color:#93d9d0}</style>
 <main><h1>Mirage Sentinel · 電商戰情室</h1><p>正常與沙盒互動時間線。點選事件查看請求、特徵、分數和實際回應。</p>
-<div id="status">載入中</div><input id="visitor" placeholder="訪客 ID（留空顯示全部）" size="38"><select id="mode"><option value="all">全部流量</option><option value="real">正常環境</option><option value="sandbox">沙盒環境</option></select><button id="load">重新載入</button><button id="more">載入後續事件</button><button id="release">解除此訪客的沙盒標記</button><button id="export">匯出已載入 JSON</button>
+<div id="status">載入中</div><input id="visitor" placeholder="訪客 ID（留空顯示全部）" size="38"><select id="mode"><option value="all">全部流量</option><option value="real">正常環境</option><option value="sandbox">沙盒環境</option></select><button id="load">重新載入</button><button id="more">載入後續事件</button><button id="release">解除此訪客的沙盒標記（需管理員驗證）</button><button id="export">匯出已載入 JSON</button>
 <table><thead><tr><th>時間／序號</th><th>訪客</th><th>請求</th><th>環境</th><th>分數／來源</th><th>HTTP</th></tr></thead><tbody id="rows"></tbody></table><pre id="detail">選取事件查看內容</pre></main>
 <script>
 let events=[],cursor=0;

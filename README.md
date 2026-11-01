@@ -14,7 +14,7 @@
 | 鑑識儲存與戰情室 | services/commerce/collector.py、soc.html |
 | Docker 編排 | docker-compose.commerce.yml |
 
-正式與沙盒使用不同 PostgreSQL、JWT/Cookie secrets 與隔離網路。誘餌不掛載鑑識卷；Collector 寫入端與 SOC 讀取端分別驗證權限，事件禁止 UPDATE/DELETE。訪客及 Mirage 記憶使用 30 天期限；不代表所有資料庫都自動刪除 30 天前的資料。
+正式與沙盒使用不同 PostgreSQL、JWT/Cookie secrets 與隔離網路。誘餌不掛載鑑識卷；Collector 寫入端驗證憑證，SOC 查看免登入、解除沙盒標記仍需管理員驗證，事件禁止 UPDATE/DELETE。訪客及 Mirage 記憶使用 30 天期限；不代表所有資料庫都自動刪除 30 天前的資料。
 
 ## 本機啟動
 
@@ -27,7 +27,7 @@ python scripts/wait_commerce.py
 python scripts/smoke_commerce.py
 ```
 
-prepare_commerce.py 不覆寫既存 .env.commerce。購物網站預設 http://localhost:8080；SOC 為 3000 埠且要求登入；管理 API 僅綁定本機 9100 埠。帳密在私有 .env.commerce，不要提交或貼入聊天。
+prepare_commerce.py 不覆寫既存 .env.commerce。購物網站預設 http://localhost:8080；SOC 為 3000 埠，進入與查看免登入；解除訪客沙盒標記仍要求管理員驗證；管理 API 僅綁定本機 9100 埠。帳密在私有 .env.commerce，不要提交或貼入聊天。
 
 明確指定 Compose 與環境檔：
 
