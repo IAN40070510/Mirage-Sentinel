@@ -8,6 +8,8 @@
 <script>
 let events=[],selectedVisitor='',filter='',generation=0,loading=false;
 const el=id=>document.getElementById(id);
+const taiwanTime=new Intl.DateTimeFormat('zh-TW',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',fractionalSecondDigits:3,hour12:false});
+function formatTaiwanTime(value){const date=new Date(value);return Number.isNaN(date.getTime())?value:taiwanTime.format(date)+' GMT+8';}
 async function load(reset=false,older=false){
  if(loading&&!reset)return;
  if(reset){generation++;events=[];filter=el('visitor').value.trim();selectedVisitor='';el('detail').textContent='選取事件查看內容'}
@@ -21,13 +23,13 @@ async function load(reset=false,older=false){
   const page=await r.json();if(version!==generation)return;
   const merged=new Map(events.map(e=>[e.cursor,e]));for(const e of page)merged.set(e.cursor,e);
   events=[...merged.values()].sort((a,b)=>b.cursor-a.cursor).slice(0,2000);render();
-  el('updated').textContent=`更新時間：${new Date().toLocaleTimeString()}｜已載入 ${events.length} 筆（最多 2,000 筆）｜${filter?'篩選來源 IP：'+filter:'所有 IP'}${older&&!page.length?'｜沒有更早事件':''}`;
+  el('updated').textContent=`更新時間：${formatTaiwanTime(new Date().toISOString())}｜已載入 ${events.length} 筆（最多 2,000 筆）｜${filter?'篩選來源 IP：'+filter:'所有 IP'}${older&&!page.length?'｜沒有更早事件':''}`;
   const s=await fetch('/api/status',{cache:'no-store'});if(version!==generation)return;
   if(s.ok){const x=await s.json();el('status').textContent=`模型：${x.model}｜待寫入：${x.audit_queued}｜已送達：${x.audit_delivered}｜遺失：${x.audit_dropped}`}else el('status').textContent='無法讀取 Gateway 狀態';
  }catch(e){if(version===generation)el('updated').textContent='更新失敗，保留既有事件：'+String(e)}
  finally{if(version===generation)loading=false}
 }
-function render(){el('rows').replaceChildren();for(const e of events){if(filter&&e.client_ip!==filter)continue;if(el('mode').value!=='all'&&e.route!==el('mode').value)continue;const tr=document.createElement('tr');const score=e.model_probability==null?'模型無分數':'模型 '+(e.model_probability*100).toFixed(4)+'%';for(const t of [e.at+' / '+(e.sequence??'—'),e.client_ip??'未記錄',e.method?e.method+' '+e.path:e.kind,e.route??'管理',score+' / '+(e.decision_source??'—'),e.status??'—']){const td=document.createElement('td');td.textContent=t;tr.append(td)}if(e.route==='sandbox')tr.className='bad';tr.onclick=()=>{el('detail').textContent=JSON.stringify(e,null,2);selectedVisitor=e.visitor_id};el('rows').append(tr)}}
+function render(){el('rows').replaceChildren();for(const e of events){if(filter&&e.client_ip!==filter)continue;if(el('mode').value!=='all'&&e.route!==el('mode').value)continue;const tr=document.createElement('tr');const score=e.model_probability==null?'模型無分數':'模型 '+(e.model_probability*100).toFixed(4)+'%';for(const t of [formatTaiwanTime(e.at)+' / '+(e.sequence??'—'),e.client_ip??'未記錄',e.method?e.method+' '+e.path:e.kind,e.route??'管理',score+' / '+(e.decision_source??'—'),e.status??'—']){const td=document.createElement('td');td.textContent=t;tr.append(td)}if(e.route==='sandbox')tr.className='bad';tr.onclick=()=>{el('detail').textContent=JSON.stringify(e,null,2);selectedVisitor=e.visitor_id};el('rows').append(tr)}}
 el('load').onclick=()=>load(true);el('more').onclick=()=>load(false,true);el('mode').onchange=render;
 el('visitor').onchange=()=>load(true);el('clear').onclick=()=>{el('visitor').value='';load(true)};
 el('release').onclick=async()=>{const id=selectedVisitor;if(!/^[a-f0-9]{32}$/.test(id)){alert('請先選擇訪客');return}if(!confirm('解除訪客 '+id+' 的沙盒標記？下一次可疑請求仍會重新觸發。'))return;const r=await fetch('/api/release/'+id,{method:'POST',headers:{'x-soc-action':'release'}});el('detail').textContent=await r.text();load()};
