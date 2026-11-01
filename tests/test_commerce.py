@@ -236,15 +236,32 @@ def test_encoded_traversal_cannot_reach_admin(system):
         assert len(calls) == before
 
 
+def test_unavailable_required_model_retries_without_forwarding_or_quarantining(system):
+    client, _, audit, calls = system
+    detector=Detector()
+    detector.model_required=True
+    detector.model_status='unavailable_or_incompatible'
+    client.app.state.detector=detector
+    response=client.get('/store/products?q=cotton')
+    assert response.status_code==503
+    assert response.headers['retry-after']=='1'
+    assert not calls
+    assert audit.events[-1]['retry_required'] is True
+    assert audit.events[-1]['attack'] is False
+    client.app.state.detector=Detector()
+    assert client.get('/store/products?q=cotton').json()['host']=='real-medusa'
+
+
 @pytest.mark.asyncio
 async def test_model_timeout_uses_rules_and_does_not_spawn_unlimited_work():
-    detector = Detector(timeout=0.001)
+    detector = Detector(timeout=0.001, queue_timeout=0.001)
     detector.model = object()
     detector._predict = lambda values: time.sleep(0.1) or 0.1
     result = await detector.assess("a", "GET", "/", "q=UNION SELECT 1", {}, b"")
     assert result["attack"] and result["fallback"] == "model_error_or_timeout"
     second = await detector.assess("a", "GET", "/", "", {}, b"")
-    assert second["fallback"] == "model_busy"
+    assert second["fallback"] == "model_queue_timeout"
+    assert second['retry_required'] is True
     await asyncio.sleep(0.15)
 
 

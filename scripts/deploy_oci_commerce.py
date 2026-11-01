@@ -147,13 +147,15 @@ def main() -> None:
                 "gateway", "python", "/tmp/check.py", "--url", "http://edge-preview:8080")
         command(ROOT, "exec", "-T", "gateway", "python", "/models/runtime.py", "--self-test")
         command(ROOT, "exec", "-T", "gateway", "python", "-c",
-                'import os,json,urllib.request; '
+                'import os,json,urllib.request,hashlib; from pathlib import Path; '
                 'req=urllib.request.Request("http://localhost:8000/_control/status",'
                 'headers={"x-control-token":os.environ["CONTROL_TOKEN"]}); '
                 'state=json.load(urllib.request.urlopen(req,timeout=10)); '
                 'assert state["model"]=="ready_five_class", state["model"]; '
                 'assert state["model_mode"]=="enforce", state["model_mode"]; '
-                'print("Five-class model ready in enforce mode")')
+                'expected=hashlib.sha256(Path("/models/bundle.json").read_bytes()).hexdigest(); '
+                'assert state["model_bundle_sha256"]==expected; '
+                'print("Five-class model ready in enforce mode; bundle:", expected)')
         for script in ["smoke_commerce.py"]:
             command(
                 ROOT,

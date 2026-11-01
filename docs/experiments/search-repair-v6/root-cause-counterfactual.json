@@ -1,0 +1,92 @@
+[
+  {
+    "value": "紅色上衣",
+    "query": "q=%E7%B4%85%E8%89%B2%E4%B8%8A%E8%A1%A3",
+    "score": 0.9094802141189575,
+    "class": "sqli"
+  },
+  {
+    "value": "紅色上衣",
+    "query": "limit=20&offset=0&q=%E7%B4%85%E8%89%B2%E4%B8%8A%E8%A1%A3",
+    "score": 0.01722496747970581,
+    "class": "normal"
+  },
+  {
+    "value": "紅色上衣",
+    "query": "q=%E7%B4%85%E8%89%B2%E4%B8%8A%E8%A1%A3&limit=20&offset=0",
+    "score": 0.034992754459381104,
+    "class": "normal"
+  },
+  {
+    "value": "100% cotton",
+    "query": "q=100%25+cotton",
+    "score": 0.9637197256088257,
+    "class": "sqli"
+  },
+  {
+    "value": "100% cotton",
+    "query": "limit=20&offset=0&q=100%25+cotton",
+    "score": 0.0007353425025939941,
+    "class": "normal"
+  },
+  {
+    "value": "100% cotton",
+    "query": "q=100%25+cotton&limit=20&offset=0",
+    "score": 0.2533162236213684,
+    "class": "normal"
+  },
+  {
+    "value": "C++",
+    "query": "q=C%2B%2B",
+    "score": 0.9904264807701111,
+    "class": "cmdi"
+  },
+  {
+    "value": "C++",
+    "query": "limit=20&offset=0&q=C%2B%2B",
+    "score": 0.03157663345336914,
+    "class": "normal"
+  },
+  {
+    "value": "C++",
+    "query": "q=C%2B%2B&limit=20&offset=0",
+    "score": 0.13318753242492676,
+    "class": "normal"
+  },
+  {
+    "value": "日本製",
+    "query": "q=%E6%97%A5%E6%9C%AC%E8%A3%BD",
+    "score": 0.997230052947998,
+    "class": "cmdi"
+  },
+  {
+    "value": "日本製",
+    "query": "limit=20&offset=0&q=%E6%97%A5%E6%9C%AC%E8%A3%BD",
+    "score": 0.07135564088821411,
+    "class": "normal"
+  },
+  {
+    "value": "日本製",
+    "query": "q=%E6%97%A5%E6%9C%AC%E8%A3%BD&limit=20&offset=0",
+    "score": 0.41501694917678833,
+    "class": "normal"
+  },
+  {
+    "value": "cotton shirt",
+    "query": "q=cotton+shirt",
+    "score": 0.0007390379905700684,
+    "class": "normal"
+  },
+  {
+    "value": "cotton shirt",
+    "query": "limit=20&offset=0&q=cotton+shirt",
+    "score": 0.00020378828048706055,
+    "class": "normal"
+  },
+  {
+    "value": "cotton shirt",
+    "query": "q=cotton+shirt&limit=20&offset=0",
+    "score": 0.0004799365997314453,
+    "class": "normal"
+  }
+]

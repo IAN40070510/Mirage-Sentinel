@@ -1,0 +1,74 @@
+{
+  "created_at": "2026-11-01T06:47:57.497+00:00",
+  "scope": "Previously disclosed development regressions; not blind evaluation",
+  "bundle_sha256": "40df8e610f453dd3ee5b6b3ed031f3ae7321cce81c6d4c6234e1bbf2af828041",
+  "detector_sha256": "3e465d9a7bd76a3863fc51ffc45c57c07a43d6fba10a43e6a6ca39495c403484",
+  "previous_pool_rows": 2156,
+  "previous_pool_flagged": 0,
+  "previous_pool_fallbacks": 0,
+  "groups": {
+    "q_only": {
+      "rows": 370,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "pagination_first": {
+      "rows": 370,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "pagination_last": {
+      "rows": 370,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "sort_first": {
+      "rows": 370,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "percent_spaces": {
+      "rows": 306,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "json_note": {
+      "rows": 370,
+      "flagged": 0,
+      "fallback": 0
+    }
+  },
+  "previous_pool_problems": [],
+  "legacy_counts": {
+    "path_traversal": 6500,
+    "cmdi": 6000,
+    "sqli": 6500,
+    "xss": 6000,
+    "normal": 102
+  },
+  "legacy_current_service_confusion": [
+    [
+      102,
+      0
+    ],
+    [
+      1,
+      24999
+    ]
+  ],
+  "legacy_problems": [
+    {
+      "sample_id": "external-v1-httpparams-0009920",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=c%3Awindowswin.ini",
+        "headers": {},
+        "body": null
+      },
+      "label": "path_traversal",
+      "model_score": 0.3210919499397278,
+      "rules": []
+    }
+  ]
+}

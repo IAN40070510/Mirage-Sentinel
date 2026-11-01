@@ -1,0 +1,39 @@
+{
+  "version": "commerce-text-five-v1",
+  "labels": [
+    "normal",
+    "sqli",
+    "xss",
+    "cmdi",
+    "path_traversal"
+  ],
+  "rules": {
+    "sqli": "(?:\\bunion\\s+(?:all\\s+)?select\\b|\\bor\\s+['\\\"]?\\d+['\\\"]?\\s*=\\s*['\\\"]?\\d+|\\bsleep\\s*\\(|\\bdrop\\s+table\\b)",
+    "xss": "<\\s*script\\b|javascript\\s*:|\\bonerror\\s*=",
+    "path_traversal": "(?:\\.\\.[/\\\\]){2,}|/etc/(?:passwd|shadow)",
+    "cmdi": ";\\s*(?:cat|curl|wget|bash|sh|id|whoami)\\b|\\$\\(|\\b(?:exec|system)\\s*\\("
+  },
+  "threshold": 0.465,
+  "threshold_selection": {
+    "method": "validation-grid-201-max-recall-under-fpr",
+    "max_fpr": 0.001,
+    "validation_fpr": 0.0005214670606640013,
+    "normal_route_fpr_constraint": true,
+    "validation_recall": 1.0,
+    "warning": "Probabilities are not calibrated; threshold is validation-selected"
+  },
+  "validated_for_deployment": false,
+  "sha256": {
+    "xgb.json": "b2e4af2219d23d2333c6cda6b9549fcd80a316bbee4c18f5463e268334515162",
+    "features.json": "dc5b36c0323fa6ee6868e04fd91ff6c8d3f4bfc0f3bca8c6eaa2fda9b495918d",
+    "runtime.py": "f3eb44b1b1613c4d8f3b97c807d0057177f55bc099c8cba86fd4b1f32992f73f",
+    "portability-probes.json": "072f5b37005b17b6e1ed310606e9537c223a629a4aa0140117306e6fc8026b61"
+  },
+  "feature_count": 8014,
+  "versions": {
+    "numpy": "2.2.6",
+    "scipy": "1.17.1",
+    "scikit-learn": "1.8.0",
+    "xgboost": "3.2.0"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "record_type": "predeployment_validation_snapshot",
+  "local_validation": "passed",
+  "reserved_validation": "passed",
+  "deployment_authority": "https://github.com/IAN40070510/Mirage-Sentinel/actions/workflows/deploy.yml",
+  "bundle_sha256": "40df8e610f453dd3ee5b6b3ed031f3ae7321cce81c6d4c6234e1bbf2af828041",
+  "note": "This frozen record does not assert a live deployment result. Deployment and bundle verification logs are authoritative."
+}

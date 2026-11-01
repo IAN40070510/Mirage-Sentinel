@@ -1,0 +1,78 @@
+{
+  "train": {
+    "total": 168557,
+    "labels": {
+      "normal": 20983,
+      "cmdi": 35640,
+      "sqli": 40640,
+      "path_traversal": 34700,
+      "xss": 36594
+    },
+    "source_fields": {
+      "external": 11093,
+      "ai": 157464
+    },
+    "datasets": {
+      "Mirage-Sentinel/isolated-shopping-capture": 1953,
+      "Mirage-Sentinel/original-commerce-v4.1-templates": 94652,
+      "Mirage-Sentinel/comparison-context-v5": 7108,
+      "Morzeux/HttpParamsDataset": 5850,
+      "Mirage-Sentinel/literal-context-v4": 6461,
+      "mendeley/z6xm42spk6": 2700,
+      "fmereani/Cross-Site-Scripting-XSS": 420,
+      "Mirage-Sentinel/multilingual-context-v6": 8728,
+      "Mirage-Sentinel/search-shape-counterfactual-v3": 18805,
+      "danielmiessler/SecLists": 170,
+      "Mirage-Sentinel/query-context-augmentation": 21710
+    }
+  },
+  "validation": {
+    "total": 34940,
+    "labels": {
+      "normal": 5753,
+      "path_traversal": 7340,
+      "sqli": 7550,
+      "cmdi": 7050,
+      "xss": 7247
+    },
+    "source_fields": {
+      "external": 2362,
+      "ai": 32578
+    },
+    "datasets": {
+      "Mirage-Sentinel/isolated-shopping-capture": 492,
+      "Mirage-Sentinel/original-commerce-v4.1-templates": 18850,
+      "Mirage-Sentinel/comparison-context-v5": 1480,
+      "Morzeux/HttpParamsDataset": 1250,
+      "Mirage-Sentinel/literal-context-v4": 1345,
+      "mendeley/z6xm42spk6": 500,
+      "fmereani/Cross-Site-Scripting-XSS": 90,
+      "Mirage-Sentinel/multilingual-context-v6": 2000,
+      "Mirage-Sentinel/search-shape-counterfactual-v3": 4523,
+      "danielmiessler/SecLists": 30,
+      "Mirage-Sentinel/query-context-augmentation": 4380
+    }
+  },
+  "test": {
+    "total": 25102,
+    "labels": {
+      "path_traversal": 6500,
+      "cmdi": 6000,
+      "sqli": 6500,
+      "xss": 6000,
+      "normal": 102
+    },
+    "source_fields": {
+      "ai": 23002,
+      "external": 2100
+    },
+    "datasets": {
+      "Mirage-Sentinel/original-commerce-v4.1-templates": 18852,
+      "Morzeux/HttpParamsDataset": 1250,
+      "mendeley/z6xm42spk6": 700,
+      "fmereani/Cross-Site-Scripting-XSS": 100,
+      "danielmiessler/SecLists": 50,
+      "Mirage-Sentinel/query-context-augmentation": 4150
+    }
+  }
+}

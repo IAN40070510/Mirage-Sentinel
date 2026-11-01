@@ -1,0 +1,3589 @@
+{
+  "created_at": "2026-11-01T06:47:55.023+00:00",
+  "bundle_sha256": "40df8e610f453dd3ee5b6b3ed031f3ae7321cce81c6d4c6234e1bbf2af828041",
+  "mode": "enforce",
+  "threshold": 0.465,
+  "fit_or_tuning": false,
+  "scope": "Synthetic diagnostic strings; intended attack labels do not prove exploitability. Replayed acceptance is regression only, not a new blind evaluation.",
+  "probe_rows": 70,
+  "probes": [
+    {
+      "name": "benign product search: cotton shirt",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=cotton+shirt",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 10.339200031012297,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9955258965492249,
+          "sqli": 0.0004116644850000739,
+          "xss": 0.00026344353682361543,
+          "cmdi": 0.0016203144332394004,
+          "path_traversal": 0.0021787157747894526
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.0044741034507751465,
+        "model_probability": 0.0044741034507751465,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 14,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign product search: 紅色上衣",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=%E7%B4%85%E8%89%B2%E4%B8%8A%E8%A1%A3",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 3.4753999207168818,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9988182187080383,
+          "sqli": 0.0002231266553280875,
+          "xss": 9.147149103228003e-05,
+          "cmdi": 0.0006496679270640016,
+          "path_traversal": 0.00021750670566689223
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.00118178129196167,
+        "model_probability": 0.00118178129196167,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 38,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign product search: O'Reilly",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=O%27Reilly",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 3.0362000688910484,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.54660564661026,
+          "sqli": 0.4504135251045227,
+          "xss": 9.704282274469733e-05,
+          "cmdi": 0.0011627854546532035,
+          "path_traversal": 0.0017209890065714717
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.45339435338974,
+        "model_probability": 0.45339435338974,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 12,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign product search: AT&T",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=AT%26T",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.861600019969046,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.8898782134056091,
+          "sqli": 0.031859952956438065,
+          "xss": 0.0008619576110504568,
+          "cmdi": 0.06577606499195099,
+          "path_traversal": 0.011623822152614594
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.11012178659439087,
+        "model_probability": 0.11012178659439087,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 8,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign product search: 100% cotton",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=100%25+cotton",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.796499989926815,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9494372010231018,
+          "sqli": 0.04934253171086311,
+          "xss": 8.438558870693669e-05,
+          "cmdi": 0.00018912609084509313,
+          "path_traversal": 0.0009467963827773929
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.05056279897689819,
+        "model_probability": 0.05056279897689819,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 15,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign product search: size < 10",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=size+%3C+10",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.786400029435754,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9995934367179871,
+          "sqli": 2.924944601545576e-05,
+          "xss": 0.00016439505270682275,
+          "cmdi": 0.00011731139966286719,
+          "path_traversal": 9.567010420141742e-05
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.00040656328201293945,
+        "model_probability": 0.00040656328201293945,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 13,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign product search: price >= 100",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=price+%3E%3D+100",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.5464999489486217,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9992820620536804,
+          "sqli": 3.705568451550789e-05,
+          "xss": 0.00042307580588385463,
+          "cmdi": 0.0001758668222464621,
+          "path_traversal": 8.199825242627412e-05
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.0007179379463195801,
+        "model_probability": 0.0007179379463195801,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 18,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign product search: shirt; blue",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=shirt%3B+blue",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.624399960041046,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9538503289222717,
+          "sqli": 0.0015668314881622791,
+          "xss": 0.031677063554525375,
+          "cmdi": 0.004593560937792063,
+          "path_traversal": 0.008312215097248554
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.04614967107772827,
+        "model_probability": 0.04614967107772827,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 15,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign product search: C++",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=C%2B%2B",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.7911000652238727,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.8732823729515076,
+          "sqli": 0.006238478701561689,
+          "xss": 0.0012893659295514226,
+          "cmdi": 0.10390087217092514,
+          "path_traversal": 0.015288946218788624
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.12671762704849243,
+        "model_probability": 0.12671762704849243,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 9,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign product search: 日本製",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=%E6%97%A5%E6%9C%AC%E8%A3%BD",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.75559991132468,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9995749592781067,
+          "sqli": 8.238809095928445e-05,
+          "xss": 3.417046173126437e-05,
+          "cmdi": 0.0002019162056967616,
+          "path_traversal": 0.00010658130486262962
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.00042504072189331055,
+        "model_probability": 0.00042504072189331055,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 29,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign product search: 優惠 🎉",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=%E5%84%AA%E6%83%A0+%F0%9F%8E%89",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.764499979093671,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.999599039554596,
+          "sqli": 7.452449790434912e-05,
+          "xss": 3.137779640383087e-05,
+          "cmdi": 0.00021004398877266794,
+          "path_traversal": 8.506006997777149e-05
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.00040096044540405273,
+        "model_probability": 0.00040096044540405273,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 33,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign product search: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 4.007500014267862,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.8563035130500793,
+          "sqli": 0.03855453431606293,
+          "xss": 0.056133419275283813,
+          "cmdi": 0.014476108364760876,
+          "path_traversal": 0.03453243896365166
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.14369648694992065,
+        "model_probability": 0.14369648694992065,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 1002,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign product search: javascript: the definitive guide",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=javascript%3A+the+definitive+guide",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 3.31579998601228,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9817125201225281,
+          "sqli": 0.0002588170173112303,
+          "xss": 0.0009317053481936455,
+          "cmdi": 0.0005437626969069242,
+          "path_traversal": 0.016553133726119995
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.018287479877471924,
+        "model_probability": 0.018287479877471924,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 36,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign product search: UNION SELECT SQL textbook",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=UNION+SELECT+SQL+textbook",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.7516999980434775,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.999419093132019,
+          "sqli": 0.0004251222126185894,
+          "xss": 3.45055123034399e-05,
+          "cmdi": 4.317007915233262e-05,
+          "path_traversal": 7.81115231802687e-05
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.000580906867980957,
+        "model_probability": 0.000580906867980957,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 27,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign product search: ../../ print pattern",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=..%2F..%2F+print+pattern",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.6567999739199877,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9866518974304199,
+          "sqli": 0.00014085366274230182,
+          "xss": 0.00017740247130859643,
+          "cmdi": 0.001783799147233367,
+          "path_traversal": 0.011246081441640854
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.013348102569580078,
+        "model_probability": 0.013348102569580078,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 26,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign product search: sale >= 250",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=sale+%3E%3D+250",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.783200005069375,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9992640614509583,
+          "sqli": 3.493554686428979e-05,
+          "xss": 0.00048088241601362824,
+          "cmdi": 0.00012813658395316452,
+          "path_traversal": 9.19406083994545e-05
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.000735938549041748,
+        "model_probability": 0.000735938549041748,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 17,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign product search: 幅 < 28",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=%E5%B9%85+%3C+28",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.5505999801680446,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.996187150478363,
+          "sqli": 0.00014215646660886705,
+          "xss": 0.0003412505320739001,
+          "cmdi": 0.0031428150832653046,
+          "path_traversal": 0.00018660507339518517
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.003812849521636963,
+        "model_probability": 0.003812849521636963,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 18,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign product search: baleares (illes)",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=baleares+%28illes%29",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.5431999238207936,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9918873906135559,
+          "sqli": 0.0034516274463385344,
+          "xss": 0.0004548932483885437,
+          "cmdi": 0.0006720985402353108,
+          "path_traversal": 0.0035339556634426117
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.008112609386444092,
+        "model_probability": 0.008112609386444092,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 22,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign product search: javascript: browser reference",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=javascript%3A+browser+reference",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.8415999840945005,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9981446266174316,
+          "sqli": 0.00019736308604478836,
+          "xss": 0.0008465630235150456,
+          "cmdi": 0.00010976124758599326,
+          "path_traversal": 0.0007017237367108464
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.0018553733825683594,
+        "model_probability": 0.0018553733825683594,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 33,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign product search: ../../ textile illustration",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=..%2F..%2F+textile+illustration",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.5893000420182943,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9989877343177795,
+          "sqli": 2.4510562070645392e-05,
+          "xss": 3.701898822328076e-05,
+          "cmdi": 6.246879638638347e-05,
+          "path_traversal": 0.0008882820839062333
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.001012265682220459,
+        "model_probability": 0.001012265682220459,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 33,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign route: GET /dk",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/dk",
+        "query": "",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.3497999645769596,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9999809265136719,
+          "sqli": 3.3435592285968596e-06,
+          "xss": 6.668410605925601e-06,
+          "cmdi": 4.522243216342758e-06,
+          "path_traversal": 4.552459813567111e-06
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 1.9073486328125e-05,
+        "model_probability": 1.9073486328125e-05,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 3,
+          "query_length": 0,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign route: GET /store/orders/order_01JABCDEFGHIJK",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/orders/order_01JABCDEFGHIJK",
+        "query": "",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.461700001731515,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.999995231628418,
+          "sqli": 2.316030986548867e-06,
+          "xss": 6.181771823321469e-07,
+          "cmdi": 5.135711376169638e-07,
+          "path_traversal": 1.3621011021314189e-06
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 4.76837158203125e-06,
+        "model_probability": 4.76837158203125e-06,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 34,
+          "query_length": 0,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign route: GET /store/customers/me",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/customers/me",
+        "query": "",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.444599987939,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9999852180480957,
+          "sqli": 5.411387064668816e-06,
+          "xss": 1.4048690673007513e-06,
+          "cmdi": 4.470553449209547e-06,
+          "path_traversal": 3.5238233522250084e-06
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 1.4781951904296875e-05,
+        "model_probability": 1.4781951904296875e-05,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 19,
+          "query_length": 0,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign route: OPTIONS /store/products",
+      "expected": "normal",
+      "request": {
+        "method": "OPTIONS",
+        "path": "/store/products",
+        "query": "",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.407599939033389,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9980316758155823,
+          "sqli": 0.0013077225303277373,
+          "xss": 4.8868561862036586e-05,
+          "cmdi": 0.00041463234811089933,
+          "path_traversal": 0.00019714700465556234
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.0019683241844177246,
+        "model_probability": 0.0019683241844177246,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 0,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign route: HEAD /store/products",
+      "expected": "normal",
+      "request": {
+        "method": "HEAD",
+        "path": "/store/products",
+        "query": "",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 3.3361000241711736,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9947049021720886,
+          "sqli": 0.0032351429108530283,
+          "xss": 9.456428961129859e-05,
+          "cmdi": 0.0016020931070670485,
+          "path_traversal": 0.0003632925800047815
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.005295097827911377,
+        "model_probability": 0.005295097827911377,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 0,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign route: GET /favicon.ico",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/favicon.ico",
+        "query": "",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.926299930550158,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9999855756759644,
+          "sqli": 2.7980283903161762e-06,
+          "xss": 6.558061159012141e-06,
+          "cmdi": 1.9473754946375266e-06,
+          "path_traversal": 3.0857463571010157e-06
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 1.4424324035644531e-05,
+        "model_probability": 1.4424324035644531e-05,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 12,
+          "query_length": 0,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign route: GET /robots.txt",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/robots.txt",
+        "query": "",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.3987999884411693,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9999780654907227,
+          "sqli": 4.135589733778033e-06,
+          "xss": 8.196928320103325e-06,
+          "cmdi": 3.4295574096177006e-06,
+          "path_traversal": 6.129218490968924e-06
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 2.193450927734375e-05,
+        "model_probability": 2.193450927734375e-05,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 11,
+          "query_length": 0,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign route: GET /store/products/nonexistent-product",
+      "expected": "normal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products/nonexistent-product",
+        "query": "",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.4465000024065375,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9956545829772949,
+          "sqli": 0.002579563995823264,
+          "xss": 0.00022907227685209364,
+          "cmdi": 0.0007213381468318403,
+          "path_traversal": 0.0008154779206961393
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.004345417022705078,
+        "model_probability": 0.004345417022705078,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 35,
+          "query_length": 0,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign cart address: {'first_name': \"O'Reilly\", 'city': '台北', 'address_1': '信義路100號'}",
+      "expected": "normal",
+      "request": {
+        "method": "POST",
+        "path": "/store/carts/cart_01JABCDEFGHIJK",
+        "query": "",
+        "body": "{\"first_name\": \"O'Reilly\", \"city\": \"台北\", \"address_1\": \"信義路100號\"}",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "latency_ms": 5.245100008323789,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.999247670173645,
+          "sqli": 0.000199133122805506,
+          "xss": 4.583115878631361e-05,
+          "cmdi": 6.727986328769475e-05,
+          "path_traversal": 0.000440143805462867
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.0007523298263549805,
+        "model_probability": 0.0007523298263549805,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 32,
+          "query_length": 0,
+          "body_length": 76,
+          "header_count": 1,
+          "header_bytes": 28,
+          "body_entropy": 4.963075664868002,
+          "special_ratio": 0.34375,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 1,
+          "json_body": 1,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign cart address: {'first_name': 'Anne-Marie', 'city': 'Montréal', 'address_1': '12 Rue Saint-Paul'}",
+      "expected": "normal",
+      "request": {
+        "method": "POST",
+        "path": "/store/carts/cart_01JABCDEFGHIJK",
+        "query": "",
+        "body": "{\"first_name\": \"Anne-Marie\", \"city\": \"Montréal\", \"address_1\": \"12 Rue Saint-Paul\"}",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "latency_ms": 3.0120000010356307,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9998685121536255,
+          "sqli": 2.5868252123473212e-05,
+          "xss": 8.842353054205887e-06,
+          "cmdi": 1.1691401596181095e-05,
+          "path_traversal": 8.501592674292624e-05
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.00013148784637451172,
+        "model_probability": 0.00013148784637451172,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 32,
+          "query_length": 0,
+          "body_length": 83,
+          "header_count": 1,
+          "header_bytes": 28,
+          "body_entropy": 4.5568482817013285,
+          "special_ratio": 0.2804878048780488,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 1,
+          "json_body": 1,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "benign cart address: {'metadata': {'note': 'Please deliver after 18:00; ring twice.'}}",
+      "expected": "normal",
+      "request": {
+        "method": "POST",
+        "path": "/store/carts/cart_01JABCDEFGHIJK",
+        "query": "",
+        "body": "{\"metadata\": {\"note\": \"Please deliver after 18:00; ring twice.\"}}",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "latency_ms": 2.8406999772414565,
+      "result": {
+        "attack": false,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9940517544746399,
+          "sqli": 0.0013230304466560483,
+          "xss": 0.0012787068262696266,
+          "cmdi": 0.0021841581910848618,
+          "path_traversal": 0.0011623697355389595
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.005948245525360107,
+        "model_probability": 0.005948245525360107,
+        "rule_score": 0.05,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [],
+        "feature_version": 2,
+        "features": {
+          "path_length": 32,
+          "query_length": 0,
+          "body_length": 65,
+          "header_count": 1,
+          "header_bytes": 28,
+          "body_entropy": 4.350903152811622,
+          "special_ratio": 0.23076923076923078,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 1,
+          "json_body": 1,
+          "rule_hits": 0
+        }
+      }
+    },
+    {
+      "name": "attack query: ' OR 1=1--",
+      "expected": "sqli",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=%27+OR+1%3D1--",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.6320000179111958,
+      "result": {
+        "attack": true,
+        "model_attack": true,
+        "model_mode": "enforce",
+        "predicted_label": "sqli",
+        "class_probabilities": {
+          "normal": 0.0007550615118816495,
+          "sqli": 0.9856169819831848,
+          "xss": 0.0009328568121418357,
+          "cmdi": 0.011235726065933704,
+          "path_traversal": 0.0014593254309147596
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.9992449283599854,
+        "model_probability": 0.9992449283599854,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "sqli"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 16,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack body: ' OR 1=1--",
+      "expected": "sqli",
+      "request": {
+        "method": "POST",
+        "path": "/store/carts/cart_01JABCDEFGHIJK",
+        "query": "",
+        "body": "{\"metadata\": {\"note\": \"' OR 1=1--\"}}",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "latency_ms": 2.697100047953427,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9867618083953857,
+          "sqli": 0.013202587142586708,
+          "xss": 1.2798105672118254e-05,
+          "cmdi": 1.5284189430531114e-05,
+          "path_traversal": 7.550298960268265e-06
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.013238191604614258,
+        "model_probability": 0.013238191604614258,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "sqli"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 32,
+          "query_length": 0,
+          "body_length": 36,
+          "header_count": 1,
+          "header_bytes": 28,
+          "body_entropy": 3.9193819456463705,
+          "special_ratio": 0.4444444444444444,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 1,
+          "json_body": 1,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack header: ' OR 1=1--",
+      "expected": "sqli",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "limit=20",
+        "body": "",
+        "headers": {
+          "x-probe": "' OR 1=1--"
+        }
+      },
+      "latency_ms": 2.7074000099673867,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.996677041053772,
+          "sqli": 0.0023934440687298775,
+          "xss": 5.8845511375693604e-05,
+          "cmdi": 0.0005755547899752855,
+          "path_traversal": 0.0002950773050542921
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.0033229589462280273,
+        "model_probability": 0.0033229589462280273,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "sqli"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 8,
+          "body_length": 0,
+          "header_count": 1,
+          "header_bytes": 17,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack query: ' UNION SELECT 1--",
+      "expected": "sqli",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=%27+UNION+SELECT+1--",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.853799960575998,
+      "result": {
+        "attack": true,
+        "model_attack": true,
+        "model_mode": "enforce",
+        "predicted_label": "sqli",
+        "class_probabilities": {
+          "normal": 7.036282477201894e-05,
+          "sqli": 0.9997714161872864,
+          "xss": 3.273240736234584e-06,
+          "cmdi": 0.00012562934716697782,
+          "path_traversal": 2.9285749405971728e-05
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.999929666519165,
+        "model_probability": 0.999929666519165,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "sqli"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 22,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack body: ' UNION SELECT 1--",
+      "expected": "sqli",
+      "request": {
+        "method": "POST",
+        "path": "/store/carts/cart_01JABCDEFGHIJK",
+        "query": "",
+        "body": "{\"metadata\": {\"note\": \"' UNION SELECT 1--\"}}",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "latency_ms": 3.4487999510020018,
+      "result": {
+        "attack": true,
+        "model_attack": true,
+        "model_mode": "enforce",
+        "predicted_label": "sqli",
+        "class_probabilities": {
+          "normal": 0.16293981671333313,
+          "sqli": 0.8370063900947571,
+          "xss": 1.9020782929146662e-05,
+          "cmdi": 2.3827575205359608e-05,
+          "path_traversal": 1.0930928510788362e-05
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.8370602130889893,
+        "model_probability": 0.8370602130889893,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "sqli"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 32,
+          "query_length": 0,
+          "body_length": 44,
+          "header_count": 1,
+          "header_bytes": 28,
+          "body_entropy": 4.308768198567055,
+          "special_ratio": 0.3409090909090909,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 1,
+          "json_body": 1,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack header: ' UNION SELECT 1--",
+      "expected": "sqli",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "limit=20",
+        "body": "",
+        "headers": {
+          "x-probe": "' UNION SELECT 1--"
+        }
+      },
+      "latency_ms": 2.8162000235170126,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.996677041053772,
+          "sqli": 0.0023934440687298775,
+          "xss": 5.8845511375693604e-05,
+          "cmdi": 0.0005755547899752855,
+          "path_traversal": 0.0002950773050542921
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.0033229589462280273,
+        "model_probability": 0.0033229589462280273,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "sqli"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 8,
+          "body_length": 0,
+          "header_count": 1,
+          "header_bytes": 25,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack query: '/**/OR/**/1=1--",
+      "expected": "sqli",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=%27%2F%2A%2A%2FOR%2F%2A%2A%2F1%3D1--",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 3.4446000354364514,
+      "result": {
+        "attack": true,
+        "model_attack": true,
+        "model_mode": "enforce",
+        "predicted_label": "sqli",
+        "class_probabilities": {
+          "normal": 3.124643990304321e-05,
+          "sqli": 0.9997641444206238,
+          "xss": 9.493459401710425e-06,
+          "cmdi": 0.00011953130888286978,
+          "path_traversal": 7.55695000407286e-05
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.9999687671661377,
+        "model_probability": 0.9999687671661377,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "sqli"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 38,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack body: '/**/OR/**/1=1--",
+      "expected": "sqli",
+      "request": {
+        "method": "POST",
+        "path": "/store/carts/cart_01JABCDEFGHIJK",
+        "query": "",
+        "body": "{\"metadata\": {\"note\": \"'/**/OR/**/1=1--\"}}",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "latency_ms": 2.7215000009164214,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9878326654434204,
+          "sqli": 0.012134800665080547,
+          "xss": 9.866701475402806e-06,
+          "cmdi": 1.4076391380513087e-05,
+          "path_traversal": 8.547212928533554e-06
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.01216733455657959,
+        "model_probability": 0.01216733455657959,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "sqli"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 32,
+          "query_length": 0,
+          "body_length": 42,
+          "header_count": 1,
+          "header_bytes": 28,
+          "body_entropy": 4.082328136858431,
+          "special_ratio": 0.5714285714285714,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 1,
+          "json_body": 1,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack header: '/**/OR/**/1=1--",
+      "expected": "sqli",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "limit=20",
+        "body": "",
+        "headers": {
+          "x-probe": "'/**/OR/**/1=1--"
+        }
+      },
+      "latency_ms": 2.675900002941489,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.996677041053772,
+          "sqli": 0.0023934440687298775,
+          "xss": 5.8845511375693604e-05,
+          "cmdi": 0.0005755547899752855,
+          "path_traversal": 0.0002950773050542921
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.0033229589462280273,
+        "model_probability": 0.0033229589462280273,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "sqli"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 8,
+          "body_length": 0,
+          "header_count": 1,
+          "header_bytes": 23,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack query: <script>alert(1)</script>",
+      "expected": "xss",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=%3Cscript%3Ealert%281%29%3C%2Fscript%3E",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.74979998357594,
+      "result": {
+        "attack": true,
+        "model_attack": true,
+        "model_mode": "enforce",
+        "predicted_label": "xss",
+        "class_probabilities": {
+          "normal": 9.354462804367358e-07,
+          "sqli": 7.4947374741896056e-06,
+          "xss": 0.9999810457229614,
+          "cmdi": 4.895773145108251e-06,
+          "path_traversal": 5.642475116474088e-06
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.9999990463256836,
+        "model_probability": 0.9999990463256836,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "xss"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 41,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack body: <script>alert(1)</script>",
+      "expected": "xss",
+      "request": {
+        "method": "POST",
+        "path": "/store/carts/cart_01JABCDEFGHIJK",
+        "query": "",
+        "body": "{\"metadata\": {\"note\": \"<script>alert(1)</script>\"}}",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "latency_ms": 2.9548000311478972,
+      "result": {
+        "attack": true,
+        "model_attack": true,
+        "model_mode": "enforce",
+        "predicted_label": "xss",
+        "class_probabilities": {
+          "normal": 6.823686271673068e-05,
+          "sqli": 8.329965567099862e-06,
+          "xss": 0.9999121427536011,
+          "cmdi": 7.648396604054142e-06,
+          "path_traversal": 3.6464889490162022e-06
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.9999317526817322,
+        "model_probability": 0.9999317526817322,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "xss"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 32,
+          "query_length": 0,
+          "body_length": 51,
+          "header_count": 1,
+          "header_bytes": 28,
+          "body_entropy": 4.32871308681501,
+          "special_ratio": 0.37254901960784315,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 1,
+          "json_body": 1,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack header: <script>alert(1)</script>",
+      "expected": "xss",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "limit=20",
+        "body": "",
+        "headers": {
+          "x-probe": "<script>alert(1)</script>"
+        }
+      },
+      "latency_ms": 2.8098999755457044,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.996677041053772,
+          "sqli": 0.0023934440687298775,
+          "xss": 5.8845511375693604e-05,
+          "cmdi": 0.0005755547899752855,
+          "path_traversal": 0.0002950773050542921
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.0033229589462280273,
+        "model_probability": 0.0033229589462280273,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "xss"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 8,
+          "body_length": 0,
+          "header_count": 1,
+          "header_bytes": 32,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack query: <svg/onload=alert(1)>",
+      "expected": "xss",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=%3Csvg%2Fonload%3Dalert%281%29%3E",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.660199999809265,
+      "result": {
+        "attack": true,
+        "model_attack": true,
+        "model_mode": "enforce",
+        "predicted_label": "xss",
+        "class_probabilities": {
+          "normal": 1.3558772025135113e-06,
+          "sqli": 1.2641016837733332e-05,
+          "xss": 0.9999797344207764,
+          "cmdi": 4.467502549232449e-06,
+          "path_traversal": 1.839008859860769e-06
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.9999986290931702,
+        "model_probability": 0.9999986290931702,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "xss"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 35,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack body: <svg/onload=alert(1)>",
+      "expected": "xss",
+      "request": {
+        "method": "POST",
+        "path": "/store/carts/cart_01JABCDEFGHIJK",
+        "query": "",
+        "body": "{\"metadata\": {\"note\": \"<svg/onload=alert(1)>\"}}",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "latency_ms": 2.844999893568456,
+      "result": {
+        "attack": true,
+        "model_attack": true,
+        "model_mode": "enforce",
+        "predicted_label": "xss",
+        "class_probabilities": {
+          "normal": 0.10825199633836746,
+          "sqli": 0.0015487323980778456,
+          "xss": 0.8884124755859375,
+          "cmdi": 0.0012249273713678122,
+          "path_traversal": 0.0005619371659122407
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.8917480111122131,
+        "model_probability": 0.8917480111122131,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "xss"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 32,
+          "query_length": 0,
+          "body_length": 47,
+          "header_count": 1,
+          "header_bytes": 28,
+          "body_entropy": 4.307159266931027,
+          "special_ratio": 0.3829787234042553,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 1,
+          "json_body": 1,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack header: <svg/onload=alert(1)>",
+      "expected": "xss",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "limit=20",
+        "body": "",
+        "headers": {
+          "x-probe": "<svg/onload=alert(1)>"
+        }
+      },
+      "latency_ms": 2.5932000717148185,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.996677041053772,
+          "sqli": 0.0023934440687298775,
+          "xss": 5.8845511375693604e-05,
+          "cmdi": 0.0005755547899752855,
+          "path_traversal": 0.0002950773050542921
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.0033229589462280273,
+        "model_probability": 0.0033229589462280273,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "xss"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 8,
+          "body_length": 0,
+          "header_count": 1,
+          "header_bytes": 28,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack query: <img src=x onerror=alert(1)>",
+      "expected": "xss",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=%3Cimg+src%3Dx+onerror%3Dalert%281%29%3E",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.876299899071455,
+      "result": {
+        "attack": true,
+        "model_attack": true,
+        "model_mode": "enforce",
+        "predicted_label": "xss",
+        "class_probabilities": {
+          "normal": 1.4002172292748583e-06,
+          "sqli": 6.149573891889304e-06,
+          "xss": 0.9999891519546509,
+          "cmdi": 1.8627440567797748e-06,
+          "path_traversal": 1.4484448911389336e-06
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.9999986290931702,
+        "model_probability": 0.9999986290931702,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "xss"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 42,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack body: <img src=x onerror=alert(1)>",
+      "expected": "xss",
+      "request": {
+        "method": "POST",
+        "path": "/store/carts/cart_01JABCDEFGHIJK",
+        "query": "",
+        "body": "{\"metadata\": {\"note\": \"<img src=x onerror=alert(1)>\"}}",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "latency_ms": 3.508100053295493,
+      "result": {
+        "attack": true,
+        "model_attack": true,
+        "model_mode": "enforce",
+        "predicted_label": "xss",
+        "class_probabilities": {
+          "normal": 0.05641160160303116,
+          "sqli": 5.248753950581886e-05,
+          "xss": 0.9434864521026611,
+          "cmdi": 3.3166390494443476e-05,
+          "path_traversal": 1.6270383639493957e-05
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.943588376045227,
+        "model_probability": 0.943588376045227,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "xss"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 32,
+          "query_length": 0,
+          "body_length": 54,
+          "header_count": 1,
+          "header_bytes": 28,
+          "body_entropy": 4.3498078173314845,
+          "special_ratio": 0.3333333333333333,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 1,
+          "json_body": 1,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack header: <img src=x onerror=alert(1)>",
+      "expected": "xss",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "limit=20",
+        "body": "",
+        "headers": {
+          "x-probe": "<img src=x onerror=alert(1)>"
+        }
+      },
+      "latency_ms": 2.8289000038057566,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.996677041053772,
+          "sqli": 0.0023934440687298775,
+          "xss": 5.8845511375693604e-05,
+          "cmdi": 0.0005755547899752855,
+          "path_traversal": 0.0002950773050542921
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.0033229589462280273,
+        "model_probability": 0.0033229589462280273,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "xss"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 8,
+          "body_length": 0,
+          "header_count": 1,
+          "header_bytes": 35,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack query: ; whoami",
+      "expected": "cmdi",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=%3B+whoami",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.5179999647662044,
+      "result": {
+        "attack": true,
+        "model_attack": true,
+        "model_mode": "enforce",
+        "predicted_label": "cmdi",
+        "class_probabilities": {
+          "normal": 0.0004560760280583054,
+          "sqli": 3.360862683621235e-05,
+          "xss": 0.00010614592611091211,
+          "cmdi": 0.9992221593856812,
+          "path_traversal": 0.00018198460747953504
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.9995439052581787,
+        "model_probability": 0.9995439052581787,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "command"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 12,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack body: ; whoami",
+      "expected": "cmdi",
+      "request": {
+        "method": "POST",
+        "path": "/store/carts/cart_01JABCDEFGHIJK",
+        "query": "",
+        "body": "{\"metadata\": {\"note\": \"; whoami\"}}",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "latency_ms": 2.5357999838888645,
+      "result": {
+        "attack": true,
+        "model_attack": true,
+        "model_mode": "enforce",
+        "predicted_label": "cmdi",
+        "class_probabilities": {
+          "normal": 0.0013945621903985739,
+          "sqli": 1.0745010513346642e-05,
+          "xss": 1.0744395694928244e-05,
+          "cmdi": 0.998578667640686,
+          "path_traversal": 5.252720256976318e-06
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.9986054301261902,
+        "model_probability": 0.9986054301261902,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "command"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 32,
+          "query_length": 0,
+          "body_length": 34,
+          "header_count": 1,
+          "header_bytes": 28,
+          "body_entropy": 3.7633584292311077,
+          "special_ratio": 0.38235294117647056,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 1,
+          "json_body": 1,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack header: ; whoami",
+      "expected": "cmdi",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "limit=20",
+        "body": "",
+        "headers": {
+          "x-probe": "; whoami"
+        }
+      },
+      "latency_ms": 2.6313000125810504,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.996677041053772,
+          "sqli": 0.0023934440687298775,
+          "xss": 5.8845511375693604e-05,
+          "cmdi": 0.0005755547899752855,
+          "path_traversal": 0.0002950773050542921
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.0033229589462280273,
+        "model_probability": 0.0033229589462280273,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "command"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 8,
+          "body_length": 0,
+          "header_count": 1,
+          "header_bytes": 15,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack query: $(id)",
+      "expected": "cmdi",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=%24%28id%29",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.856600098311901,
+      "result": {
+        "attack": true,
+        "model_attack": true,
+        "model_mode": "enforce",
+        "predicted_label": "cmdi",
+        "class_probabilities": {
+          "normal": 0.0007975840708240867,
+          "sqli": 0.00486172316595912,
+          "xss": 3.2783755159471184e-05,
+          "cmdi": 0.9941248297691345,
+          "path_traversal": 0.0001830568944569677
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.9992024302482605,
+        "model_probability": 0.9992024302482605,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "command"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 13,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack body: $(id)",
+      "expected": "cmdi",
+      "request": {
+        "method": "POST",
+        "path": "/store/carts/cart_01JABCDEFGHIJK",
+        "query": "",
+        "body": "{\"metadata\": {\"note\": \"$(id)\"}}",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "latency_ms": 3.1664000125601888,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9999666213989258,
+          "sqli": 8.986490684037562e-06,
+          "xss": 8.880118002707604e-06,
+          "cmdi": 1.100012923416216e-05,
+          "path_traversal": 4.473912213143194e-06
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 3.337860107421875e-05,
+        "model_probability": 3.337860107421875e-05,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "command"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 32,
+          "query_length": 0,
+          "body_length": 31,
+          "header_count": 1,
+          "header_bytes": 28,
+          "body_entropy": 3.7600172778496526,
+          "special_ratio": 0.4838709677419355,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 1,
+          "json_body": 1,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack header: $(id)",
+      "expected": "cmdi",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "limit=20",
+        "body": "",
+        "headers": {
+          "x-probe": "$(id)"
+        }
+      },
+      "latency_ms": 2.5043999776244164,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.996677041053772,
+          "sqli": 0.0023934440687298775,
+          "xss": 5.8845511375693604e-05,
+          "cmdi": 0.0005755547899752855,
+          "path_traversal": 0.0002950773050542921
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.0033229589462280273,
+        "model_probability": 0.0033229589462280273,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "command"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 8,
+          "body_length": 0,
+          "header_count": 1,
+          "header_bytes": 12,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack query: | id",
+      "expected": "cmdi",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=%7C+id",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.5480000767856836,
+      "result": {
+        "attack": true,
+        "model_attack": true,
+        "model_mode": "enforce",
+        "predicted_label": "cmdi",
+        "class_probabilities": {
+          "normal": 0.0025797828566282988,
+          "sqli": 0.00035889053833670914,
+          "xss": 2.5911509510478936e-05,
+          "cmdi": 0.9965290427207947,
+          "path_traversal": 0.000506365904584527
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.9974201917648315,
+        "model_probability": 0.9974201917648315,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "command"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 8,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack body: | id",
+      "expected": "cmdi",
+      "request": {
+        "method": "POST",
+        "path": "/store/carts/cart_01JABCDEFGHIJK",
+        "query": "",
+        "body": "{\"metadata\": {\"note\": \"| id\"}}",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "latency_ms": 2.7737999334931374,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9999661445617676,
+          "sqli": 9.262105777452234e-06,
+          "xss": 9.112738553085364e-06,
+          "cmdi": 1.101328780350741e-05,
+          "path_traversal": 4.422347956278827e-06
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 3.3855438232421875e-05,
+        "model_probability": 3.3855438232421875e-05,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "command"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 32,
+          "query_length": 0,
+          "body_length": 30,
+          "header_count": 1,
+          "header_bytes": 28,
+          "body_entropy": 3.581076011914607,
+          "special_ratio": 0.43333333333333335,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 1,
+          "json_body": 1,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack header: | id",
+      "expected": "cmdi",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "limit=20",
+        "body": "",
+        "headers": {
+          "x-probe": "| id"
+        }
+      },
+      "latency_ms": 2.400800003670156,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.996677041053772,
+          "sqli": 0.0023934440687298775,
+          "xss": 5.8845511375693604e-05,
+          "cmdi": 0.0005755547899752855,
+          "path_traversal": 0.0002950773050542921
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.0033229589462280273,
+        "model_probability": 0.0033229589462280273,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "command"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 8,
+          "body_length": 0,
+          "header_count": 1,
+          "header_bytes": 11,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack query: `id`",
+      "expected": "cmdi",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=%60id%60",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.2686999291181564,
+      "result": {
+        "attack": true,
+        "model_attack": true,
+        "model_mode": "enforce",
+        "predicted_label": "cmdi",
+        "class_probabilities": {
+          "normal": 0.0017466754652559757,
+          "sqli": 6.0429640143411234e-05,
+          "xss": 2.5635587007855065e-05,
+          "cmdi": 0.9976999163627625,
+          "path_traversal": 0.00046733987983316183
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.998253345489502,
+        "model_probability": 0.998253345489502,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "command"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 10,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack body: `id`",
+      "expected": "cmdi",
+      "request": {
+        "method": "POST",
+        "path": "/store/carts/cart_01JABCDEFGHIJK",
+        "query": "",
+        "body": "{\"metadata\": {\"note\": \"`id`\"}}",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "latency_ms": 2.8343000449240208,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9999663829803467,
+          "sqli": 9.219349522027187e-06,
+          "xss": 9.07067078514956e-06,
+          "cmdi": 1.0962447049678303e-05,
+          "path_traversal": 4.401933438202832e-06
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 3.361701965332031e-05,
+        "model_probability": 3.361701965332031e-05,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "command"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 32,
+          "query_length": 0,
+          "body_length": 30,
+          "header_count": 1,
+          "header_bytes": 28,
+          "body_entropy": 3.606238928653389,
+          "special_ratio": 0.4666666666666667,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 1,
+          "json_body": 1,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack header: `id`",
+      "expected": "cmdi",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "limit=20",
+        "body": "",
+        "headers": {
+          "x-probe": "`id`"
+        }
+      },
+      "latency_ms": 2.5867000222206116,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.996677041053772,
+          "sqli": 0.0023934440687298775,
+          "xss": 5.8845511375693604e-05,
+          "cmdi": 0.0005755547899752855,
+          "path_traversal": 0.0002950773050542921
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.0033229589462280273,
+        "model_probability": 0.0033229589462280273,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "command"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 8,
+          "body_length": 0,
+          "header_count": 1,
+          "header_bytes": 11,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack query: ../../etc/passwd",
+      "expected": "path_traversal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=..%2F..%2Fetc%2Fpasswd",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.4533000541850924,
+      "result": {
+        "attack": true,
+        "model_attack": true,
+        "model_mode": "enforce",
+        "predicted_label": "cmdi",
+        "class_probabilities": {
+          "normal": 0.07603298127651215,
+          "sqli": 0.0007257245015352964,
+          "xss": 0.00041136133950203657,
+          "cmdi": 0.7617908716201782,
+          "path_traversal": 0.1610390990972519
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.9239670038223267,
+        "model_probability": 0.9239670038223267,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "traversal"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 24,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack body: ../../etc/passwd",
+      "expected": "path_traversal",
+      "request": {
+        "method": "POST",
+        "path": "/store/carts/cart_01JABCDEFGHIJK",
+        "query": "",
+        "body": "{\"metadata\": {\"note\": \"../../etc/passwd\"}}",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "latency_ms": 2.862700028344989,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9983345866203308,
+          "sqli": 8.091238123597577e-05,
+          "xss": 8.082014392130077e-05,
+          "cmdi": 8.73384196893312e-05,
+          "path_traversal": 0.0014163668965920806
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.0016654133796691895,
+        "model_probability": 0.0016654133796691895,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "traversal"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 32,
+          "query_length": 0,
+          "body_length": 42,
+          "header_count": 1,
+          "header_bytes": 28,
+          "body_entropy": 3.9394709940012875,
+          "special_ratio": 0.4523809523809524,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 1,
+          "json_body": 1,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack header: ../../etc/passwd",
+      "expected": "path_traversal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "limit=20",
+        "body": "",
+        "headers": {
+          "x-probe": "../../etc/passwd"
+        }
+      },
+      "latency_ms": 2.415599999949336,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.996677041053772,
+          "sqli": 0.0023934440687298775,
+          "xss": 5.8845511375693604e-05,
+          "cmdi": 0.0005755547899752855,
+          "path_traversal": 0.0002950773050542921
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.0033229589462280273,
+        "model_probability": 0.0033229589462280273,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "traversal"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 8,
+          "body_length": 0,
+          "header_count": 1,
+          "header_bytes": 23,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack query: ..%2f..%2fetc%2fpasswd",
+      "expected": "path_traversal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=..%252f..%252fetc%252fpasswd",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.9244000324979424,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.7965627312660217,
+          "sqli": 0.0029974933713674545,
+          "xss": 0.011968666687607765,
+          "cmdi": 0.004589706193655729,
+          "path_traversal": 0.18388137221336365
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.20343726873397827,
+        "model_probability": 0.20343726873397827,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "traversal"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 30,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack body: ..%2f..%2fetc%2fpasswd",
+      "expected": "path_traversal",
+      "request": {
+        "method": "POST",
+        "path": "/store/carts/cart_01JABCDEFGHIJK",
+        "query": "",
+        "body": "{\"metadata\": {\"note\": \"..%2f..%2fetc%2fpasswd\"}}",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "latency_ms": 2.8882999904453754,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9779137969017029,
+          "sqli": 0.001223491388373077,
+          "xss": 0.0010188709711655974,
+          "cmdi": 0.0011484947754070163,
+          "path_traversal": 0.01869533210992813
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.02208620309829712,
+        "model_probability": 0.02208620309829712,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "traversal"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 32,
+          "query_length": 0,
+          "body_length": 48,
+          "header_count": 1,
+          "header_bytes": 28,
+          "body_entropy": 4.115601562950722,
+          "special_ratio": 0.3958333333333333,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 1,
+          "json_body": 1,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack header: ..%2f..%2fetc%2fpasswd",
+      "expected": "path_traversal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "limit=20",
+        "body": "",
+        "headers": {
+          "x-probe": "..%2f..%2fetc%2fpasswd"
+        }
+      },
+      "latency_ms": 2.5412000250071287,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.996677041053772,
+          "sqli": 0.0023934440687298775,
+          "xss": 5.8845511375693604e-05,
+          "cmdi": 0.0005755547899752855,
+          "path_traversal": 0.0002950773050542921
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.0033229589462280273,
+        "model_probability": 0.0033229589462280273,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "traversal"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 8,
+          "body_length": 0,
+          "header_count": 1,
+          "header_bytes": 29,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack query: ..\\..\\windows\\win.ini",
+      "expected": "path_traversal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=..%5C..%5Cwindows%5Cwin.ini",
+        "body": "",
+        "headers": {}
+      },
+      "latency_ms": 2.570300013758242,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.9190145134925842,
+          "sqli": 0.0012677604099735618,
+          "xss": 0.0005491077899932861,
+          "cmdi": 0.0076058292761445045,
+          "path_traversal": 0.07156278192996979
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.08098548650741577,
+        "model_probability": 0.08098548650741577,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "traversal"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 29,
+          "body_length": 0,
+          "header_count": 0,
+          "header_bytes": 0,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack body: ..\\..\\windows\\win.ini",
+      "expected": "path_traversal",
+      "request": {
+        "method": "POST",
+        "path": "/store/carts/cart_01JABCDEFGHIJK",
+        "query": "",
+        "body": "{\"metadata\": {\"note\": \"..\\\\..\\\\windows\\\\win.ini\"}}",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      "latency_ms": 2.870999975129962,
+      "result": {
+        "attack": true,
+        "model_attack": true,
+        "model_mode": "enforce",
+        "predicted_label": "path_traversal",
+        "class_probabilities": {
+          "normal": 0.22320693731307983,
+          "sqli": 0.03343654423952103,
+          "xss": 0.048710767179727554,
+          "cmdi": 0.05050281807780266,
+          "path_traversal": 0.6441429257392883
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.7767930626869202,
+        "model_probability": 0.7767930626869202,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "traversal"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 32,
+          "query_length": 0,
+          "body_length": 50,
+          "header_count": 1,
+          "header_bytes": 28,
+          "body_entropy": 3.9059791299831024,
+          "special_ratio": 0.46,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 1,
+          "json_body": 1,
+          "rule_hits": 1
+        }
+      }
+    },
+    {
+      "name": "attack header: ..\\..\\windows\\win.ini",
+      "expected": "path_traversal",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "limit=20",
+        "body": "",
+        "headers": {
+          "x-probe": "..\\..\\windows\\win.ini"
+        }
+      },
+      "latency_ms": 2.559900050982833,
+      "result": {
+        "attack": true,
+        "model_attack": false,
+        "model_mode": "enforce",
+        "predicted_label": "normal",
+        "class_probabilities": {
+          "normal": 0.996677041053772,
+          "sqli": 0.0023934440687298775,
+          "xss": 5.8845511375693604e-05,
+          "cmdi": 0.0005755547899752855,
+          "path_traversal": 0.0002950773050542921
+        },
+        "model_contract": "commerce-text-five-v1",
+        "model_threshold": 0.465,
+        "score": 0.0033229589462280273,
+        "model_probability": 0.0033229589462280273,
+        "rule_score": 0.95,
+        "decision_source": "xgboost",
+        "fallback": null,
+        "retry_required": false,
+        "rules": [
+          "traversal"
+        ],
+        "feature_version": 2,
+        "features": {
+          "path_length": 15,
+          "query_length": 8,
+          "body_length": 0,
+          "header_count": 1,
+          "header_bytes": 28,
+          "body_entropy": 0,
+          "special_ratio": 0.0,
+          "request_count_60s": 1,
+          "interval_ms": 60000.0,
+          "method_write": 0,
+          "json_body": 0,
+          "rule_hits": 1
+        }
+      }
+    }
+  ],
+  "false_positives": [],
+  "missed_attack_strings": [],
+  "capture_rows": 2160,
+  "capture_flagged": 0,
+  "capture_flagged_sessions": 0,
+  "capture_fallbacks": {
+    "none": 2160
+  },
+  "capture_problems": [],
+  "concurrent_16_fallbacks": {
+    "none": 16
+  }
+}

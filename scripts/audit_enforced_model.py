@@ -26,7 +26,9 @@ def probes() -> list[dict]:
     for query in ('cotton shirt', '紅色上衣', "O\'Reilly", 'AT&T', '100% cotton',
                   'size < 10', 'price >= 100', 'shirt; blue', 'C++', '日本製',
                   '優惠 🎉', 'a' * 1000, 'javascript: the definitive guide',
-                  'UNION SELECT SQL textbook', '../../ print pattern'):
+                  'UNION SELECT SQL textbook', '../../ print pattern',
+                  'sale >= 250', '幅 < 28', 'baleares (illes)',
+                  'javascript: browser reference', '../../ textile illustration'):
         add('benign product search: ' + query[:60], 'normal', query=urlencode({'q': query}))
     for method,path in [('GET','/dk'),('GET','/store/orders/order_01JABCDEFGHIJK'),
                         ('GET','/store/customers/me'),('OPTIONS','/store/products'),
@@ -105,9 +107,11 @@ async def inspect(bundle: Path, capture: Path | None) -> dict:
 
 def main() -> None:
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--bundle',type=Path,default=ROOT/'model/commerce-five/search-repair-v3')
+    parser.add_argument('--bundle',type=Path,default=ROOT/'model/commerce-five/search-repair-v6')
     parser.add_argument('--capture',type=Path)
     parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--require-clean',action='store_true',
+                        help='Fail when known regressions or inference fallbacks occur')
     args=parser.parse_args()
     report=asyncio.run(inspect(args.bundle,args.capture))
     args.output.parent.mkdir(parents=True,exist_ok=True)
@@ -116,6 +120,11 @@ def main() -> None:
     print(json.dumps({k:v for k,v in report.items() if k not in
                      ('probes','false_positives','missed_attack_strings','capture_problems')},ensure_ascii=False))
     print('False positives:',len(report['false_positives']),'; missed attack strings:',len(report['missed_attack_strings']))
+    if args.require_clean and (report['false_positives'] or report['missed_attack_strings']
+                              or report['capture_problems']
+                              or report['concurrent_16_fallbacks'] != {'none':16}
+                              or any(r['result']['fallback'] for r in report['probes'])):
+        raise SystemExit('Enforced model regression gate failed; inspect the saved report')
 
 
 if __name__=='__main__':

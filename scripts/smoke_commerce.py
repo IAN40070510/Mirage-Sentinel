@@ -113,7 +113,7 @@ def main() -> None:
         region = regions_response.json()["regions"][0]
         country = region["countries"][0]["iso_2"]
         home = client.get(f"/{country}")
-        assert home.status_code == 200
+        assert home.status_code == 200, f'Storefront /{country} returned HTTP {home.status_code}'
         assets = ScriptAssets()
         assets.feed(home.text)
         assert assets.urls, "Storefront JavaScript assets missing"

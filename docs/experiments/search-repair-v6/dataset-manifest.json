@@ -1,0 +1,133 @@
+{
+  "created_at": "2026-11-01T06:33:36.798+00:00",
+  "base_manifest_sha256": "9646877cb7282ff923a53af0cb1a57bfd608c7b0b1d2b1d87c7086d503cfd2fe",
+  "prior_reserved_policy": "v3b disclosed cases now development regressions; never claimed as new blind results",
+  "fit_uses_reserved_v4": false,
+  "test_policy": "Legacy test inspected for diagnosis; no longer an untouched estimate. No test row copied into fitting.",
+  "splits": {
+    "train": {
+      "added": {
+        "normal": 6408,
+        "sqli": 480,
+        "xss": 960,
+        "cmdi": 480,
+        "path_traversal": 400
+      },
+      "skipped": {
+        "exact": 80
+      },
+      "sha256": "e2110f9ec6045c5637725668767a5da5bd8536c911e4818811f8a3eb379d15b7"
+    },
+    "validation": {
+      "added": {
+        "normal": 1520,
+        "sqli": 100,
+        "xss": 200,
+        "cmdi": 100,
+        "path_traversal": 80
+      },
+      "skipped": {
+        "cross_split_near": 404,
+        "exact": 20
+      },
+      "sha256": "05e2707cb9128990fa0ca9d1ecadbabdfe0986b34b489ef4ed987ef36e36ab5f"
+    }
+  },
+  "audit": {
+    "normalization": "decoded-case-number-quoted-literal-v1",
+    "near_detection_limit": "Heuristic only; independent scenario review is still required",
+    "cross_split_conflicts": {},
+    "allow_shared_families": true,
+    "shared_family_rows": {
+      "train/validation:traversal-parent-boundary": 6460,
+      "train/validation:sql-predicate": 3837,
+      "train/validation:sql-union-constants": 1573,
+      "train/validation:cmd-substitution": 3911,
+      "train/validation:cmd-shell-chain": 2079,
+      "train/validation:xss-script-element": 611,
+      "train/validation:xss-context-breakout": 329,
+      "train/validation:normal-search-natural": 8,
+      "train/validation:normal-search-literal": 8,
+      "train/validation:normal-search-size": 6,
+      "train/validation:normal-search-description": 5,
+      "train/validation:normal-search-budget": 12,
+      "train/validation:normal-product-browse": 2,
+      "train/validation:normal-search-help": 9,
+      "train/test:traversal-parent-boundary": 6460,
+      "train/test:cmd-shell-chain": 2070,
+      "train/test:sql-predicate": 3801,
+      "train/test:cmd-substitution": 3920,
+      "train/test:xss-script-element": 643,
+      "train/test:sql-union-constants": 1609,
+      "train/test:xss-context-breakout": 297,
+      "train/test:normal-search-help": 9,
+      "train/test:normal-search-natural": 9,
+      "train/test:normal-search-literal": 8,
+      "train/test:normal-search-size": 9,
+      "train/test:normal-search-description": 4,
+      "train/test:normal-search-budget": 11
+    },
+    "allow_shared_normal_templates": true,
+    "shared_normal_template_rows": {
+      "train/validation": 202
+    },
+    "splits": {
+      "train": {
+        "rows": 168557,
+        "labels": {
+          "normal": 20983,
+          "cmdi": 35640,
+          "sqli": 40640,
+          "path_traversal": 34700,
+          "xss": 36594
+        },
+        "sources": {
+          "external": 11093,
+          "ai": 157464
+        },
+        "reviewed": 0,
+        "exact_duplicates": 0,
+        "near_groups": 146846
+      },
+      "validation": {
+        "rows": 34940,
+        "labels": {
+          "normal": 5753,
+          "path_traversal": 7340,
+          "sqli": 7550,
+          "cmdi": 7050,
+          "xss": 7247
+        },
+        "sources": {
+          "external": 2362,
+          "ai": 32578
+        },
+        "reviewed": 0,
+        "exact_duplicates": 0,
+        "near_groups": 31389
+      },
+      "test": {
+        "rows": 25102,
+        "labels": {
+          "path_traversal": 6500,
+          "cmdi": 6000,
+          "sqli": 6500,
+          "xss": 6000,
+          "normal": 102
+        },
+        "sources": {
+          "ai": 23002,
+          "external": 2100
+        },
+        "reviewed": 0,
+        "exact_duplicates": 0,
+        "near_groups": 25102
+      }
+    },
+    "ratios": {
+      "train": 0.7373479324056535,
+      "validation": 0.15284406318487834,
+      "test": 0.10980800440946811
+    }
+  }
+}

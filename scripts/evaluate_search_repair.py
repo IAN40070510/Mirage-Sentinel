@@ -49,6 +49,7 @@ def main() -> None:
     parser.add_argument('--output',type=Path,required=True)
     args=parser.parse_args()
     frozen=json.loads(args.freeze.read_text(encoding='utf-8'))
+    assert frozen['evaluation_source_sha256']==sha(Path(__file__)), 'Evaluator changed after freeze'
     for key,path in [('bundle_sha256',args.bundle/'bundle.json'),('reserved_sha256',args.reserved),
                      ('protocol_sha256',args.protocol),('detector_sha256',ROOT/'services/commerce/detection.py'),
                      ('dataset_manifest_sha256',args.dataset/'manifest.json')]:

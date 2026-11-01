@@ -1,5 +1,6 @@
 """Exercise the downloaded model through the actual asynchronous service adapter."""
 from pathlib import Path
+import hashlib
 import shutil
 from urllib.parse import urlencode
 
@@ -11,11 +12,12 @@ from services.commerce.five_runtime import Predictor, LABELS
 BUNDLE = Path(__file__).resolve().parents[1] / 'model/commerce-five/run-20261028T081548514385Z'
 
 
-@pytest.mark.parametrize('bundle', [BUNDLE, BUNDLE.parent / 'diversity-v2', BUNDLE.parent / 'search-repair-v3'])
+@pytest.mark.parametrize('bundle', [BUNDLE, BUNDLE.parent / 'diversity-v2', BUNDLE.parent / 'search-repair-v3', BUNDLE.parent / 'search-repair-v6'])
 @pytest.mark.asyncio
 async def test_five_class_service_matches_training_runtime(bundle: Path):
     detector = Detector(str(bundle), timeout=5, model_mode='enforce')
     assert detector.model_status == 'ready_five_class'
+    assert detector.model_bundle_sha256 == hashlib.sha256((bundle/'bundle.json').read_bytes()).hexdigest()
     reference = Predictor(bundle)
     for query in ('q=cotton', 'q=%3Cscript%3Evoid(0)%3C/script%3E', 'q=%27+OR+1%3D1--'):
         request = dict(method='GET', path='/store/products', query=query, headers={}, body='')
@@ -60,9 +62,9 @@ def test_unknown_model_mode_is_rejected():
 
 @pytest.mark.asyncio
 async def test_default_enforcement_uses_model_without_rule_hit() -> None:
-    detector = Detector(str(BUNDLE.parent / 'search-repair-v3'), timeout=5)
+    detector = Detector(str(BUNDLE.parent / 'search-repair-v6'), timeout=5)
     decision = await detector.assess('model-only', 'GET', '/store/products',
-                                    'q=%3Csvg%2Fonload%3Dalert%281%29%3E', {}, b'')
+                                    'q=%27+AND+1%3D1--', {}, b'')
     assert detector.model_mode == 'enforce'
     assert decision['fallback'] is None
     assert decision['rules'] == []
@@ -72,9 +74,11 @@ async def test_default_enforcement_uses_model_without_rule_hit() -> None:
 
 @pytest.mark.asyncio
 async def test_repaired_normal_search_is_not_dependent_on_pagination() -> None:
-    detector = Detector(str(BUNDLE.parent / 'search-repair-v3'), timeout=5)
+    detector = Detector(str(BUNDLE.parent / 'search-repair-v6'), timeout=5)
     for value in ('紅色上衣','100% cotton','C++','AT&T','日本製','size < 10',
-                  'javascript: the definitive guide','UNION SELECT SQL textbook','../../ print pattern'):
+                  'javascript: the definitive guide','UNION SELECT SQL textbook','../../ print pattern',
+                  'sale >= 250','幅 < 28','baleares (illes)','javascript: browser reference',
+                  '../../ textile illustration'):
         for fields in [[('q',value)],[('limit','20'),('offset','0'),('q',value)],
                        [('q',value),('limit','20'),('offset','0')]]:
             decision = await detector.assess('regression', 'GET', '/store/products', urlencode(fields), {}, b'')

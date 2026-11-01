@@ -1,0 +1,11 @@
+{
+  "created_at": "2026-11-01T06:18:42.258+00:00",
+  "max_reserved_normal_fpr": 0.0,
+  "max_each_request_shape_fpr": 0.0,
+  "max_legacy_attack_fnr": 0.001,
+  "max_old_normal_regression_fp": 0,
+  "known_normal_probe_fp": 0,
+  "known_attack_string_misses": 0,
+  "concurrent_16_fallbacks": 0,
+  "policy": "Freeze final model and detector before first evaluation of untouched literal-v4 plus new comparison/parentheses lexical pool. Earlier v3 pool and legacy test are development regressions after diagnosis; never claimed blind. v6 adds untouched multilingual comparison terms before any reserved inference."
+}

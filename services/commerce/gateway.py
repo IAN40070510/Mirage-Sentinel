@@ -116,6 +116,9 @@ def create_app(
         return {
             "model": app.state.detector.model_status,
             "model_mode": app.state.detector.model_mode,
+            "model_bundle_sha256": app.state.detector.model_bundle_sha256,
+            "model_pending": app.state.detector.waiting,
+            "model_outcomes": dict(app.state.detector.stats),
             "audit_queued": app.state.audit.queue.qsize(),
             "audit_dropped": app.state.audit.dropped,
             "audit_delivered": app.state.audit.delivered,
@@ -302,6 +305,11 @@ def create_app(
                 409,
                 b'{"type":"invalid_state","message":"Please reload the page and try again."}',
             )
+        elif decision.get('retry_required'):
+            status_code = 503
+            content = b'{"type":"service_unavailable","message":"Please retry shortly."}'
+            response_headers.append(('retry-after','1'))
+            origin = 'inference_unavailable'
         else:
             try:
                 # Next's static route matcher needs literal route-group parentheses.

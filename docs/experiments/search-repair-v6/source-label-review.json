@@ -1,0 +1,25 @@
+{
+  "scope": "Legacy regression failures retained without relabeling or filtering",
+  "source": "Morzeux/HttpParamsDataset/payload_full.csv",
+  "findings": [
+    {
+      "row": 9913,
+      "payload": "c:oot.ini",
+      "original_label": "path-traversal",
+      "finding": "Already present in pinned raw source; not introduced by the commerce adapter. No traversal segments; ambiguous drive-relative filename, exploitability not established."
+    },
+    {
+      "row": 9920,
+      "payload": "c:windowswin.ini",
+      "original_label": "path-traversal",
+      "finding": "Already present in pinned raw source; missing directory separators. Source label retained; requires human annotation review."
+    },
+    {
+      "row": 9845,
+      "payload": "ping -i 30 127.0.0.1",
+      "original_label": "cmdi",
+      "finding": "Standalone command string wrapped into product search. Model threshold miss in v5; execution context not represented. Retained in reported false negatives."
+    }
+  ],
+  "policy": "No test labels changed, no rows removed, no whitelist or exact-payload rule added to improve scores."
+}

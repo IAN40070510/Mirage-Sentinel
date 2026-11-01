@@ -14,3 +14,9 @@ services/commerce/detection.py -text
 scripts/build_search_repair.py -text
 scripts/evaluate_search_repair.py -text
 docs/experiments/search-repair-v3/*.json -text
+
+model/commerce-five/search-repair-v6/* -text
+docs/experiments/search-repair-v6/*.json -text
+scripts/build_literal_repair.py -text
+scripts/build_comparison_repair.py -text
+scripts/build_multilingual_repair.py -text

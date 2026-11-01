@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import math
@@ -9,7 +10,7 @@ import time
 from collections import Counter, OrderedDict, deque
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote
+from urllib.parse import unquote, parse_qsl
 
 FEATURE_VERSION = 2
 
@@ -32,7 +33,7 @@ RULES = {
         r"(?:\bunion\s+(?:all\s+)?select\s+(?:\d|NULL\b|['\"`*(@]|[\w.]+\s*(?:,|\(|\bfrom\b))|\bor\s+['\"]?\d+['\"]?\s*=\s*['\"]?\d+|\bsleep\s*\(|\bdrop\s+table\s+[\w`\"]+)",
         re.IGNORECASE,
     ),
-    "xss": re.compile(r"<\s*script\b|javascript\s*:\s*(?:[\w.$]+\s*[=(`]|[([]|(?:void|throw)\b)|\bonerror\s*=", re.IGNORECASE),
+    "xss": re.compile(r"<\s*script\b|javascript\s*:\s*(?:[\w.$]+\s*[=(`]|[([]|(?:void|throw)\b)|\bonerror\s*=|<\s*[a-z][^>]{0,2048}\bonload\s*=", re.IGNORECASE),
     "traversal": re.compile(r"(?:\.\.[/\\]){2,}(?!\.\.[/\\])(?=\S|$)|/etc/(?:passwd|shadow)", re.IGNORECASE),
     "command": re.compile(
         r";\s*(?:cat|curl|wget|bash|sh|id|whoami)\b|\$\(|\b(?:exec|system)\s*\(",
@@ -41,14 +42,51 @@ RULES = {
 }
 
 
+def request_values(query: str, body: str, headers: dict[str, str]) -> list[str]:
+    """Decode bounded JSON values before signatures inspect application strings."""
+    values = [v for _, v in parse_qsl(query, keep_blank_values=True)]
+    values.extend(v for k,v in headers.items() if k.lower() not in {'cookie','authorization'})
+    try:
+        pending = [json.loads(body)] if body else []
+        examined = 0
+        while pending and examined < 1024:
+            value = pending.pop(); examined += 1
+            if isinstance(value,str): values.append(value)
+            elif isinstance(value,dict): pending.extend(value.values())
+            elif isinstance(value,list): pending.extend(value)
+    except (ValueError, RecursionError):
+        values.append(body)
+    decoded = []
+    for value in values:
+        for _ in range(3): value=unquote(value)
+        decoded.append(value)
+    return decoded
+
+
+def has_atomic_command(query: str, body: str, headers: dict[str, str]) -> bool:
+    """Match complete command atoms, not explanatory prose containing code words."""
+    for value in request_values(query, body, headers):
+        if re.fullmatch(r"\s*(?:\|\s*(?:id|whoami)|`\s*(?:id|whoami)\s*`)\s*", value, re.I):
+            return True
+    return False
+
+
 class Detector:
     """JSON-only XGBoost contract; incompatible legacy pickle artifacts are not loaded."""
 
     def __init__(self, model_dir: str = "", timeout: float = 0.15,
-                 model_mode: str = "enforce") -> None:
+                 model_mode: str = "enforce", queue_timeout: float = 0.5,
+                 queue_limit: int = 32) -> None:
         if model_mode not in {"shadow", "enforce"}:
             raise ValueError("model_mode must be shadow or enforce")
         self.model_mode = model_mode
+        if min(timeout,queue_timeout,queue_limit) <= 0:
+            raise ValueError('Inference deadlines and queue capacity must be positive')
+        self.model_required = bool(model_dir)
+        self.model_lock = asyncio.Lock()
+        self.waiting = 0
+        self.queue_timeout, self.queue_limit = queue_timeout, queue_limit
+        self.stats: Counter[str] = Counter()
         self.model: Any = None
         self.predictor: Any = None
         self.threshold = 0.7
@@ -56,6 +94,7 @@ class Detector:
         self.history: OrderedDict[str, deque[float]] = OrderedDict()
         self.busy = False
         self.model_status = "rules_only"
+        self.model_bundle_sha256: str | None = None
         if model_dir and (Path(model_dir) / "xgb.json").is_file():
             try:
                 if (Path(model_dir) / "bundle.json").is_file():
@@ -63,6 +102,8 @@ class Detector:
                     self.predictor = Predictor(Path(model_dir))
                     self.model = self.predictor.model
                     self.threshold = self.predictor.threshold
+                    self.model_bundle_sha256 = hashlib.sha256(
+                        (Path(model_dir) / 'bundle.json').read_bytes()).hexdigest()
                     self.model_status = "ready_five_class"
                     return
                 import xgboost as xgb
@@ -85,7 +126,7 @@ class Detector:
                 self.model_status = "ready"
             except Exception:
                 logging.getLogger(__name__).exception(
-                    "Commerce model unavailable; using rules"
+                    "Commerce model failed to load"
                 )
                 self.model = None
                 self.model_status = "unavailable_or_incompatible"
@@ -132,7 +173,15 @@ class Detector:
         )
         for _ in range(3):
             text = unquote(text)
-        hits = [name for name, pattern in RULES.items() if pattern.search(text)]
+        # SQL comments can separate tokens without changing their meaning.
+        text = re.sub(r'/\*.*?\*/', ' ', text, flags=re.DOTALL)
+        decoded_values = request_values(query, body_text, headers)
+        signature_texts = [text] + [re.sub(r'/\*.*?\*/', ' ', v, flags=re.DOTALL)
+                                    for v in decoded_values]
+        hits = [name for name, pattern in RULES.items()
+                if any(pattern.search(value) for value in signature_texts)]
+        if 'command' not in hits and has_atomic_command(query,body_text,headers):
+            hits.append('command')
         counts = Counter(body)
         entropy = (
             -sum((n / len(body)) * math.log2(n / len(body)) for n in counts.values())
@@ -158,21 +207,28 @@ class Detector:
         probability = None
         source = "rule"
         fallback = self.model_status
-        if self.model is not None and not self.busy:
-            self.busy = True
-            request = {"method": method, "path": path, "query": query,
-                       "headers": headers, "body": body_text}
-            task = asyncio.create_task(asyncio.to_thread(
-                self._predict_five if self.predictor is not None else self._predict,
-                request if self.predictor is not None else values))
-
-            def done(future: asyncio.Task) -> None:
-                self.busy = False
-                if not future.cancelled():
-                    future.exception()
-
-            task.add_done_callback(done)
+        if self.model is not None and self.waiting < self.queue_limit:
+            self.waiting += 1
+            acquired = False
+            phase = 'queue'
             try:
+                await asyncio.wait_for(self.model_lock.acquire(), self.queue_timeout)
+                acquired = True
+                self.busy = True
+                phase = 'inference'
+                request = {"method": method, "path": path, "query": query,
+                           "headers": headers, "body": body_text}
+                task = asyncio.create_task(asyncio.to_thread(
+                    self._predict_five if self.predictor is not None else self._predict,
+                    request if self.predictor is not None else values))
+
+                def done(future: asyncio.Task) -> None:
+                    self.busy = False
+                    self.model_lock.release()
+                    if not future.cancelled(): future.exception()
+
+                task.add_done_callback(done)
+                acquired = False  # Worker owns the lock until completion, even after timeout.
                 result = await asyncio.wait_for(asyncio.shield(task), self.timeout)
                 if self.predictor is not None:
                     prediction = result
@@ -181,18 +237,24 @@ class Detector:
                     probability = result
                 source, fallback = "xgboost", None
             except (Exception, asyncio.TimeoutError):
-                logging.getLogger(__name__).exception(
-                    "Commerce model failed or timed out; using rules"
-                )
-                fallback = "model_error_or_timeout"
+                logging.getLogger(__name__).warning("Commerce model unavailable during %s", phase)
+                fallback = "model_queue_timeout" if phase == 'queue' else "model_error_or_timeout"
+            finally:
+                self.waiting -= 1
+                if acquired:
+                    self.busy = False
+                    self.model_lock.release()
         elif self.model is not None:
-            fallback = "model_busy"
+            fallback = "model_queue_full"
         # High-confidence signatures remain a safety net even when the model is available.
         rule_score = 0.95 if hits else 0.05
         model_attack = probability is not None and probability >= self.threshold
         # Enforce model decisions by default; shadow remains an explicit diagnostic option.
         enforced = self.predictor is None or self.model_mode == "enforce"
         attack = bool(hits) or (enforced and model_attack)
+        retry_required = (self.model_mode == 'enforce' and fallback is not None and not hits
+                          and (self.model_required or self.model is not None))
+        self.stats[fallback or 'predicted'] += 1
         if prediction is not None and not enforced:
             source = "rule_with_shadow_model"
         return {
@@ -208,6 +270,7 @@ class Detector:
             "rule_score": rule_score,
             "decision_source": source,
             "fallback": fallback,
+            "retry_required": retry_required,
             "rules": hits,
             "feature_version": FEATURE_VERSION,
             "features": dict(zip(FEATURES, values)),
