@@ -441,3 +441,24 @@ def test_enforced_storefront_calls_preserve_real_and_sandbox_boundaries(system):
         'x-storefront-token':'SANDBOX_STOREFRONT_TOKEN'*4,'x-routing-epoch':sandbox_epoch})
     assert response.json()['host']=='sandbox-medusa'
     assert client.get('/dk').json()['host']=='sandbox-storefront'
+
+
+def test_soc_latest_history_and_incremental_events(tmp_path, monkeypatch):
+    monkeypatch.setenv("AUDIT_WRITE_TOKEN", "write" * 8)
+    monkeypatch.setenv("SOC_PASSWORD", "password" * 8)
+    db = Forensics(str(tmp_path / "audit.db"))
+    for i in range(205):
+        db.append({"event_id": str(uuid.uuid4()), "at": "2026-11-02T00:00:00.123+00:00",
+                   "visitor_id": "alice" if i % 2 == 0 else "bob"})
+    with TestClient(collector_app(db)) as client:
+        latest = client.get("/api/events?latest=true").json()
+        assert [e["cursor"] for e in latest] == list(range(205, 5, -1))
+        older = client.get("/api/events?latest=true&before=6").json()
+        assert [e["cursor"] for e in older] == [5, 4, 3, 2, 1]
+        filtered = client.get("/api/events?latest=true&visitor=alice&limit=2").json()
+        assert [e["cursor"] for e in filtered] == [205, 203]
+        assert all(e["visitor_id"] == "alice" for e in filtered)
+        db.append({"event_id": str(uuid.uuid4()), "at": "2026-11-02T00:00:01.123+00:00", "visitor_id": "alice"})
+        assert [e["cursor"] for e in client.get("/api/events?after=205").json()] == [206]
+        assert client.get("/api/events?latest=true&visitor=missing").json() == []
+        assert len(db.read(0, "", 10000, True)) == 206

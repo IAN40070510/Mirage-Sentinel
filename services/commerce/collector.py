@@ -51,15 +51,28 @@ class Forensics:
                 ),
             )
 
-    def read(self, after: int, visitor: str, limit: int) -> list[dict]:
-        # Explicit read-only connection for SOC queries.
+    def read(
+        self, after: int, visitor: str, limit: int,
+        latest: bool = False, before: int = 0,
+    ) -> list[dict]:
+        # SOC-only read connection; preserve the append-only writer and schema.
         uri = Path(self.path).resolve().as_uri() + "?mode=ro"
+        clauses = ["id>?"]
+        params: list[int | str] = [max(after, 0)]
+        if visitor:
+            clauses.append("visitor_id=?")
+            params.append(visitor)
+        if before > 0:
+            clauses.append("id<?")
+            params.append(before)
+        order = "DESC" if latest else "ASC"
+        params.append(min(max(limit, 1), 500))
         with sqlite3.connect(uri, uri=True) as db:
             rows = db.execute(
-                "SELECT id,payload FROM events WHERE id>? AND (?='' OR visitor_id=?) ORDER BY id LIMIT ?",
-                (after, visitor, visitor, min(max(limit, 1), 500)),
+                "SELECT id,payload FROM events WHERE " + " AND ".join(clauses)
+                + " ORDER BY id " + order + " LIMIT ?", params,
             ).fetchall()
-        return [{"cursor": row[0], **json.loads(row[1])} for row in rows]
+        return [{**json.loads(row[1]), "cursor": row[0]} for row in rows]
 
 
 def create_app(database: Forensics | None = None) -> FastAPI:
@@ -124,8 +137,13 @@ def create_app(database: Forensics | None = None) -> FastAPI:
         )
 
     @app.get("/api/events")
-    async def events(after: int = 0, visitor: str = "", limit: int = 200) -> list[dict]:
-        return await asyncio.to_thread(app.state.db.read, max(after, 0), visitor, limit)
+    async def events(
+        after: int = 0, visitor: str = "", limit: int = 200,
+        latest: bool = False, before: int = 0,
+    ) -> list[dict]:
+        return await asyncio.to_thread(
+            app.state.db.read, max(after, 0), visitor, limit, latest, max(before, 0)
+        )
 
     @app.get("/api/status")
     async def status() -> dict:

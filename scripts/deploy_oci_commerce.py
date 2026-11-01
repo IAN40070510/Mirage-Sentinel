@@ -172,7 +172,8 @@ def main() -> None:
                 "--state-db",
                 "/state/visitors.db",
             )
-        subprocess.run([sys.executable, str(ROOT / "scripts/smoke_soc.py")], check=True)
+        subprocess.run([sys.executable, str(ROOT / "scripts/smoke_soc.py"),
+                        "--commerce-url", "http://127.0.0.1:18080"], check=True)
         command(ROOT, "up", "-d", "--no-deps", "edge")
         subprocess.run(
             [

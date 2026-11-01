@@ -40,7 +40,7 @@ jobs:
           python scripts/wait_commerce.py
           docker compose --env-file .env.commerce -f docker-compose.commerce.yml run --rm --no-deps -v "$PWD/scripts/smoke_commerce.py:/tmp/check.py:ro" gateway python /tmp/check.py --url http://edge:8080 --state-db /state/visitors.db
       - name: Verify public SOC and protected release
-        run: python scripts/smoke_soc.py
+        run: python scripts/smoke_soc.py --commerce-url http://localhost:8080
       - name: Collect isolated normal shopping journeys
         run: python scripts/collect_commerce_normal.py --output artifacts/normal-shopping-capture --sessions 30 --revision "${{ github.sha }}"
       - name: Diagnose enforced model input coverage and concurrency
