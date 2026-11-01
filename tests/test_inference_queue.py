@@ -46,7 +46,7 @@ def test_atomic_commands_are_detected_in_header_and_body(value: str) -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize('value,label', [("'/**/OR/**/1=1--",'sqli'),('<svg/onload=alert(1)>','xss')])
 async def test_header_variants_hit_rules(value: str,label: str) -> None:
-    detector=Detector()
+    detector=Detector(rules_enforce=True)
     result=await detector.assess('test','GET','/store/products','limit=20',{'x-probe':value},b'')
     assert label in result['rules'] and result['attack']
 
@@ -54,7 +54,7 @@ async def test_header_variants_hit_rules(value: str,label: str) -> None:
 @pytest.mark.asyncio
 async def test_json_escaped_values_are_inspected_after_parsing() -> None:
     import json
-    detector = Detector()
+    detector = Detector(rules_enforce=True)
     for note, expected in [(r"..\..\windows\win.ini", True),
                             ("../../ textile illustration", False),
                             ("javascript: browser reference", False)]:

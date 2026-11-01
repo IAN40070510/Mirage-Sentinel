@@ -116,6 +116,7 @@ def create_app(
         return {
             "model": app.state.detector.model_status,
             "model_mode": app.state.detector.model_mode,
+            "decision_policy": "hybrid_diagnostic" if app.state.detector.rules_enforce else "model_only",
             "model_bundle_sha256": app.state.detector.model_bundle_sha256,
             "model_pending": app.state.detector.waiting,
             "model_outcomes": dict(app.state.detector.stats),

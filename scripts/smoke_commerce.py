@@ -161,7 +161,11 @@ def main() -> None:
             assert order_response.status_code == 200, f'Benign search changed realm: {query}'
             assert order_response.json()['order']['id'] == normal_order
             assert_realm(client,'real',args.state_db)
-        client.get("/store/products?q=UNION%20SELECT%201")
+        # This known rule-only hit must stay real under the model-only policy.
+        client.get("/store/products?q=UNION%20SELECT%201").raise_for_status()
+        assert_realm(client,'real',args.state_db)
+        # Model-positive fixture tests quarantine wiring, not attack coverage.
+        client.get("/store/products?q=%27+OR+1%3D1--")
         assert_realm(client,'sandbox',args.state_db)
         client.headers.pop("authorization", None)
         sandbox_order = exercise(client)

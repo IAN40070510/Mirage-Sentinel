@@ -1,0 +1,32 @@
+{
+  "decision_policy": "model_only",
+  "bundle_sha256": "845be3fdc2440d56aefdb5bd056729dcc6d88edd7161344e082b6aa63edfe7b1",
+  "threshold": 0.84,
+  "note": "Known model-only misses retained after user requested removal of rule enforcement. This is a regression baseline, not evidence of complete attack detection.",
+  "missed_probe_names": [
+    "attack body: $(id)",
+    "attack body: ' OR 1=1--",
+    "attack body: '/**/OR/**/1=1--",
+    "attack body: ..%2f..%2fetc%2fpasswd",
+    "attack body: ../../etc/passwd",
+    "attack body: ..\\..\\windows\\win.ini",
+    "attack body: `id`",
+    "attack body: | id",
+    "attack header: $(id)",
+    "attack header: ' OR 1=1--",
+    "attack header: ' UNION SELECT 1--",
+    "attack header: '/**/OR/**/1=1--",
+    "attack header: ..%2f..%2fetc%2fpasswd",
+    "attack header: ../../etc/passwd",
+    "attack header: ..\\..\\windows\\win.ini",
+    "attack header: ; whoami",
+    "attack header: <img src=x onerror=alert(1)>",
+    "attack header: <script>alert(1)</script>",
+    "attack header: <svg/onload=alert(1)>",
+    "attack header: `id`",
+    "attack header: | id",
+    "attack query: ..%2f..%2fetc%2fpasswd",
+    "attack query: ../../etc/passwd",
+    "attack query: ..\\..\\windows\\win.ini"
+  ]
+}

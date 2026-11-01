@@ -64,7 +64,7 @@ def system(tmp_path, monkeypatch):
         )
 
     with TestClient(
-        create_app(store, Detector(), audit, httpx.MockTransport(upstream))
+        create_app(store, Detector(rules_enforce=True), audit, httpx.MockTransport(upstream))
     ) as client:
         client.headers["x-edge-token"] = "EDGE_TOKEN" * 4
         yield client, store, audit, requests
@@ -238,7 +238,7 @@ def test_encoded_traversal_cannot_reach_admin(system):
 
 def test_unavailable_required_model_retries_without_forwarding_or_quarantining(system):
     client, _, audit, calls = system
-    detector=Detector()
+    detector=Detector(rules_enforce=True)
     detector.model_required=True
     detector.model_status='unavailable_or_incompatible'
     client.app.state.detector=detector
@@ -248,17 +248,18 @@ def test_unavailable_required_model_retries_without_forwarding_or_quarantining(s
     assert not calls
     assert audit.events[-1]['retry_required'] is True
     assert audit.events[-1]['attack'] is False
-    client.app.state.detector=Detector()
+    client.app.state.detector=Detector(rules_enforce=True)
     assert client.get('/store/products?q=cotton').json()['host']=='real-medusa'
 
 
 @pytest.mark.asyncio
-async def test_model_timeout_uses_rules_and_does_not_spawn_unlimited_work():
+async def test_model_timeout_requires_retry_and_does_not_spawn_unlimited_work():
     detector = Detector(timeout=0.001, queue_timeout=0.001)
     detector.model = object()
     detector._predict = lambda values: time.sleep(0.1) or 0.1
     result = await detector.assess("a", "GET", "/", "q=UNION SELECT 1", {}, b"")
-    assert result["attack"] and result["fallback"] == "model_error_or_timeout"
+    assert not result["attack"] and result["fallback"] == "model_error_or_timeout"
+    assert result["retry_required"] is True
     second = await detector.assess("a", "GET", "/", "", {}, b"")
     assert second["fallback"] == "model_queue_timeout"
     assert second['retry_required'] is True
@@ -399,7 +400,7 @@ def test_trained_shadow_model_preserves_real_to_sandbox_transition(system):
 
     client, _store, audit, calls = system
     bundle = Path(__file__).resolve().parents[1] / 'model/commerce-five/run-20261028T081548514385Z'
-    client.app.state.detector = Detector(str(bundle), timeout=5, model_mode="shadow")
+    client.app.state.detector = Detector(str(bundle), timeout=5, model_mode="shadow", rules_enforce=True)
     assert client.app.state.detector.model_status == 'ready_five_class'
     # Previously this normal page already quarantined the visitor before shopping.
     assert client.get('/dk').json()['host'] == 'real-storefront'
@@ -431,7 +432,7 @@ def test_enforced_storefront_calls_preserve_real_and_sandbox_boundaries(system):
         assert audit.events[-1]['model_mode']=='enforce'
     before=len(calls)
     # A real storefront's stale context cannot cross the quarantine transition.
-    attack=client.get('/_api/store/products?q=UNION%20SELECT%201',headers=headers)
+    attack=client.get('/_api/store/products?q=%27+OR+1%3D1--',headers=headers)
     assert attack.status_code==409
     assert len(calls)==before
     assert audit.events[-1]['attack'] is True

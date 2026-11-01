@@ -102,7 +102,7 @@ async def inspect(bundle: Path, capture: Path | None) -> dict:
         await asyncio.sleep(.001)
     return {'created_at':datetime.now(timezone.utc).isoformat(timespec='milliseconds'),
             'bundle_sha256':hashlib.sha256((bundle/'bundle.json').read_bytes()).hexdigest(),
-            'mode':detector.model_mode,'threshold':detector.threshold,'fit_or_tuning':False,
+            'decision_policy':'model_only','mode':detector.model_mode,'threshold':detector.threshold,'fit_or_tuning':False,
             'scope':'Synthetic diagnostic strings; intended attack labels do not prove exploitability. Replayed acceptance is regression only, not a new blind evaluation.',
             'probe_rows':len(results),'probes':results,
             'false_positives':[r for r in results if r['expected']=='normal' and r['result']['attack']],
@@ -122,6 +122,7 @@ def main() -> None:
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--require-clean',action='store_true',
                         help='Fail when known regressions or inference fallbacks occur')
+    parser.add_argument("--expected-misses", type=Path, help="Explicit model-only regression baseline; known misses remain reported")
     args=parser.parse_args()
     report=asyncio.run(inspect(args.bundle,args.capture))
     args.output.parent.mkdir(parents=True,exist_ok=True)
@@ -130,7 +131,15 @@ def main() -> None:
     print(json.dumps({k:v for k,v in report.items() if k not in
                      ('probes','false_positives','missed_attack_strings','capture_problems')},ensure_ascii=False))
     print('False positives:',len(report['false_positives']),'; missed attack strings:',len(report['missed_attack_strings']))
-    if args.require_clean and (report['false_positives'] or report['missed_attack_strings']
+    unexpected_misses = bool(report['missed_attack_strings'])
+    if args.expected_misses:
+        baseline = json.loads(args.expected_misses.read_text(encoding='utf-8'))
+        if baseline['bundle_sha256'] != report['bundle_sha256'] or baseline['threshold'] != report['threshold']:
+            raise SystemExit('Model-only baseline does not match the deployed model')
+        actual = {row['name'] for row in report['missed_attack_strings']}
+        unexpected_misses = bool(actual - set(baseline['missed_probe_names']))
+        print('Known model-only misses:', len(actual), '; unexpected misses:', unexpected_misses)
+    if args.require_clean and (report['false_positives'] or unexpected_misses
                               or report['capture_problems']
                               or report['concurrent_16_fallbacks'] != {'none':16}
                               or any(r['result']['fallback'] for r in report['probes'])):

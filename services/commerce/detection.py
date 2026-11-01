@@ -76,9 +76,10 @@ class Detector:
 
     def __init__(self, model_dir: str = "", timeout: float = 0.15,
                  model_mode: str = "enforce", queue_timeout: float = 0.5,
-                 queue_limit: int = 32) -> None:
+                 queue_limit: int = 32, rules_enforce: bool = False) -> None:
         if model_mode not in {"shadow", "enforce"}:
             raise ValueError("model_mode must be shadow or enforce")
+        self.rules_enforce = rules_enforce  # Explicit historical diagnostics only; never enabled by Gateway.
         self.model_mode = model_mode
         if min(timeout,queue_timeout,queue_limit) <= 0:
             raise ValueError('Inference deadlines and queue capacity must be positive')
@@ -205,7 +206,7 @@ class Detector:
         ]
         prediction: dict[str, Any] | None = None
         probability = None
-        source = "rule"
+        source = "rule" if self.rules_enforce else "model_unavailable"
         fallback = self.model_status
         if self.model is not None and self.waiting < self.queue_limit:
             self.waiting += 1
@@ -246,26 +247,28 @@ class Detector:
                     self.model_lock.release()
         elif self.model is not None:
             fallback = "model_queue_full"
-        # High-confidence signatures remain a safety net even when the model is available.
+        # Signatures are diagnostic only in the production model-only policy.
         rule_score = 0.95 if hits else 0.05
         model_attack = probability is not None and probability >= self.threshold
         # Enforce model decisions by default; shadow remains an explicit diagnostic option.
         enforced = self.predictor is None or self.model_mode == "enforce"
-        attack = bool(hits) or (enforced and model_attack)
-        retry_required = (self.model_mode == 'enforce' and fallback is not None and not hits
-                          and (self.model_required or self.model is not None))
+        attack = (self.rules_enforce and bool(hits)) or (enforced and model_attack)
+        retry_required = (self.model_mode == 'enforce' and fallback is not None
+                          and (not self.rules_enforce or not hits)
+                          and (not self.rules_enforce or self.model_required or self.model is not None))
         self.stats[fallback or 'predicted'] += 1
         if prediction is not None and not enforced:
-            source = "rule_with_shadow_model"
+            source = "rule_with_shadow_model" if self.rules_enforce else "shadow_model"
         return {
             "attack": attack,
+            "decision_policy": "hybrid_diagnostic" if self.rules_enforce else "model_only",
             "model_attack": model_attack if probability is not None else None,
             "model_mode": self.model_mode if self.predictor is not None else "legacy",
             "predicted_label": prediction["predicted_label"] if prediction else None,
             "class_probabilities": prediction["probabilities"] if prediction else None,
             "model_contract": prediction["contract_version"] if prediction else None,
             "model_threshold": self.threshold if probability is not None else None,
-            "score": probability if probability is not None else rule_score,
+            "score": probability if probability is not None else (rule_score if self.rules_enforce else None),
             "model_probability": probability,
             "rule_score": rule_score,
             "decision_source": source,

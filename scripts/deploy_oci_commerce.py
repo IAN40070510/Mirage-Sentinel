@@ -153,6 +153,7 @@ def main() -> None:
                 'state=json.load(urllib.request.urlopen(req,timeout=10)); '
                 'assert state["model"]=="ready_five_class", state["model"]; '
                 'assert state["model_mode"]=="enforce", state["model_mode"]; '
+                'assert state["decision_policy"]=="model_only"; '
                 'expected=hashlib.sha256(Path("/models/bundle.json").read_bytes()).hexdigest(); '
                 'assert state["model_bundle_sha256"]==expected; '
                 'print("Five-class model ready in enforce mode; bundle:", expected)')

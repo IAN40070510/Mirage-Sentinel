@@ -26,7 +26,7 @@ def test_complete_attack_syntax_still_hits(label: str,text: str) -> None:
 async def test_additional_executable_syntax_is_detected(payload: str) -> None:
     from urllib.parse import urlencode
     from services.commerce.detection import Detector
-    result=await Detector().assess('syntax','GET','/store/products',urlencode({'q':payload}),{},b'')
+    result=await Detector(rules_enforce=True).assess('syntax','GET','/store/products',urlencode({'q':payload}),{},b'')
     assert result['attack'] and result['rules']
 
 @pytest.mark.asyncio
@@ -34,5 +34,5 @@ async def test_additional_executable_syntax_is_detected(payload: str) -> None:
 async def test_event_and_function_prose_remains_normal(text: str) -> None:
     from urllib.parse import urlencode
     from services.commerce.detection import Detector
-    result=await Detector().assess('prose','GET','/store/products',urlencode({'q':text}),{},b'')
+    result=await Detector(rules_enforce=True).assess('prose','GET','/store/products',urlencode({'q':text}),{},b'')
     assert not result['rules']

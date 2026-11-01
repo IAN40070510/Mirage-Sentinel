@@ -29,7 +29,7 @@ async def test_five_class_service_matches_training_runtime(bundle: Path):
         assert set(actual['class_probabilities']) == set(LABELS)
         assert actual['model_probability'] == pytest.approx(expected['attack_score'])
         assert actual['model_threshold'] == reference.threshold
-        assert actual['attack'] == (bool(actual['rules']) or expected['model_attack'])
+        assert actual['attack'] == expected['model_attack']
 
 
 def test_corrupt_five_class_model_falls_back(tmp_path):
@@ -42,7 +42,7 @@ def test_corrupt_five_class_model_falls_back(tmp_path):
 
 @pytest.mark.asyncio
 async def test_shadow_keeps_normal_browsing_real_but_rules_still_quarantine():
-    detector = Detector(str(BUNDLE), timeout=5, model_mode="shadow")
+    detector = Detector(str(BUNDLE), timeout=5, model_mode="shadow", rules_enforce=True)
     # Real downloaded model reproduces the production smoke-test false positive.
     normal = await detector.assess('visitor', 'GET', '/dk', '', {}, b'')
     assert normal['model_attack'] is True
@@ -84,3 +84,19 @@ async def test_repaired_normal_search_is_not_dependent_on_pagination() -> None:
             decision = await detector.assess('regression', 'GET', '/store/products', urlencode(fields), {}, b'')
             assert decision['fallback'] is None
             assert decision['attack'] is False, (value, fields, decision['model_probability'])
+
+
+@pytest.mark.asyncio
+async def test_model_only_does_not_quarantine_rule_only_hit():
+    detector = Detector(str(BUNDLE.parent / 'search-repair-v8'), timeout=5)
+    result = await detector.assess('low-score', 'GET', '/store/products',
+                                   'q=UNION%20SELECT%201', {}, b'')
+    assert result['rules'] == ['sqli']
+    assert result['model_probability'] < result['model_threshold']
+    assert result['decision_policy'] == 'model_only'
+    assert result['attack'] is False
+    missing = await Detector().assess('missing', 'GET', '/store/products',
+                                      'q=UNION%20SELECT%201', {}, b'')
+    assert missing['attack'] is False
+    assert missing['retry_required'] is True
+    assert missing['decision_source'] == 'model_unavailable'
