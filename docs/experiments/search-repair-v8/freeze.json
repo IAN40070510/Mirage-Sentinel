@@ -1,0 +1,11 @@
+{
+  "created_at": "2026-11-01T11:55:18.144+00:00",
+  "bundle_sha256": "845be3fdc2440d56aefdb5bd056729dcc6d88edd7161344e082b6aa63edfe7b1",
+  "reserved_sha256": "0a6740bd026f9b4208e73b2550c424a8b5c5d14d7e412f92a97cac31527bdb41",
+  "protocol_sha256": "90e2d0693d910de1923875b158132c722bea1099916157b46f03817fb27a9153",
+  "detector_sha256": "bcf9d642a784c23c176c01ad7f288ae81d3d1f26428cb9968ca0061f22a6429f",
+  "dataset_manifest_sha256": "6dd4cbdca484ea38a47e911f59745bad3387944d20229dd671caf65571df4cbd",
+  "evaluation_source_sha256": "7858af1d51d97e5f9e7cbff5e45414eb9bf9b2a9b7df1668cb36340daddf2fb2",
+  "gateway_sha256": "1c0fbb28e968de754622c8d59720bf18779f7babdbe51fe9d1952ecb7e37a435",
+  "training_input_manifest_sha256": "b3eb4f112ec72da1d6fa15f62736458bfacdbddc9df5d38bd0334a5da99ed482"
+}

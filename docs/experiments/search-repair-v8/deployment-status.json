@@ -1,0 +1,8 @@
+{
+  "record_type": "predeployment_validation_snapshot",
+  "local_validation": "passed",
+  "reserved_validation": "passed",
+  "deployment_authority": "https://github.com/IAN40070510/Mirage-Sentinel/actions/workflows/deploy.yml",
+  "bundle_sha256": "845be3fdc2440d56aefdb5bd056729dcc6d88edd7161344e082b6aa63edfe7b1",
+  "note": "Actual integration and deployment must be confirmed in the workflow logs."
+}

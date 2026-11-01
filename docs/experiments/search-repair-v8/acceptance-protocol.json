@@ -1,0 +1,14 @@
+{
+  "created_at": "2026-11-01T11:54:22.563+00:00",
+  "max_reserved_normal_fpr": 0.0,
+  "max_each_request_shape_fpr": 0.0,
+  "max_legacy_attack_fnr": 0.001,
+  "max_old_normal_regression_fp": 0,
+  "known_normal_probe_fp": 0,
+  "known_attack_string_misses": 0,
+  "concurrent_16_fallbacks": 0,
+  "policy": "New final lexical pool and SSR IDs; v3/v6/v7 pools are now regression-only. No scoring before freeze; no fitting or tuning on this final pool.",
+  "raw_rows_before_dedup": 4608,
+  "development_overlaps_excluded_before_inference": 480,
+  "reserved_rows": 2528
+}

@@ -8,6 +8,7 @@ from scripts import wait_commerce
 def test_readiness_waits_for_storefront_after_api_is_ready(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = []
     homes = 0
+    openers = []
     class Response(BytesIO):
         status = 200
     class Opener:
@@ -22,8 +23,13 @@ def test_readiness_waits_for_storefront_after_api_is_ready(monkeypatch: pytest.M
                 return Response(b'{"regions":[{"countries":[{"iso_2":"dk"}]}]}')
             return Response(b'{"status":"ok"}')
     monkeypatch.setattr(sys,'argv',['wait_commerce.py'])
-    monkeypatch.setattr(wait_commerce.urllib.request,'build_opener',lambda *args:Opener())
+    def build_opener(*args: object) -> Opener:
+        openers.append(args)
+        return Opener()
+    monkeypatch.setattr(wait_commerce.urllib.request,'build_opener',build_opener)
     monkeypatch.setattr(wait_commerce.time,'sleep',lambda _:None)
     wait_commerce.main()
     assert homes == 2
     assert len(calls) == 6
+    assert len(openers) == 2
+    assert openers[0][0].cookiejar is not openers[1][0].cookiejar

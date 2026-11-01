@@ -15,5 +15,5 @@ def normal_route_group(text: str) -> str:
     elif re.fullmatch(r'/[a-z]{2}', path):
         path = '/<locale>'
     else:
-        path = re.sub(r'/(?:cart|order|pay_col|paycol|cus|prod|variant)_[^/]+', '/<id>', path)
+        path = re.sub(r'/(?:cart|order|pay_col|paycol|cus|prod|variant|reg|pcol|pcat|so)_[^/]+', '/<id>', path)
     return method + ' ' + path

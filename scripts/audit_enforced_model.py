@@ -15,6 +15,7 @@ from urllib.parse import urlencode
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from services.commerce.detection import Detector
+from scripts.storefront_requests import requests as storefront_requests
 
 
 def probes() -> list[dict]:
@@ -51,6 +52,15 @@ def probes() -> list[dict]:
             add('attack body: '+payload, label, method='POST',path='/store/carts/cart_01JABCDEFGHIJK',
                 query='',body=json.dumps({'metadata':{'note':payload}}),headers={'content-type':'application/json'})
             add('attack header: '+payload, label, headers={'x-probe':payload})
+    seen: set[str] = set()
+    for index in range(2):
+        for request in storefront_requests('diagnostic',index):
+            key=json.dumps(request,sort_keys=True)
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append({'name':'normal storefront server API: '+request['path'],
+                         'expected':'normal','request':request})
     return rows
 
 
@@ -107,7 +117,7 @@ async def inspect(bundle: Path, capture: Path | None) -> dict:
 
 def main() -> None:
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--bundle',type=Path,default=ROOT/'model/commerce-five/search-repair-v6')
+    parser.add_argument('--bundle',type=Path,default=ROOT/'model/commerce-five/search-repair-v8')
     parser.add_argument('--capture',type=Path)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--require-clean',action='store_true',

@@ -1,0 +1,68 @@
+{
+  "train": {
+    "total": 178831,
+    "labels": {
+      "normal": 27247,
+      "cmdi": 36500,
+      "sqli": 41690,
+      "path_traversal": 35750,
+      "xss": 37644
+    },
+    "datasets": {
+      "Mirage-Sentinel/isolated-shopping-capture": 1953,
+      "Mirage-Sentinel/original-commerce-v4.1-templates": 94652,
+      "Mirage-Sentinel/comparison-context-v5": 7108,
+      "Morzeux/HttpParamsDataset": 5850,
+      "Mirage-Sentinel/literal-context-v4": 6461,
+      "mendeley/z6xm42spk6": 2700,
+      "fmereani/Cross-Site-Scripting-XSS": 420,
+      "Mirage-Sentinel/multilingual-context-v6": 8728,
+      "Mirage-Sentinel/search-shape-counterfactual-v3": 18805,
+      "danielmiessler/SecLists": 170,
+      "Mirage-Sentinel/source-derived-storefront-v7": 10274,
+      "Mirage-Sentinel/query-context-augmentation": 21710
+    }
+  },
+  "validation": {
+    "total": 37578,
+    "labels": {
+      "normal": 7343,
+      "path_traversal": 7613,
+      "sqli": 7823,
+      "cmdi": 7279,
+      "xss": 7520
+    },
+    "datasets": {
+      "Mirage-Sentinel/isolated-shopping-capture": 492,
+      "Mirage-Sentinel/original-commerce-v4.1-templates": 18850,
+      "Mirage-Sentinel/comparison-context-v5": 1480,
+      "Morzeux/HttpParamsDataset": 1250,
+      "Mirage-Sentinel/literal-context-v4": 1345,
+      "mendeley/z6xm42spk6": 500,
+      "fmereani/Cross-Site-Scripting-XSS": 90,
+      "Mirage-Sentinel/multilingual-context-v6": 2000,
+      "Mirage-Sentinel/search-shape-counterfactual-v3": 4523,
+      "danielmiessler/SecLists": 30,
+      "Mirage-Sentinel/source-derived-storefront-v7": 2638,
+      "Mirage-Sentinel/query-context-augmentation": 4380
+    }
+  },
+  "test": {
+    "total": 25102,
+    "labels": {
+      "path_traversal": 6500,
+      "cmdi": 6000,
+      "sqli": 6500,
+      "xss": 6000,
+      "normal": 102
+    },
+    "datasets": {
+      "Mirage-Sentinel/original-commerce-v4.1-templates": 18852,
+      "Morzeux/HttpParamsDataset": 1250,
+      "mendeley/z6xm42spk6": 700,
+      "fmereani/Cross-Site-Scripting-XSS": 100,
+      "danielmiessler/SecLists": 50,
+      "Mirage-Sentinel/query-context-augmentation": 4150
+    }
+  }
+}

@@ -1,0 +1,147 @@
+{
+  "created_at": "2026-11-01T07:01:31.872+00:00",
+  "base_manifest_sha256": "5323bad7877d3b14690c3907fb8988b98e36d7f01e696ab5224dba0169da7c22",
+  "prior_reserved_policy": "v3 and v6 disclosed pools are regression-only; v7 reserved pool is not used for fitting",
+  "test_policy": "Legacy test inspected for diagnosis; no longer an untouched estimate. No test row copied into fitting.",
+  "splits": {
+    "train": {
+      "added": {
+        "normal": 6264,
+        "sqli": 1050,
+        "xss": 1050,
+        "cmdi": 860,
+        "path_traversal": 1050
+      },
+      "skipped": {
+        "exact": 10726
+      },
+      "sha256": "497cb55ff40e6a5fd5816c19026e47eb6cc8b3b7f23fe6f87a409c0a6c8c48a5"
+    },
+    "validation": {
+      "added": {
+        "normal": 1590,
+        "sqli": 273,
+        "xss": 273,
+        "cmdi": 229,
+        "path_traversal": 273
+      },
+      "skipped": {
+        "exact": 2654
+      },
+      "sha256": "91a4a1e600cfaeb14d02d7943ac4071366c2ef79e0bcc6dad50fe66596db09a7"
+    }
+  },
+  "request_catalog_sha256": "84eb882b330b6965105359cbd611c56c019abe270f6a0c7677a244bf055ba19c",
+  "application_sources": {
+    "products.ts": "3c77c1b972f99f1004cac5457d8235b584ea65ef57868ab68efe75489f1f2180",
+    "categories.ts": "a8bb19c71cb0922310264af1ecaeb6d9ca2df7b001318dffe2fa63974166479c",
+    "collections.ts": "e58a54b5bfb13f8b5738c44a98f45a09a8042347980dccb3f2345f645d5fd8c4",
+    "cart.ts": "6453b9177eac2468ea872ce696358289122c21425333595405a4be8cf4e38dce",
+    "orders.ts": "fc8622468f15eb10631c43d84da187659919790c064944b389ad94fcde87a3b5",
+    "customer.ts": "70ace178e49cd82b5510e17f1d32055fd4330c408e33dacec6622308fb599233",
+    "fulfillment.ts": "aea2efd3a81ca36910d1ba5581ab48e5520f528a45249a0eac4ecee4e9729494",
+    "payment.ts": "2bc8ae3f9544f777b59fc03fedbd35bd14c2fb934382f5d6b53d04938c845972",
+    "variants.ts": "b823c1b4d048f55c17dbdc64aea621e466f704338c61b56bda306a747f519f88",
+    "locales.ts": "d25cd1e90fae1ab5cec3151ff6594649a24ae00169aee93883f76b50901c1bdc",
+    "product-options.ts": "8cb2f13d4f130e3adf43346a3e346c4cfafa6ebe6e0a3aa69221f392acd43f15",
+    "regions.ts": "280097c5566ff1e6e86b36db244fa929a5d279378200b2d4c50bca468e9cbc39"
+  },
+  "audit": {
+    "normalization": "decoded-case-number-quoted-literal-v1",
+    "near_detection_limit": "Heuristic only; independent scenario review is still required",
+    "cross_split_conflicts": {},
+    "allow_shared_families": true,
+    "shared_family_rows": {
+      "train/validation:traversal-parent-boundary": 6460,
+      "train/validation:sql-predicate": 3837,
+      "train/validation:sql-union-constants": 1573,
+      "train/validation:cmd-substitution": 3911,
+      "train/validation:cmd-shell-chain": 2079,
+      "train/validation:xss-script-element": 611,
+      "train/validation:xss-context-breakout": 329,
+      "train/validation:normal-search-natural": 8,
+      "train/validation:normal-search-literal": 8,
+      "train/validation:normal-search-size": 6,
+      "train/validation:normal-search-description": 5,
+      "train/validation:normal-search-budget": 12,
+      "train/validation:normal-product-browse": 2,
+      "train/validation:normal-search-help": 9,
+      "train/test:traversal-parent-boundary": 6460,
+      "train/test:cmd-shell-chain": 2070,
+      "train/test:sql-predicate": 3801,
+      "train/test:cmd-substitution": 3920,
+      "train/test:xss-script-element": 643,
+      "train/test:sql-union-constants": 1609,
+      "train/test:xss-context-breakout": 297,
+      "train/test:normal-search-help": 9,
+      "train/test:normal-search-natural": 9,
+      "train/test:normal-search-literal": 8,
+      "train/test:normal-search-size": 9,
+      "train/test:normal-search-description": 4,
+      "train/test:normal-search-budget": 11
+    },
+    "allow_shared_normal_templates": true,
+    "shared_normal_template_rows": {
+      "train/validation": 642
+    },
+    "splits": {
+      "train": {
+        "rows": 178831,
+        "labels": {
+          "normal": 27247,
+          "cmdi": 36500,
+          "sqli": 41690,
+          "path_traversal": 35750,
+          "xss": 37644
+        },
+        "sources": {
+          "external": 11093,
+          "ai": 167738
+        },
+        "reviewed": 0,
+        "exact_duplicates": 0,
+        "near_groups": 152726
+      },
+      "validation": {
+        "rows": 37578,
+        "labels": {
+          "normal": 7343,
+          "path_traversal": 7613,
+          "sqli": 7823,
+          "cmdi": 7279,
+          "xss": 7520
+        },
+        "sources": {
+          "external": 2362,
+          "ai": 35216
+        },
+        "reviewed": 0,
+        "exact_duplicates": 0,
+        "near_groups": 32935
+      },
+      "test": {
+        "rows": 25102,
+        "labels": {
+          "path_traversal": 6500,
+          "cmdi": 6000,
+          "sqli": 6500,
+          "xss": 6000,
+          "normal": 102
+        },
+        "sources": {
+          "ai": 23002,
+          "external": 2100
+        },
+        "reviewed": 0,
+        "exact_duplicates": 0,
+        "near_groups": 25102
+      }
+    },
+    "ratios": {
+      "train": 0.7404673079073003,
+      "validation": 0.15559539731109556,
+      "test": 0.10393729478160416
+    }
+  },
+  "fit_uses_reserved_v7": false
+}

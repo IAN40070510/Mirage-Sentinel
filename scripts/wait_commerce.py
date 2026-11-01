@@ -17,11 +17,13 @@ def main() -> None:
     parser.add_argument("--timeout", type=int, default=180)
     args = parser.parse_args()
     deadline = time.monotonic() + args.timeout
-    opener = urllib.request.build_opener(
-        urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
-    )
     last_issue = "No successful full-stack response"
     while time.monotonic() < deadline:
+        # A failed page can change this visitor's realm. Each retry must test a
+        # fresh normal visitor, not accidentally accept a quarantined session.
+        opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
+        )
         try:
             with opener.open(
                 args.url.rstrip("/") + "/healthz", timeout=10

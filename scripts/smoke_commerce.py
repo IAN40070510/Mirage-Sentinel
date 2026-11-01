@@ -3,10 +3,34 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import hmac
+import os
+from pathlib import Path
+import re
 import secrets
+import sqlite3
 from html.parser import HTMLParser
 
 import httpx
+
+
+def assert_realm(client: httpx.Client, expected: str, state_db: Path | None) -> None:
+    """Read only this test visitor's disposable routing state, never forensics."""
+    if state_db is None:
+        return
+    if state_db.name != 'visitors.db':
+        raise ValueError('Only the disposable visitors.db routing state is allowed')
+    token=client.cookies.get('visitor_id') or ''
+    visitor,sep,signature=token.partition('.')
+    assert sep and re.fullmatch(r'[a-f0-9]{32}',visitor), 'Missing signed test visitor'
+    key=os.environ['VISITOR_SIGNING_KEY'].encode()
+    expected_signature=hmac.new(key,visitor.encode(),hashlib.sha256).hexdigest()
+    assert hmac.compare_digest(signature,expected_signature), 'Invalid test visitor signature'
+    with sqlite3.connect(state_db.resolve().as_uri()+'?mode=ro',uri=True) as db:
+        db.execute('PRAGMA query_only=ON')
+        row=db.execute('SELECT sandbox FROM visitors WHERE id=?',(visitor,)).fetchone()
+    assert row is not None and bool(row[0]) == (expected=='sandbox'), f'Expected {expected} routing'
 
 
 class ScriptAssets(HTMLParser):
@@ -106,6 +130,8 @@ def exercise(client: httpx.Client, profile: dict | None = None) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default="http://localhost:8080")
+    parser.add_argument('--state-db',type=Path,
+                        help='Read-only verification of this test visitor inside the gateway container')
     args = parser.parse_args()
     with httpx.Client(base_url=args.url, timeout=60, follow_redirects=True) as client:
         regions_response = client.get("/store/regions")
@@ -114,6 +140,7 @@ def main() -> None:
         country = region["countries"][0]["iso_2"]
         home = client.get(f"/{country}")
         assert home.status_code == 200, f'Storefront /{country} returned HTTP {home.status_code}'
+        assert_realm(client,'real',args.state_db)
         assets = ScriptAssets()
         assets.feed(home.text)
         assert assets.urls, "Storefront JavaScript assets missing"
@@ -122,6 +149,7 @@ def main() -> None:
             assert asset.status_code == 200, f"Missing browser asset: {source}"
             assert "javascript" in asset.headers.get("content-type", "")
         normal_order = exercise(client)
+        assert_realm(client,'real',args.state_db)
         # A 200 product response alone cannot distinguish real from sandbox routing.
         # Retain access to this identity's real order after benign complex searches.
         for query in ('紅色上衣', '100% cotton', 'C++', 'AT&T', '日本製', 'size < 10',
@@ -132,9 +160,12 @@ def main() -> None:
             order_response = client.get('/store/orders/' + normal_order)
             assert order_response.status_code == 200, f'Benign search changed realm: {query}'
             assert order_response.json()['order']['id'] == normal_order
+            assert_realm(client,'real',args.state_db)
         client.get("/store/products?q=UNION%20SELECT%201")
+        assert_realm(client,'sandbox',args.state_db)
         client.headers.pop("authorization", None)
         sandbox_order = exercise(client)
+        assert_realm(client,'sandbox',args.state_db)
         assert normal_order != sandbox_order
         # The real order must not be visible through the quarantined identity.
         assert client.get("/store/orders/" + normal_order).status_code in {

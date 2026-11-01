@@ -44,6 +44,16 @@ jobs:
           name: normal-diversity-acceptance-reserved
           path: artifacts/normal-diversity-acceptance/
           retention-days: 30
+      - name: Save bounded runtime diagnostics on failure
+        if: failure()
+        run: python scripts/commerce_failure_diagnostics.py
+      - name: Retain redacted runtime diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commerce-runtime-diagnostics
+          path: artifacts/commerce-runtime-errors.log
+          retention-days: 7
       - name: Stop isolated collection stack
         if: always()
         run: docker compose --env-file .env.commerce -f docker-compose.commerce.yml down -v

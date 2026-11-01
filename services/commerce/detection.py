@@ -30,10 +30,10 @@ FEATURES = [
 ]
 RULES = {
     "sqli": re.compile(
-        r"(?:\bunion\s+(?:all\s+)?select\s+(?:\d|NULL\b|['\"`*(@]|[\w.]+\s*(?:,|\(|\bfrom\b))|\bor\s+['\"]?\d+['\"]?\s*=\s*['\"]?\d+|\bsleep\s*\(|\bdrop\s+table\s+[\w`\"]+)",
+        r"(?:\bunion\s+(?:all\s+)?select\s+(?:\d|NULL\b|['\"`*(@]|[\w.]+\s*(?:,|\(|\bfrom\b))|\bor\s+['\"]?\d+['\"]?\s*=\s*['\"]?\d+|\bsleep\s*\(|\bdrop\s+table\s+[\w`\"]+|\biif\s*\(\s*\d+\s*=\s*\d+\s*,\s*\d+\s*,\s*\d+\s*/\s*0\s*\))",
         re.IGNORECASE,
     ),
-    "xss": re.compile(r"<\s*script\b|javascript\s*:\s*(?:[\w.$]+\s*[=(`]|[([]|(?:void|throw)\b)|\bonerror\s*=|<\s*[a-z][^>]{0,2048}\bonload\s*=", re.IGNORECASE),
+    "xss": re.compile(r"<\s*script\b|javascript\s*:\s*(?:[\w.$]+\s*[=(`]|[([]|(?:void|throw)\b)|\bonerror\s*=|<\s*[a-z][^>]{0,2048}\bon(?:load|mouseover|mouseenter|focus|focusin|click|input|animationstart|pointerover|begin)\s*=", re.IGNORECASE),
     "traversal": re.compile(r"(?:\.\.[/\\]){2,}(?!\.\.[/\\])(?=\S|$)|/etc/(?:passwd|shadow)", re.IGNORECASE),
     "command": re.compile(
         r";\s*(?:cat|curl|wget|bash|sh|id|whoami)\b|\$\(|\b(?:exec|system)\s*\(",

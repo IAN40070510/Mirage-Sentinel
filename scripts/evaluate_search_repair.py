@@ -24,14 +24,15 @@ async def evaluate(bundle: Path, requests: list[dict]) -> tuple[list[dict], dict
     assert detector.model_status=='ready_five_class' and detector.model_mode=='enforce'
     results=[];groups=defaultdict(Counter);seen=set()
     shapes=['q_only','pagination_first','pagination_last','sort_first','percent_spaces','json_note']
-    for index,req in enumerate(requests):
+    for index,item in enumerate(requests):
+        req = item.get('request', item)
         key=json.dumps(req,sort_keys=True,ensure_ascii=False)
         if key in seen:continue
         seen.add(key)
         prediction=await detector.assess(str(index),req['method'],req['path'],req['query'],
                                          req['headers'],req['body'].encode())
         while detector.busy:await asyncio.sleep(.001)
-        group=shapes[index % len(shapes)]
+        group=item.get('group',shapes[index % len(shapes)])
         groups[group]['rows']+=1
         groups[group]['flagged']+=int(prediction['attack'])
         groups[group]['fallback']+=int(prediction['fallback'] is not None)
@@ -62,7 +63,7 @@ def main() -> None:
         for path in (args.dataset/split).glob('*.jsonl'):
             for line in path.open(encoding='utf-8'):
                 development.add(hashlib.sha256(request_text(json.loads(line)['request']).encode()).hexdigest())
-    overlaps=len({hashlib.sha256(request_text(r).encode()).hexdigest() for r in requests} & development)
+    overlaps=len({hashlib.sha256(request_text(r.get('request',r)).encode()).hexdigest() for r in requests} & development)
     results,groups=asyncio.run(evaluate(args.bundle,requests))
     count=len(results);flagged=sum(r['attack'] for r in results)
     fallbacks=Counter(r['fallback'] or 'none' for r in results)

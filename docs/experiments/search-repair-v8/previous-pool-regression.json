@@ -1,0 +1,132 @@
+{
+  "created_at": "2026-11-01T11:54:48.217+00:00",
+  "scope": "Previously disclosed development regressions; not blind evaluation",
+  "bundle_sha256": "845be3fdc2440d56aefdb5bd056729dcc6d88edd7161344e082b6aa63edfe7b1",
+  "detector_sha256": "bcf9d642a784c23c176c01ad7f288ae81d3d1f26428cb9968ca0061f22a6429f",
+  "previous_pool_rows": 2432,
+  "previous_pool_flagged": 0,
+  "previous_pool_fallbacks": 0,
+  "groups": {
+    "q_only": {
+      "rows": 192,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "pagination_first": {
+      "rows": 192,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "pagination_last": {
+      "rows": 192,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "sort_first": {
+      "rows": 192,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "percent_spaces": {
+      "rows": 192,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "json_note": {
+      "rows": 192,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "ssr_collections": {
+      "rows": 360,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "ssr_product-categories": {
+      "rows": 200,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "ssr_products": {
+      "rows": 320,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "ssr_carts": {
+      "rows": 120,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "ssr_orders": {
+      "rows": 120,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "ssr_shipping-options": {
+      "rows": 40,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "ssr_payment-providers": {
+      "rows": 40,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "ssr_product-variants": {
+      "rows": 40,
+      "flagged": 0,
+      "fallback": 0
+    },
+    "ssr_regions": {
+      "rows": 40,
+      "flagged": 0,
+      "fallback": 0
+    }
+  },
+  "previous_pool_problems": [],
+  "legacy_counts": {
+    "path_traversal": 6500,
+    "cmdi": 6000,
+    "sqli": 6500,
+    "xss": 6000,
+    "normal": 102
+  },
+  "legacy_current_service_confusion": [
+    [
+      102,
+      0
+    ],
+    [
+      2,
+      24998
+    ]
+  ],
+  "legacy_problems": [
+    {
+      "sample_id": "external-v1-httpparams-0009920",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=c%3Awindowswin.ini",
+        "headers": {},
+        "body": null
+      },
+      "label": "path_traversal",
+      "model_score": 0.22172480821609497,
+      "rules": []
+    },
+    {
+      "sample_id": "external-v1-httpparams-0009913",
+      "request": {
+        "method": "GET",
+        "path": "/store/products",
+        "query": "q=c%3Aoot.ini",
+        "headers": {},
+        "body": null
+      },
+      "label": "path_traversal",
+      "model_score": 0.5277801752090454,
+      "rules": []
+    }
+  ]
+}

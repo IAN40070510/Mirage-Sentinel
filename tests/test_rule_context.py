@@ -19,3 +19,20 @@ def test_benign_search_has_no_signature(text: str) -> None:
     ('traversal','..\\..\\windows\\win.ini'),('command','; whoami')])
 def test_complete_attack_syntax_still_hits(label: str,text: str) -> None:
     assert RULES[label].search(text)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('payload', ['<input onmouseover="alert(1)">','<svg onfocus=alert(2)>','iif(123=123,1,1/0)'])
+async def test_additional_executable_syntax_is_detected(payload: str) -> None:
+    from urllib.parse import urlencode
+    from services.commerce.detection import Detector
+    result=await Detector().assess('syntax','GET','/store/products',urlencode({'q':payload}),{},b'')
+    assert result['attack'] and result['rules']
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('text',['onmouseover event reference','IIF SQL reference','input focus textbook'])
+async def test_event_and_function_prose_remains_normal(text: str) -> None:
+    from urllib.parse import urlencode
+    from services.commerce.detection import Detector
+    result=await Detector().assess('prose','GET','/store/products',urlencode({'q':text}),{},b'')
+    assert not result['rules']

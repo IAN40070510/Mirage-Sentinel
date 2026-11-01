@@ -24,7 +24,7 @@ jobs:
       - name: Verify frozen five-class model
         run: |
           pip check
-          python model/commerce-five/search-repair-v6/runtime.py --self-test
+          python model/commerce-five/search-repair-v8/runtime.py --self-test
       - name: Routing and isolation tests
         run: python -m pytest tests -q --junitxml=artifacts/commerce-tests.xml
       - name: Create ephemeral credentials
@@ -36,7 +36,9 @@ jobs:
           python scripts/wait_commerce.py
           docker compose --env-file .env.commerce -f docker-compose.commerce.yml exec -T gateway python -c 'import os,json,urllib.request,hashlib; from pathlib import Path; req=urllib.request.Request("http://localhost:8000/_control/status",headers={"x-control-token":os.environ["CONTROL_TOKEN"]}); state=json.load(urllib.request.urlopen(req,timeout=10)); assert state["model"]=="ready_five_class", state["model"]; assert state["model_mode"]=="enforce", state["model_mode"]; expected=hashlib.sha256(Path("/models/bundle.json").read_bytes()).hexdigest(); assert state["model_bundle_sha256"]==expected; print("Five-class gateway model loaded in enforce mode; bundle:",expected)'
       - name: Shopping and quarantine acceptance
-        run: python scripts/wait_commerce.py && python scripts/smoke_commerce.py
+        run: |
+          python scripts/wait_commerce.py
+          docker compose --env-file .env.commerce -f docker-compose.commerce.yml run --rm --no-deps -v "$PWD/scripts/smoke_commerce.py:/tmp/check.py:ro" gateway python /tmp/check.py --url http://edge:8080 --state-db /state/visitors.db
       - name: Collect isolated normal shopping journeys
         run: python scripts/collect_commerce_normal.py --output artifacts/normal-shopping-capture --sessions 30 --revision "${{ github.sha }}"
       - name: Diagnose enforced model input coverage and concurrency
@@ -62,6 +64,16 @@ jobs:
         with:
           name: commerce-tests
           path: artifacts/commerce-tests.xml
+      - name: Save bounded runtime diagnostics on failure
+        if: failure()
+        run: python scripts/commerce_failure_diagnostics.py
+      - name: Retain redacted runtime diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commerce-runtime-diagnostics
+          path: artifacts/commerce-runtime-errors.log
+          retention-days: 7
       - name: Stop this CI stack
         if: always()
         run: docker compose --env-file .env.commerce -f docker-compose.commerce.yml down -v

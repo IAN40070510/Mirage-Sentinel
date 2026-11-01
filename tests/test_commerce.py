@@ -411,3 +411,36 @@ def test_trained_shadow_model_preserves_real_to_sandbox_transition(system):
     assert client.get('/store/orders/order_fixture').json()['host'] == 'sandbox-medusa'
     assert client.get('/dk').json()['host'] == 'sandbox-storefront'
     assert [event['route'] for event in audit.events] == ['real', 'real', 'sandbox', 'sandbox', 'sandbox']
+
+
+def test_enforced_storefront_calls_preserve_real_and_sandbox_boundaries(system):
+    from pathlib import Path
+    from urllib.parse import urlencode
+    from scripts.storefront_requests import CATEGORY_FIELDS, PRODUCT_FIELDS
+    client, _store, audit, calls = system
+    bundle=Path(__file__).resolve().parents[1]/'model/commerce-five/search-repair-v8'
+    client.app.state.detector=Detector(str(bundle),timeout=5)
+    assert client.app.state.detector.model_status=='ready_five_class'
+    assert client.get('/dk').json()['host']=='real-storefront'
+    epoch=audit.events[-1]['epoch']
+    headers={'x-storefront-token':'REAL_STOREFRONT_TOKEN'*4,
+             'x-routing-epoch':epoch,'content-type':'application/json'}
+    for path,query in [('/store/product-categories',{'fields':CATEGORY_FIELDS,'limit':100}),
+                       ('/store/products',{'fields':PRODUCT_FIELDS,'region_id':'reg_01KABC12345678901234567890','limit':12,'offset':0})]:
+        response=client.get('/_api'+path+'?'+urlencode(query),headers=headers)
+        assert response.json()['host']=='real-medusa'
+        assert audit.events[-1]['epoch']==epoch
+        assert audit.events[-1]['fallback'] is None
+        assert audit.events[-1]['model_mode']=='enforce'
+    before=len(calls)
+    # A real storefront's stale context cannot cross the quarantine transition.
+    attack=client.get('/_api/store/products?q=UNION%20SELECT%201',headers=headers)
+    assert attack.status_code==409
+    assert len(calls)==before
+    assert audit.events[-1]['attack'] is True
+    assert client.get('/store/products').json()['host']=='sandbox-medusa'
+    sandbox_epoch=audit.events[-1]['epoch']
+    response=client.get('/_api/store/products',headers={
+        'x-storefront-token':'SANDBOX_STOREFRONT_TOKEN'*4,'x-routing-epoch':sandbox_epoch})
+    assert response.json()['host']=='sandbox-medusa'
+    assert client.get('/dk').json()['host']=='sandbox-storefront'

@@ -21,3 +21,9 @@ scripts/build_literal_repair.py -text
 scripts/build_comparison_repair.py -text
 scripts/build_multilingual_repair.py -text
 services/commerce/gateway.py -text
+
+model/commerce-five/search-repair-v8/* -text
+docs/experiments/search-repair-v8/*.json -text
+scripts/storefront_requests.py -text
+scripts/build_storefront_repair.py -text
+commerce_ml/normal_balance.py -text

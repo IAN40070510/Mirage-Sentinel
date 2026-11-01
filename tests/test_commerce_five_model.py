@@ -12,7 +12,7 @@ from services.commerce.five_runtime import Predictor, LABELS
 BUNDLE = Path(__file__).resolve().parents[1] / 'model/commerce-five/run-20261028T081548514385Z'
 
 
-@pytest.mark.parametrize('bundle', [BUNDLE, BUNDLE.parent / 'diversity-v2', BUNDLE.parent / 'search-repair-v3', BUNDLE.parent / 'search-repair-v6'])
+@pytest.mark.parametrize('bundle', [BUNDLE, BUNDLE.parent / 'diversity-v2', BUNDLE.parent / 'search-repair-v3', BUNDLE.parent / 'search-repair-v6', BUNDLE.parent / 'search-repair-v8'])
 @pytest.mark.asyncio
 async def test_five_class_service_matches_training_runtime(bundle: Path):
     detector = Detector(str(bundle), timeout=5, model_mode='enforce')
@@ -62,7 +62,7 @@ def test_unknown_model_mode_is_rejected():
 
 @pytest.mark.asyncio
 async def test_default_enforcement_uses_model_without_rule_hit() -> None:
-    detector = Detector(str(BUNDLE.parent / 'search-repair-v6'), timeout=5)
+    detector = Detector(str(BUNDLE.parent / 'search-repair-v8'), timeout=5)
     decision = await detector.assess('model-only', 'GET', '/store/products',
                                     'q=%27+AND+1%3D1--', {}, b'')
     assert detector.model_mode == 'enforce'
@@ -74,7 +74,7 @@ async def test_default_enforcement_uses_model_without_rule_hit() -> None:
 
 @pytest.mark.asyncio
 async def test_repaired_normal_search_is_not_dependent_on_pagination() -> None:
-    detector = Detector(str(BUNDLE.parent / 'search-repair-v6'), timeout=5)
+    detector = Detector(str(BUNDLE.parent / 'search-repair-v8'), timeout=5)
     for value in ('紅色上衣','100% cotton','C++','AT&T','日本製','size < 10',
                   'javascript: the definitive guide','UNION SELECT SQL textbook','../../ print pattern',
                   'sale >= 250','幅 < 28','baleares (illes)','javascript: browser reference',

@@ -32,3 +32,14 @@ def test_route_fpr_constraint_prevents_hiding_a_rare_normal_failure():
 def test_real_medusa_payment_ids_and_fixture_ids_are_one_group():
     assert normal_route_group('POST\n/store/payment-collections/pay_col_ABC/payment-sessions\n') == normal_route_group('POST\n/store/payment-collections/pay_col_XYZ/payment-sessions\n')
     assert normal_route_group('POST\n/store/carts/<ID>/line-items\n') == normal_route_group('POST\n/store/carts/cart_ABC/line-items\n')
+
+
+def test_storefront_resource_ids_do_not_multiply_normal_route_weight():
+    for resource,prefix in [('regions','reg'),('collections','pcol'),
+                            ('product-categories','pcat'),('shipping-options','so')]:
+        rows=[record(i,f'/store/{resource}/{prefix}_{i:026d}') for i in range(100)]
+        rows += [record(100,'/store/products')]
+        rows += [record(100+label,'/store/products',label) for label in range(1,5)]
+        assert len({normal_route_group(r.text) for r in rows[:100]}) == 1
+        result=weights(rows,balance_normal_routes=True)
+        assert np.isclose(result[:100].sum(),result[100])

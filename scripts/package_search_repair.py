@@ -14,10 +14,11 @@ def sha(data: bytes) -> str:
 def main() -> None:
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--version',required=True)
+    parser.add_argument('--dataset-version')
     parser.add_argument('--notebook-template',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True)
     args=parser.parse_args();v=args.version
-    dataset=ROOT/f'datasets/commerce/search-repair-{v}'
+    dataset=ROOT/f'datasets/commerce/search-repair-{args.dataset_version or v}'
     model=ROOT/f'model/commerce-five/search-repair-{v}'
     docs=ROOT/f'docs/experiments/search-repair-{v}'
     assert json.loads((docs/'reserved-result.json').read_text(encoding='utf-8'))['passed']
@@ -27,7 +28,7 @@ def main() -> None:
     prior=ROOT/'datasets/commerce/diverse-rebalanced-v2/provenance'
     for p in prior.rglob('*'):
         if p.is_file():files[f'data/provenance/{p.relative_to(prior).as_posix()}']=p.read_bytes()
-    for stage in ('v3b','v4','v5'):
+    for stage in ('v3b','v4','v5','v6'):
         path=ROOT/f'datasets/commerce/search-repair-{stage}/manifest.json'
         files[f'data/provenance/repair-{stage}-manifest.json']=path.read_bytes()
     for name in ('LICENSE','README.md','source.json'):
@@ -35,7 +36,8 @@ def main() -> None:
         files[f'data/provenance/httpparams/{name}']=path.read_bytes()
     for name in ('__init__.py','runtime.py','data.py','train.py','normal_balance.py','requirements.txt'):
         files['commerce_ml/'+name]=(ROOT/'commerce_ml'/name).read_bytes()
-    for name in ('build_search_repair.py','build_literal_repair.py','build_comparison_repair.py','build_multilingual_repair.py'):
+    for name in ('build_search_repair.py','build_literal_repair.py','build_comparison_repair.py',
+                 'build_multilingual_repair.py','build_storefront_repair.py','storefront_requests.py'):
         files['scripts/'+name]=(ROOT/'scripts'/name).read_bytes()
     files['README.md']=(docs/'REPORT.md').read_bytes()
     files['data/source-counts.json']=(docs/'source-counts.json').read_bytes()

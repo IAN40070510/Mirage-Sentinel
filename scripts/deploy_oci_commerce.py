@@ -169,6 +169,8 @@ def main() -> None:
                 "/tmp/check.py",
                 "--url",
                 "http://edge-preview:8080",
+                "--state-db",
+                "/state/visitors.db",
             )
         command(ROOT, "up", "-d", "--no-deps", "edge")
         subprocess.run(
