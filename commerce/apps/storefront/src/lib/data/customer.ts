@@ -248,6 +248,9 @@ export async function confirmEmailVerification(
 }
 
 export async function signout(countryCode: string) {
+  // JWT logout alone may only clear local token storage. Explicitly unlink the
+  // verified account from this visitor without clearing account quarantine.
+  await sdk.client.fetch("/auth/session", { method: "DELETE" })
   await sdk.auth.logout()
 
   await removeAuthToken()

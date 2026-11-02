@@ -212,7 +212,8 @@ def create_app(
             app.state.store.touch, token, forced_sandbox
         )
         identity_realm = "sandbox" if provisional["sandbox"] else "real"
-        account = await verified_account(identity_realm, request.headers.get("authorization", ""))
+        logout = path == "auth/session" and request.method == "DELETE"
+        account = None if logout else await verified_account(identity_realm, request.headers.get("authorization", ""))
         if account:
             provisional = await asyncio.to_thread(app.state.store.touch, provisional["token"], False, account=account)
         forwarded = {
@@ -347,6 +348,12 @@ def create_app(
             content = b'{"type":"service_unavailable","message":"Please retry shortly."}'
             response_headers.append(('retry-after','1'))
             origin = 'inference_unavailable'
+        elif logout:
+            # JWT storefront logout needs an explicit server-side unlink. This
+            # does not release quarantine or revoke the account's existing JWTs.
+            await asyncio.to_thread(app.state.store.detach_account, visitor["id"])
+            status_code, content = 200, b'{"success":true}'
+            origin = "account_logout"
         else:
             try:
                 # Next's static route matcher needs literal route-group parentheses.
@@ -383,8 +390,6 @@ def create_app(
                             location += "?" + parsed_location.query
                     response_headers.append(("location", location))
                 origin = realm + ("_api" if is_api else "_web")
-                if response.is_success and path == "auth/session" and request.method == "DELETE":
-                    await asyncio.to_thread(app.state.store.detach_account, visitor["id"])
                 if (is_api and response.is_success and request.method == "POST"
                         and path in {"auth/customer/emailpass", "auth/token/refresh"}):
                     try:
