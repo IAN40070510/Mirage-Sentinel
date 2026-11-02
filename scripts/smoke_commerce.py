@@ -66,7 +66,16 @@ def verify_clothing_catalog(client: httpx.Client) -> None:
         assert len(product['variants']) == 4, f'{handle}: expected S/M/L/XL'
         for variant in product['variants']:
             assert variant['calculated_price']['calculated_amount'] > 0, f'{handle}: price missing'
-    print('PASS: 12 added clothing products and 48 priced size variants in current realm')
+    image_hashes: set[str] = set()
+    for handle in handles | {'t-shirt', 'sweatshirt', 'sweatpants', 'shorts'}:
+        thumbnail = products[handle]['thumbnail']
+        assert thumbnail.startswith('/images/catalog-v2/'), f'{handle}: expected local image'
+        image = client.get(thumbnail)
+        assert image.status_code == 200 and image.content.startswith(b'\x89PNG\r\n\x1a\n'), f'{handle}: missing PNG'
+        digest = hashlib.sha256(image.content).hexdigest()
+        assert digest not in image_hashes, f'{handle}: duplicate thumbnail image'
+        image_hashes.add(digest)
+    print('PASS: 12 added clothing products, 48 priced sizes and 16 unique local thumbnails')
 
 
 def exercise(client: httpx.Client, profile: dict | None = None) -> str:

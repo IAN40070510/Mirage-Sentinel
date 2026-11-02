@@ -1,0 +1,95 @@
+{
+  "generator": "built-in image_gen",
+  "kind": "AI illustrative catalog mockups, not real product photographs",
+  "prompt_summary": "One garment per image, front flat lay, warm gray studio background, no branding; regular/oversized black and white tees, three distinct gray crew sweatshirts, three distinct gray joggers, two distinct vintage shorts.",
+  "assets": [
+    {
+      "file": "classic-crew-sweatshirt.png",
+      "sha256": "faaa4df4bf7223e23f9d9bf869405ca92abb7269998ec8ce1bf12ba9b748aade"
+    },
+    {
+      "file": "classic-gray-joggers.png",
+      "sha256": "97d800fb7d452a6453ea8701f077df892513d5053fd02f72217f2c4d7331409c"
+    },
+    {
+      "file": "classic-vintage-shorts.png",
+      "sha256": "f7893d2e6829b6af064eadd04a5d90afc03225ce963db113b830639a184f3c98"
+    },
+    {
+      "file": "essential-black-tee.png",
+      "sha256": "6facdf821031e4e08a9542f437e9610a296bacd52a2f0af8c2d702bce5e89d13"
+    },
+    {
+      "file": "essential-white-tee.png",
+      "sha256": "98758fb97cff4aab966d0ae3e209499c6f158e72dded328f3bfd91254ee7068b"
+    },
+    {
+      "file": "everyday-gray-joggers.png",
+      "sha256": "1324fc2d92cc9ba90ee542c6117f69259e40339585985b4b7fc195c322fa8c6e"
+    },
+    {
+      "file": "layering-crew-sweatshirt.png",
+      "sha256": "1a65a443189e29f49d8dbda25b4cc0b07b1e22b7ef3fc412d29a303c5a8dab81"
+    },
+    {
+      "file": "relaxed-black-tee.png",
+      "sha256": "b617050ea1f27f37c347e6898a828d99779e729585f8565169a13da8cceb6134"
+    },
+    {
+      "file": "relaxed-white-tee.png",
+      "sha256": "767c3d6e4e9d1eb77875e6804e7673f0232029a5ba10c92e509e57aa51655266"
+    },
+    {
+      "file": "shorts-vintage-back.png",
+      "sha256": "d31f38ba8b552935058cb9f224cc711f7894194fcd584b3a54a376372fccdbe4"
+    },
+    {
+      "file": "shorts-vintage-front.png",
+      "sha256": "09fb8b413e34a84cd7f8814e6a3d4ce4c22026b6940e29ff66d55617d03a32bd"
+    },
+    {
+      "file": "sweatpants-gray-back.png",
+      "sha256": "156da53f2de8ea330fe8c49955a02b424c73a2277adbb2ec33ce2ea48e1eac2c"
+    },
+    {
+      "file": "sweatpants-gray-front.png",
+      "sha256": "7b4d16ee49d50a412fe1057b114e49b4d0843c506dca7d31f30747ed14ee3498"
+    },
+    {
+      "file": "sweatshirt-vintage-back.png",
+      "sha256": "37628c2032a37aa032a8de63483973c19ccd0aad406740565512e372514384c6"
+    },
+    {
+      "file": "sweatshirt-vintage-front.png",
+      "sha256": "8cfd2874b97b4bdc08c83d4049a47519885a97ccdb59476a997b8f629ceae34c"
+    },
+    {
+      "file": "tee-black-back.png",
+      "sha256": "3cf2bf44dcca862bfb5b39282b461df91bb955c318d0c6e5e2fa18791d9ed379"
+    },
+    {
+      "file": "tee-black-front.png",
+      "sha256": "fce3c8b639406972891d7e47ae6f157c445305106e70eaa6e9a6afdf8cac53f4"
+    },
+    {
+      "file": "tee-white-back.png",
+      "sha256": "af3ba1cb3503eadbb2920b19ba26f65a3a6e2af3ab7c625877bcf9badf5c1e5c"
+    },
+    {
+      "file": "tee-white-front.png",
+      "sha256": "52e41b2647066fce1b2c017a338849a7894a832737e6611d4866a8e16e12defd"
+    },
+    {
+      "file": "weekend-crew-sweatshirt.png",
+      "sha256": "14f73f2ecc815934785a9c6af73cc59081b0cd704bbd1d71569757c4e21b0a3e"
+    },
+    {
+      "file": "weekend-gray-joggers.png",
+      "sha256": "889f8bfe792af86f5114ebb04927ce83735968241c776615e47bd9fb58b0297e"
+    },
+    {
+      "file": "weekend-vintage-shorts.png",
+      "sha256": "d38f7ce933ecc2a9a0ffcc5e29491f50aee4c4396c631ef84598681a22bce845"
+    }
+  ]
+}
