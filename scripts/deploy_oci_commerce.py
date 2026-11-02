@@ -25,6 +25,11 @@ def ensure_capacity(root: Path) -> None:
         free = shutil.disk_usage(root).free
         print(f"Free after old build-cache recovery: {free / 1024**3:.2f} GiB", flush=True)
     if free < minimum:
+        # Unused build cache is regenerable; this does not prune tagged images or volumes.
+        subprocess.run(["docker", "builder", "prune", "--all", "--force"], check=True)
+        free = shutil.disk_usage(root).free
+        print(f"Free after unused build-cache recovery: {free / 1024**3:.2f} GiB", flush=True)
+    if free < minimum:
         raise SystemExit("Less than 6 GiB free after cache recovery; images and data retained")
 
 
