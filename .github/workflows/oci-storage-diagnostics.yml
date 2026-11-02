@@ -1,4 +1,4 @@
-name: Clean unused legacy images
+name: Demo readiness diagnostics
 on:
   workflow_dispatch:
 permissions:
@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Clean only verified unused legacy images
+      - name: Check Mirage LLM connection and service health
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.OCI_HOST }}
@@ -18,36 +18,18 @@ jobs:
           command_timeout: 8m
           script: |
             set -eu
-            sudo python3 - <<'PYREMOTE'
-            import json, shutil, subprocess
-            def output(*args):
-                return subprocess.check_output(['docker', *args], text=True)
-            def used_images():
-                ids = output('ps', '-aq').split()
-                return {row['Image'] for row in json.loads(output('inspect', *ids))} if ids else set()
-            before = set(output('ps', '--format', '{{.Names}}').splitlines())
-            print('Free before:', shutil.disk_usage('/var/lib/docker').free, flush=True)
-            targets = [
-                'mirage-sentinel-frontend_customer:latest',
-                'mirage-sentinel-frontend_soc:latest',
-                'mirage-sentinel-backend_public:latest',
-                'mirage-sentinel-backend_soc:latest',
-                'mirage-sentinel-sandbox:latest',
-                'mirage-sentinel-vuln_bank:latest',
-                'redis:7-alpine', 'nginx:1.27-alpine',
-            ]
-            for name in targets:
-                result = subprocess.run(['docker', 'image', 'inspect', '--format', '{{.Id}}', name], capture_output=True, text=True)
-                if result.returncode:
-                    print('Absent:', name, flush=True)
-                    continue
-                if result.stdout.strip() in used_images():
-                    print('Retain used image:', name, flush=True)
-                    continue
-                subprocess.run(['docker', 'image', 'rm', name], check=True)
-            assert before <= set(output('ps', '--format', '{{.Names}}').splitlines())
-            print('Free after:', shutil.disk_usage('/var/lib/docker').free, flush=True)
-            print('PASS: running containers retained; no volumes or commerce images deleted', flush=True)
+            sudo docker exec -i mirage-commerce-mirage-1 python - <<'PYREMOTE'
+            import os, socket, urllib.request
+            from urllib.parse import urlsplit
+            url=os.getenv('OLLAMA_URL','http://ollama:11434')
+            host=urlsplit(url).hostname
+            print('Ollama hostname:',host,flush=True)
+            try:
+                print('Resolved address:',socket.gethostbyname(host),flush=True)
+                with urllib.request.urlopen(url+'/api/tags',timeout=10) as r:
+                    print('Ollama tags HTTP:',r.status,flush=True)
+            except Exception as exc:
+                print('OLLAMA_CHECK_FAILED:',type(exc).__name__,str(exc),flush=True)
             PYREMOTE
-            curl --fail --silent --show-error --location --max-time 30 http://127.0.0.1/dk > /dev/null
-            curl --fail --silent --show-error --max-time 15 http://127.0.0.1:3000/ > /dev/null
+            sudo docker ps --format '{{.Names}} {{.Status}}'
+            df -h /var/lib/docker
