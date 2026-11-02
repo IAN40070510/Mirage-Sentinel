@@ -1,4 +1,4 @@
-"""Verify public SOC viewing and protected mutations without reading events."""
+"""Verify public SOC viewing and public release validation without reading events."""
 from __future__ import annotations
 
 import argparse
@@ -20,14 +20,14 @@ def main() -> None:
             if response.status != 200:
                 raise RuntimeError(f"SOC {path}: HTTP {response.status}")
     request = urllib.request.Request(
-        base + "/api/release/" + "0" * 32,
+        base + "/api/release/invalid-visitor",
         method="POST", headers={"x-soc-action": "release"},
     )
     try:
         with urllib.request.urlopen(request, timeout=15):
-            raise RuntimeError("Anonymous SOC release must be rejected")
+            raise RuntimeError("Invalid visitor must be rejected")
     except urllib.error.HTTPError as exc:
-        if exc.code != 401:
+        if exc.code != 400:
             raise
     if args.commerce_url:
         jar = http.cookiejar.CookieJar()
@@ -46,7 +46,7 @@ def main() -> None:
                 raise RuntimeError("Own commerce request did not appear in SOC")
             time.sleep(0.5)
         print("PASS: new commerce request is visible in SOC")
-    print("PASS: SOC opens without login; anonymous release is denied")
+    print("PASS: SOC opens without login; release requires no login and rejects invalid visitors")
 
 
 if __name__ == "__main__":

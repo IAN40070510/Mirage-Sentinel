@@ -193,7 +193,7 @@ def main() -> None:
         command(ROOT, "--profile", "preview", "stop", "edge-preview")
         previous.write_text(str(ROOT) + "\n")
         print(
-            "OCI commerce deployment passed. SOC: port 3000 (view without login; release requires authentication); admin: SSH tunnel to 127.0.0.1:9100."
+            "OCI commerce deployment passed. SOC: port 3000 (view and release without login); admin: SSH tunnel to 127.0.0.1:9100."
         )
     except BaseException:
         shared.write_text(original)

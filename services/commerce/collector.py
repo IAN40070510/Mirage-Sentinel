@@ -4,21 +4,19 @@ import asyncio
 import hmac
 import json
 import os
+import re
 import sqlite3
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from .common import now_iso, secret
 
-security = HTTPBasic()
 
 
 class Forensics:
@@ -81,27 +79,12 @@ def create_app(database: Forensics | None = None) -> FastAPI:
         app.state.db = database or Forensics(
             os.getenv("FORENSICS_DB", "/forensics/events.db")
         )
-        # Fail startup if either access channel is unconfigured.
+        # Internal service channels still require secrets.
         secret("AUDIT_WRITE_TOKEN")
-        secret("SOC_PASSWORD")
+        secret("CONTROL_TOKEN")
         yield
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
-
-    def operator(
-        credentials: Annotated[HTTPBasicCredentials, Depends(security)],
-    ) -> None:
-        if not (
-            hmac.compare_digest(
-                credentials.username.encode(), os.getenv("SOC_USER", "analyst").encode()
-            )
-            and hmac.compare_digest(
-                credentials.password.encode(), secret("SOC_PASSWORD").encode()
-            )
-        ):
-            raise HTTPException(
-                401, "Authentication required", headers={"WWW-Authenticate": "Basic"}
-            )
 
     @app.post("/events")
     async def ingest(request: Request) -> dict:
@@ -155,10 +138,14 @@ def create_app(database: Forensics | None = None) -> FastAPI:
             response.raise_for_status()
             return response.json()
 
-    @app.post("/api/release/{visitor}", dependencies=[Depends(operator)])
+    @app.post("/api/release/{visitor}")
     async def release(visitor: str, request: Request) -> dict:
-        # Same-origin JS-only header prevents CSRF with cached Basic credentials.
+        # Require an explicit JS action; cross-origin browsers cannot add it without CORS.
         if request.headers.get("x-soc-action") != "release":
+            raise HTTPException(403, "Forbidden")
+        if not re.fullmatch(r"[a-f0-9]{32}", visitor):
+            raise HTTPException(400, "Invalid visitor")
+        if request.headers.get("sec-fetch-site") == "cross-site":
             raise HTTPException(403, "Forbidden")
         await asyncio.to_thread(
             app.state.db.append,
@@ -167,7 +154,7 @@ def create_app(database: Forensics | None = None) -> FastAPI:
                 "at": now_iso(),
                 "visitor_id": visitor,
                 "kind": "release_requested",
-                "operator": os.getenv("SOC_USER", "analyst"),
+                "operator": "anonymous_soc",
             },
         )
         async with httpx.AsyncClient(timeout=5) as client:

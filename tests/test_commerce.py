@@ -319,21 +319,55 @@ def test_append_only_and_idempotent_forensics(tmp_path):
                 connection.execute(command)
 
 
-def test_soc_view_is_public_but_mutations_remain_authenticated(tmp_path, monkeypatch):
+def test_soc_release_is_public_but_validated(tmp_path, monkeypatch):
     monkeypatch.setenv("AUDIT_WRITE_TOKEN", "write" * 8)
-    monkeypatch.setenv("SOC_PASSWORD", "password" * 8)
+    monkeypatch.setenv("CONTROL_TOKEN", "control" * 8)
     with TestClient(collector_app(Forensics(str(tmp_path / "audit.db")))) as client:
         assert client.get("/").status_code == 200
         assert client.get("/api/events").json() == []
         assert client.post("/events", json={}).status_code == 403
-        assert client.post("/api/release/a", headers={"x-soc-action": "release"}).status_code == 401
+        assert client.post("/api/release/a", headers={"x-soc-action": "release"}).status_code == 400
         assert client.post("/api/release/a", headers={
             "authorization": "Bearer " + "write" * 8, "x-soc-action": "release"
-        }).status_code == 401
+        }).status_code == 400
         assert client.post("/api/release/a", auth=("analyst", "password" * 8)).status_code == 403
         # The public status endpoint must also have no Basic-auth dependency.
         routes = {route.path: route for route in client.app.routes}
         assert routes["/api/status"].dependant.dependencies == []
+
+
+def test_soc_release_without_credentials_forwards_internal_token(tmp_path, monkeypatch):
+    monkeypatch.setenv("AUDIT_WRITE_TOKEN", "write" * 8)
+    monkeypatch.setenv("CONTROL_TOKEN", "control" * 8)
+    visitor = "a" * 32
+    calls = []
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, url, headers):
+            calls.append((url, headers))
+            return httpx.Response(200, json={"released": True})
+
+    monkeypatch.setattr("services.commerce.collector.httpx.AsyncClient", FakeClient)
+    database = Forensics(str(tmp_path / "audit.db"))
+    with TestClient(collector_app(database)) as client:
+        endpoint = "/api/release/" + visitor
+        assert client.post(endpoint).status_code == 403
+        assert client.post(endpoint, headers={"x-soc-action": "release", "sec-fetch-site": "cross-site"}).status_code == 403
+        assert calls == []
+        response = client.post(endpoint, headers={"x-soc-action": "release"})
+        assert response.status_code == 200
+        assert response.json() == {"released": True}
+    assert calls == [("http://gateway:8000/_control/release/" + visitor, {"x-control-token": "control" * 8})]
+    assert database.read(0, visitor, 10)[0]["operator"] == "anonymous_soc"
 
 
 def test_audit_queue_does_not_block_when_full():
@@ -446,7 +480,7 @@ def test_enforced_storefront_calls_preserve_real_and_sandbox_boundaries(system):
 
 def test_soc_latest_history_and_incremental_events(tmp_path, monkeypatch):
     monkeypatch.setenv("AUDIT_WRITE_TOKEN", "write" * 8)
-    monkeypatch.setenv("SOC_PASSWORD", "password" * 8)
+    monkeypatch.setenv("CONTROL_TOKEN", "control" * 8)
     db = Forensics(str(tmp_path / "audit.db"))
     for i in range(205):
         db.append({"event_id": str(uuid.uuid4()), "at": "2026-11-02T00:00:00.123+00:00",
