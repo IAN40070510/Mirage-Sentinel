@@ -1,4 +1,4 @@
-name: OCI storage diagnostics
+name: Stop explicitly authorized legacy services
 on:
   workflow_dispatch:
 permissions:
@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Inspect deployment storage without modifying application data
+      - name: Stop legacy containers and verify current commerce
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.OCI_HOST }}
@@ -18,13 +18,36 @@ jobs:
           command_timeout: 8m
           script: |
             set -eu
-            df -h / /var/lib/docker "$HOME"
-            df -i / /var/lib/docker
-            sudo docker system df
-            sudo docker ps -a --format '{{.Names}} {{.Image}} {{.Status}}'
-            sudo du -sh /var/lib/docker/buildkit /var/lib/docker/overlay2 /var/lib/docker/image 2>/dev/null || true
-            du -sh "$HOME/Mirage-Sentinel" "$HOME/Mirage-Sentinel-releases" 2>/dev/null || true
-            git -C "$HOME/Mirage-Sentinel" worktree list
-            if [ -f "$HOME/Mirage-Sentinel/commerce-current-release" ]; then
-              cat "$HOME/Mirage-Sentinel/commerce-current-release"
-            fi
+            sudo python3 - <<'PYREMOTE'
+            import subprocess
+            targets = [
+                'mirage_sentinel_frontend_customer', 'mirage_sentinel_frontend_soc',
+                'mirage_sentinel_nginx', 'mirage_sentinel_backend_public',
+                'mirage_sentinel_backend_soc', 'mirage_sentinel_vuln_bank',
+                'mirage_sentinel_sandbox', 'mirage_sentinel_redis',
+                'mirage_sentinel_vuln_bank_db', 'mirage_sentinel_postgres',
+                'mirage_sentinel_ollama',
+            ]
+            def running():
+                return set(subprocess.check_output(['docker','ps','--format','{{.Names}}'], text=True).splitlines())
+            before = running()
+            protected = {name for name in before if name.startswith('mirage-commerce-') or name == 'ollama'}
+            all_names = set(subprocess.check_output(['docker','ps','-a','--format','{{.Names}}'], text=True).splitlines())
+            for name in targets:
+                if name not in all_names:
+                    print('Absent:', name, flush=True)
+                    continue
+                if name in before:
+                    subprocess.run(['docker','stop','--time','30',name], check=True)
+                else:
+                    print('Already stopped:', name, flush=True)
+            after = running()
+            assert not after.intersection(targets), 'Some legacy services remain running'
+            assert protected <= after, 'A protected service is no longer running'
+            print('PASS: legacy services stopped; protected services still running; no containers/images/volumes deleted', flush=True)
+            for name in targets:
+                if name in all_names:
+                    subprocess.run(['docker','inspect','--format','{{.Name}} {{.State.Status}}',name], check=True)
+            PYREMOTE
+            curl --fail --silent --show-error --location --max-time 30 http://127.0.0.1/dk > /dev/null
+            curl --fail --silent --show-error --max-time 15 http://127.0.0.1:3000/ > /dev/null
