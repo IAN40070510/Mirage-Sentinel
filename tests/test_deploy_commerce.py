@@ -24,7 +24,7 @@ def deployment_module() -> ModuleType:
 
 @pytest.mark.parametrize("recovered", [True, False])
 def test_low_space_only_reclaims_old_unused_cache(deployment_module: ModuleType, monkeypatch: pytest.MonkeyPatch, recovered: bool) -> None:
-    free = iter([2 * 1024**3, (7 if recovered else 3) * 1024**3])
+    free = iter([2 * 1024**3, (7 if recovered else 3) * 1024**3, 3 * 1024**3])
     monkeypatch.setattr(deployment_module.shutil, "disk_usage", lambda _: SimpleNamespace(free=next(free)))
     calls = []
     monkeypatch.setattr(deployment_module.subprocess, "run", lambda command, **kw: calls.append(command))
@@ -33,7 +33,10 @@ def test_low_space_only_reclaims_old_unused_cache(deployment_module: ModuleType,
     else:
         with pytest.raises(SystemExit, match="images and data retained"):
             deployment_module.ensure_capacity(Path("."))
-    assert calls == [["docker", "builder", "prune", "--all", "--force", "--filter", "until=168h"]]
+    expected = [["docker", "builder", "prune", "--all", "--force", "--filter", "until=168h"]]
+    if not recovered:
+        expected.append(["docker", "builder", "prune", "--all", "--force"])
+    assert calls == expected
 
 
 @pytest.mark.parametrize("changed,dirty,missing", [(False,False,False), (True,False,False),
