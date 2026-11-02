@@ -3,7 +3,7 @@
 <title>MSDSS戰情室</title>
 <style>body{margin:0;background:#0d1520;color:#e2eaf4;font:15px system-ui}main{max-width:1400px;margin:32px auto;padding:24px}h1{font-size:26px}p{color:#9dadc1}button,input,select{padding:10px;border:1px solid #42556b;border-radius:6px;background:#192b40;color:inherit;margin:4px}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:12px;text-align:left;border-bottom:1px solid #293c52}tr:hover{background:#192b40;cursor:pointer}pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:20px;background:#152437;border-radius:8px}.bad{color:#ffb49b}#status{color:#93d9d0}.event-detail:hover{background:transparent;cursor:default}.event-detail pre{margin:0}.event-toggle{margin:0;text-align:left;cursor:pointer}.event-toggle:focus-visible{outline:2px solid #93d9d0}</style>
 <main><h1>MSDSS戰情室</h1><p>正常與沙盒互動時間線。點選事件查看請求、特徵、分數和實際回應。</p>
-<div id="status">載入中</div><input id="visitor" placeholder="來源 IP（篩選已載入事件）" size="38"><select id="mode"><option value="all">全部流量</option><option value="real">正常環境</option><option value="sandbox">沙盒環境</option></select><button id="load">重新載入</button><button id="more">載入更早事件</button><button id="clear">顯示所有 IP</button><label><input id="live" type="checkbox" checked>每 3 秒更新</label><div id="updated"></div><button id="release">解除此訪客的沙盒標記（免登入）</button><button id="export">匯出已載入 JSON</button><div id="action-result" role="status"></div>
+<div id="status">載入中</div><input id="visitor" placeholder="來源 IP（篩選已載入事件）" size="38"><select id="mode"><option value="all">全部流量</option><option value="real">正常環境</option><option value="sandbox">沙盒環境</option></select><button id="load">重新載入</button><button id="more">載入更早事件</button><button id="clear">顯示所有 IP</button><label><input id="live" type="checkbox" checked>每 3 秒更新</label><div id="updated"></div><button id="release">解除此訪客與關聯帳號的沙盒標記（免登入）</button><button id="export">匯出已載入 JSON</button><div id="action-result" role="status"></div>
 <table><thead><tr><th>時間／序號</th><th>來源 IP</th><th>請求</th><th>環境</th><th>分數／來源</th><th>HTTP</th></tr></thead><tbody id="rows"></tbody></table></main>
 <script>
 let events=[],selectedVisitor='',selectedCursor=null,filter='',generation=0,loading=false;
@@ -57,7 +57,7 @@ function render(){
 }
 el('load').onclick=()=>load(true);el('more').onclick=()=>load(false,true);el('mode').onchange=render;
 el('visitor').onchange=()=>load(true);el('clear').onclick=()=>{el('visitor').value='';load(true)};
-el('release').onclick=async()=>{const id=selectedVisitor;if(!/^[a-f0-9]{32}$/.test(id)){alert('請先選擇訪客');return}if(!confirm('解除訪客 '+id+' 的沙盒標記？下一次可疑請求仍會重新觸發。'))return;const r=await fetch('/api/release/'+id,{method:'POST',headers:{'x-soc-action':'release'}});el('action-result').textContent=await r.text();load()};
+el('release').onclick=async()=>{const id=selectedVisitor;if(!/^[a-f0-9]{32}$/.test(id)){alert('請先選擇訪客');return}if(!confirm('解除訪客 '+id+' 與關聯帳號的沙盒標記？同帳號的其他訪客也會解除。下一次可疑請求仍會重新觸發。'))return;const r=await fetch('/api/release/'+id,{method:'POST',headers:{'x-soc-action':'release'}});el('action-result').textContent=await r.text();load()};
 setInterval(()=>{if(el('live').checked&&!document.hidden)load()},3000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&el('live').checked)load()});
 el('export').onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(events,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='traffic-events.json';a.click();URL.revokeObjectURL(url)};load(true);

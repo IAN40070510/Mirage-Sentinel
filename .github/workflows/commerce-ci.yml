@@ -41,6 +41,8 @@ jobs:
           docker compose --env-file .env.commerce -f docker-compose.commerce.yml run --rm --no-deps -v "$PWD/scripts/smoke_commerce.py:/tmp/check.py:ro" gateway python /tmp/check.py --url http://edge:8080 --state-db /state/visitors.db
       - name: Verify public SOC and release validation
         run: python scripts/smoke_soc.py --commerce-url http://localhost:8080
+      - name: Verify account quarantine after cookie deletion
+        run: python scripts/smoke_account_quarantine.py
       - name: Collect isolated normal shopping journeys
         run: python scripts/collect_commerce_normal.py --output artifacts/normal-shopping-capture --sessions 30 --revision "${{ github.sha }}"
       - name: Diagnose enforced model input coverage and concurrency

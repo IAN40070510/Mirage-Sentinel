@@ -148,6 +148,33 @@ def create_app(
         ):
             raise HTTPException(404, "Not found")
 
+    async def verified_account(realm: str, authorization: str) -> str | None:
+        # Trust only a customer identity returned by the realm's authenticated API.
+        # Never decode unverified JWTs or use email/account IDs supplied in the body.
+        if not authorization.startswith("Bearer ") or len(authorization) > 16384:
+            return None
+        known_realm = await asyncio.to_thread(app.state.store.token_realm, authorization)
+        if known_realm is not None and known_realm != realm:
+            return None
+        try:
+            response = await app.state.client.get(
+                os.getenv(realm.upper() + "_API_URL", f"http://{realm}-medusa:9000").rstrip("/") + "/store/customers/me",
+                headers={"authorization": authorization,
+                         "x-publishable-api-key": os.getenv(realm.upper() + "_PUBLISHABLE_KEY", "")},
+                timeout=5,
+            )
+            if response.status_code in {401, 403}:
+                return None
+            response.raise_for_status()
+            customer = response.json().get("customer", {})
+            customer_id = customer.get("id")
+            if not isinstance(customer_id, str) or not customer_id or len(customer_id) > 256:
+                raise ValueError("Invalid authenticated identity")
+            await asyncio.to_thread(app.state.store.token_realm, authorization, realm)
+            return app.state.store.account_key(realm, customer_id)
+        except (httpx.HTTPError, ValueError, TypeError, AttributeError):
+            raise HTTPException(503, "Authentication temporarily unavailable")
+
     @app.api_route(
         "/{path:path}",
         methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -184,6 +211,10 @@ def create_app(
         provisional = await asyncio.to_thread(
             app.state.store.touch, token, forced_sandbox
         )
+        identity_realm = "sandbox" if provisional["sandbox"] else "real"
+        account = await verified_account(identity_realm, request.headers.get("authorization", ""))
+        if account:
+            provisional = await asyncio.to_thread(app.state.store.touch, provisional["token"], False, account=account)
         forwarded = {
             k.lower(): v
             for k, v in request.headers.items()
@@ -231,6 +262,7 @@ def create_app(
             path.startswith("auth/")
             and not path.startswith("auth/customer/")
             and path != "auth/token/refresh"
+            and not (path == "auth/session" and request.method == "DELETE")
         ):
             control_path = True
         prefix = realm.upper()
@@ -288,6 +320,10 @@ def create_app(
                 visitor["changed"] or provisional["changed"] or stale_context
             ):
                 headers.pop("authorization", None)
+            if "authorization" in headers:
+                token_realm = await asyncio.to_thread(app.state.store.token_realm, headers["authorization"])
+                if token_realm is not None and token_realm != realm:
+                    headers.pop("authorization", None)
             headers["x-publishable-api-key"] = os.getenv(
                 prefix + "_PUBLISHABLE_KEY", ""
             )
@@ -347,6 +383,26 @@ def create_app(
                             location += "?" + parsed_location.query
                     response_headers.append(("location", location))
                 origin = realm + ("_api" if is_api else "_web")
+                if response.is_success and path == "auth/session" and request.method == "DELETE":
+                    await asyncio.to_thread(app.state.store.detach_account, visitor["id"])
+                if (is_api and response.is_success and request.method == "POST"
+                        and path in {"auth/customer/emailpass", "auth/token/refresh"}):
+                    try:
+                        login_token = response.json().get("token")
+                    except (ValueError, AttributeError):
+                        login_token = None
+                    if isinstance(login_token, str):
+                        login_account = await verified_account(realm, "Bearer " + login_token)
+                        if login_account:
+                            visitor = await asyncio.to_thread(app.state.store.touch, visitor["token"], False, account=login_account)
+                            if realm == "real" and visitor["sandbox"]:
+                                # Never expose a real token to a quarantined account or copy credentials to sandbox.
+                                realm = "sandbox"
+                                status_code = 409
+                                content = b'{"type":"invalid_state","message":"Please reload the page and sign in again."}'
+                                response_headers = [("content-type", "application/json")]
+                                cookie_prefix = f"shop_{visitor['epoch']}_"
+                                origin = "account_quarantine"
                 # Mirage enriches failed suspicious API probes, never changes successful orders.
                 if (
                     visitor["sandbox"]
@@ -392,6 +448,8 @@ def create_app(
             "route": realm,
             "origin": origin,
             "sticky": visitor["sandbox"] and not decision["attack"],
+            "account_linked": visitor.get("account_linked", False),
+            "account_quarantined": visitor.get("account_quarantined", False),
             "status": status_code,
             "duration_ms": round((time.perf_counter() - started) * 1000, 3),
             "request_headers": redact(forwarded),
