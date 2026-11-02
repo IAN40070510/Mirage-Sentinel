@@ -45,6 +45,30 @@ class ScriptAssets(HTMLParser):
                 self.urls.append(source)
 
 
+def verify_clothing_catalog(client: httpx.Client) -> None:
+    """Check purchasable clothing in the current realm, without changing existing data."""
+    handles = {
+        'essential-black-tee', 'essential-white-tee', 'relaxed-black-tee', 'relaxed-white-tee',
+        'classic-crew-sweatshirt', 'weekend-crew-sweatshirt', 'layering-crew-sweatshirt',
+        'classic-gray-joggers', 'weekend-gray-joggers', 'everyday-gray-joggers',
+        'classic-vintage-shorts', 'weekend-vintage-shorts',
+    }
+    region = client.get('/store/regions').json()['regions'][0]
+    response = client.get('/store/products', params={
+        'limit': 100, 'region_id': region['id'], 'fields': '*variants.calculated_price',
+    })
+    response.raise_for_status()
+    products = {product['handle']: product for product in response.json()['products']}
+    assert handles <= products.keys(), 'Added clothing products are missing'
+    for handle in handles:
+        product = products[handle]
+        assert product.get('thumbnail'), f'{handle}: thumbnail missing'
+        assert len(product['variants']) == 4, f'{handle}: expected S/M/L/XL'
+        for variant in product['variants']:
+            assert variant['calculated_price']['calculated_amount'] > 0, f'{handle}: price missing'
+    print('PASS: 12 added clothing products and 48 priced size variants in current realm')
+
+
 def exercise(client: httpx.Client, profile: dict | None = None) -> str:
     profile = profile or {}
     def call(method: str, path: str, data: dict | None = None) -> dict:
@@ -148,6 +172,7 @@ def main() -> None:
             asset = client.get(source)
             assert asset.status_code == 200, f"Missing browser asset: {source}"
             assert "javascript" in asset.headers.get("content-type", "")
+        verify_clothing_catalog(client)
         normal_order = exercise(client)
         assert_realm(client,'real',args.state_db)
         # A 200 product response alone cannot distinguish real from sandbox routing.
@@ -168,6 +193,7 @@ def main() -> None:
         client.get("/store/products?q=%27+OR+1%3D1--")
         assert_realm(client,'sandbox',args.state_db)
         client.headers.pop("authorization", None)
+        verify_clothing_catalog(client)
         sandbox_order = exercise(client)
         assert_realm(client,'sandbox',args.state_db)
         assert normal_order != sandbox_order
